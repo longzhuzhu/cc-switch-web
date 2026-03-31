@@ -1,6 +1,7 @@
 import type { Settings } from "@/types";
 import type { Provider } from "@/types";
 import type { McpServer, McpServersMap } from "@/types";
+import type { RemoteSnapshotInfo, WebDavSyncSettings } from "@/types";
 import type {
   OpenClawAgentsDefaults,
   OpenClawDefaultModel,
@@ -567,6 +568,52 @@ export async function setWebAutoFailoverEnabled(
 
 export async function saveWebSettings(settings: Settings): Promise<boolean> {
   return requestWithBody<boolean>("/api/settings", "PUT", settings);
+}
+
+export async function testWebdavConnection(
+  settings: WebDavSyncSettings,
+  preserveEmptyPassword = true,
+): Promise<{ success: boolean; message?: string }> {
+  return requestWithBody<{ success: boolean; message?: string }>(
+    "/api/webdav/test",
+    "POST",
+    {
+      settings,
+      preserveEmptyPassword,
+    },
+  );
+}
+
+export async function uploadWebdavSync(): Promise<{ status: string; warning?: string }> {
+  return requestWithBody<{ status: string; warning?: string }>(
+    "/api/webdav/upload",
+    "POST",
+  );
+}
+
+export async function downloadWebdavSync(): Promise<{ status: string; warning?: string }> {
+  return requestWithBody<{ status: string; warning?: string }>(
+    "/api/webdav/download",
+    "POST",
+  );
+}
+
+export async function saveWebdavSyncSettings(
+  settings: WebDavSyncSettings,
+  passwordTouched = false,
+): Promise<{ success: boolean }> {
+  return requestWithBody<{ success: boolean }>("/api/webdav/settings", "POST", {
+    settings,
+    passwordTouched,
+  });
+}
+
+export async function fetchWebdavRemoteInfo(): Promise<
+  RemoteSnapshotInfo | { empty: true }
+> {
+  return requestJson<RemoteSnapshotInfo | { empty: true }>(
+    "/api/webdav/remote-info",
+  );
 }
 
 export async function downloadWebConfigExport(

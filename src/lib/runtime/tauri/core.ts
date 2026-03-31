@@ -89,14 +89,17 @@ import {
   getWebRequestLogs,
   getWebUsageSummary,
   getWebUsageTrends,
+  fetchWebdavRemoteInfo,
   getWebWorkspaceDirectoryPath,
   getWebWorkspaceFile,
   importWebProvidersFromLive,
   installWebSkillArchives,
+  downloadWebdavSync,
   listWebDailyMemoryFiles,
   removeWebSkillRepo,
   removeWebProviderFromLiveConfig,
   saveWebDailyMemoryFile,
+  saveWebdavSyncSettings,
   setWebOpenClawAgentsDefaults,
   setWebOpenClawDefaultModel,
   setWebOpenClawEnv,
@@ -107,7 +110,9 @@ import {
   deleteWebSession,
   deleteWebSessions,
   deleteWebModelPricing,
+  testWebdavConnection,
   toggleWebSkillApp,
+  uploadWebdavSync,
   updateWebModelPricing,
   updateWebProvider,
   updateWebProxyConfig,
@@ -142,6 +147,22 @@ export async function invoke<T>(
       return (await getWebSettings()) as T;
     case "save_settings":
       return (await saveWebSettings(args?.settings as any)) as T;
+    case "webdav_test_connection":
+      return (await testWebdavConnection(
+        args?.settings as any,
+        (args?.preserveEmptyPassword as boolean | undefined) ?? true,
+      )) as T;
+    case "webdav_sync_upload":
+      return (await uploadWebdavSync()) as T;
+    case "webdav_sync_download":
+      return (await downloadWebdavSync()) as T;
+    case "webdav_sync_save_settings":
+      return (await saveWebdavSyncSettings(
+        args?.settings as any,
+        (args?.passwordTouched as boolean | undefined) ?? false,
+      )) as T;
+    case "webdav_sync_fetch_remote_info":
+      return (await fetchWebdavRemoteInfo()) as T;
     case "export_config_download":
       return (await downloadWebConfigExport(args?.defaultName as string)) as T;
     case "import_config_upload":

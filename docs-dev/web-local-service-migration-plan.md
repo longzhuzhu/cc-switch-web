@@ -154,6 +154,7 @@ Local Rust Service
 - 已恢复 `Proxy` 页中的 `Rectifier / Optimizer / Global Outbound Proxy` Web 入口与本地服务 API
 - 已恢复 `Settings / Advanced` 中的基础 Web 能力（数据库备份、日志配置、流式检查配置）
 - 已恢复 `Settings / Advanced` 中的配置导入/导出 Web 能力（浏览器上传 `.sql` 导入、浏览器下载 `.sql` 导出）
+- 已恢复 `Settings / Advanced` 中的 `WebDAV Sync` Web 能力（连接测试、保存配置、上传、下载、远端快照检查）
 - 已提供：
   - `pnpm dev` / `pnpm dev:web`
   - `pnpm build` / `pnpm build:d`

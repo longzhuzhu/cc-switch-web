@@ -27,9 +27,11 @@ use crate::prompt::Prompt;
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillUninstallResult,
 };
+use crate::services::webdav_sync as webdav_sync_service;
 use crate::services::{McpService, PromptService, ProviderService, SwitchResult};
 use crate::store::AppState;
 use crate::Database;
+use crate::settings::{self, WebDavSyncSettings};
 
 #[derive(Clone)]
 struct WebApiState {
@@ -128,6 +130,20 @@ struct ExportConfigQuery {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct WebdavTestRequest {
+    settings: WebDavSyncSettings,
+    preserve_empty_password: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebdavSaveSettingsRequest {
+    settings: WebDavSyncSettings,
+    password_touched: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct DailyMemorySearchQuery {
     query: String,
 }
@@ -214,6 +230,65 @@ fn build_post_import_sync_warning(error: impl std::fmt::Display) -> String {
         format!("Post-operation synchronization failed: {error}"),
     )
     .to_string()
+}
+
+fn attach_warning_to_value(mut value: Value, warning: Option<String>) -> Value {
+    if let Some(message) = warning {
+        if let Some(object) = value.as_object_mut() {
+            object.insert("warning".to_string(), Value::String(message));
+        }
+    }
+    value
+}
+
+fn persist_webdav_sync_error(
+    settings: &mut WebDavSyncSettings,
+    error: &crate::error::AppError,
+    source: &str,
+) {
+    settings.status.last_error = Some(error.to_string());
+    settings.status.last_error_source = Some(source.to_string());
+    let _ = settings::update_webdav_sync_status(settings.status.clone());
+}
+
+fn webdav_not_configured_error() -> ApiError {
+    ApiError::bad_request(crate::error::AppError::localized(
+        "webdav.sync.not_configured",
+        "未配置 WebDAV 同步",
+        "WebDAV sync is not configured.",
+    )
+    .to_string())
+}
+
+fn webdav_sync_disabled_error() -> ApiError {
+    ApiError::bad_request(crate::error::AppError::localized(
+        "webdav.sync.disabled",
+        "WebDAV 同步未启用",
+        "WebDAV sync is disabled.",
+    )
+    .to_string())
+}
+
+fn require_enabled_webdav_settings() -> Result<WebDavSyncSettings, ApiError> {
+    let sync_settings =
+        settings::get_webdav_sync_settings().ok_or_else(webdav_not_configured_error)?;
+    if !sync_settings.enabled {
+        return Err(webdav_sync_disabled_error());
+    }
+    Ok(sync_settings)
+}
+
+fn resolve_webdav_password_for_request(
+    mut incoming: WebDavSyncSettings,
+    existing: Option<WebDavSyncSettings>,
+    preserve_empty_password: bool,
+) -> WebDavSyncSettings {
+    if let Some(existing_settings) = existing {
+        if preserve_empty_password && incoming.password.is_empty() {
+            incoming.password = existing_settings.password;
+        }
+    }
+    incoming
 }
 
 async fn get_mcp_servers(
@@ -1197,6 +1272,108 @@ async fn import_config_upload(
     Ok(Json(payload))
 }
 
+async fn webdav_test_connection(
+    Json(payload): Json<WebdavTestRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let preserve_empty = payload.preserve_empty_password.unwrap_or(true);
+    let resolved = resolve_webdav_password_for_request(
+        payload.settings,
+        settings::get_webdav_sync_settings(),
+        preserve_empty,
+    );
+    webdav_sync_service::check_connection(&resolved)
+        .await
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    Ok(Json(json!({
+        "success": true,
+        "message": "WebDAV connection ok",
+    })))
+}
+
+async fn webdav_sync_upload(
+    State(state): State<WebApiState>,
+) -> Result<Json<Value>, ApiError> {
+    let db = state.app_state.db.clone();
+    let mut sync_settings = require_enabled_webdav_settings()?;
+    let result = webdav_sync_service::run_with_sync_lock(webdav_sync_service::upload(
+        &db,
+        &mut sync_settings,
+    ))
+    .await;
+
+    match result {
+        Ok(value) => Ok(Json(value)),
+        Err(error) => {
+            persist_webdav_sync_error(&mut sync_settings, &error, "manual");
+            Err(ApiError::internal(error.to_string()))
+        }
+    }
+}
+
+async fn webdav_sync_download(
+    State(state): State<WebApiState>,
+) -> Result<Json<Value>, ApiError> {
+    let db = state.app_state.db.clone();
+    let mut sync_settings = require_enabled_webdav_settings()?;
+    let _auto_sync_suppression = crate::services::webdav_auto_sync::AutoSyncSuppressionGuard::new();
+
+    let result = webdav_sync_service::run_with_sync_lock(webdav_sync_service::download(
+        &db,
+        &mut sync_settings,
+    ))
+    .await;
+
+    let mut value = match result {
+        Ok(value) => value,
+        Err(error) => {
+            persist_webdav_sync_error(&mut sync_settings, &error, "manual");
+            return Err(ApiError::internal(error.to_string()));
+        }
+    };
+
+    let warning = match ProviderService::sync_current_to_live(state.app_state.as_ref()) {
+        Ok(()) => settings::reload_settings()
+            .err()
+            .map(build_post_import_sync_warning),
+        Err(error) => Some(build_post_import_sync_warning(error)),
+    };
+    if let Some(message) = warning.as_ref() {
+        log::warn!("[WebDAV] post-download sync warning: {message}");
+    }
+    value = attach_warning_to_value(value, warning);
+
+    Ok(Json(value))
+}
+
+async fn webdav_sync_save_settings(
+    Json(payload): Json<WebdavSaveSettingsRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let password_touched = payload.password_touched.unwrap_or(false);
+    let existing = settings::get_webdav_sync_settings();
+    let mut sync_settings =
+        resolve_webdav_password_for_request(payload.settings, existing.clone(), !password_touched);
+
+    if let Some(existing_settings) = existing {
+        sync_settings.status = existing_settings.status;
+    }
+
+    sync_settings.normalize();
+    sync_settings
+        .validate()
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    settings::set_webdav_sync_settings(Some(sync_settings))
+        .map_err(|e| ApiError::internal(format!("failed to save webdav sync settings: {e}")))?;
+    Ok(Json(json!({ "success": true })))
+}
+
+async fn webdav_sync_fetch_remote_info() -> Result<Json<Value>, ApiError> {
+    let sync_settings = require_enabled_webdav_settings()?;
+    let info = webdav_sync_service::fetch_remote_info(&sync_settings)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to fetch webdav remote info: {e}")))?;
+    Ok(Json(info.unwrap_or(json!({ "empty": true }))))
+}
+
 async fn save_settings(
     Json(settings): Json<crate::settings::AppSettings>,
 ) -> Result<Json<bool>, ApiError> {
@@ -1925,6 +2102,11 @@ pub async fn run_web_server() -> Result<(), String> {
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
+        .route("/api/webdav/test", post(webdav_test_connection))
+        .route("/api/webdav/upload", post(webdav_sync_upload))
+        .route("/api/webdav/download", post(webdav_sync_download))
+        .route("/api/webdav/settings", post(webdav_sync_save_settings))
+        .route("/api/webdav/remote-info", get(webdav_sync_fetch_remote_info))
         .route(
             "/api/settings/rectifier",
             get(get_rectifier_config).put(set_rectifier_config),
