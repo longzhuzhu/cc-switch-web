@@ -44,6 +44,12 @@ If you are looking for the original CC Switch project, desktop application, or u
 
    Open [http://localhost:3000](http://localhost:3000). The frontend talks to the local Rust service at `http://127.0.0.1:8788`.
 
+   If you want to run the Docker stack in the foreground, use:
+
+   ```bash
+   pnpm dev:d
+   ```
+
 3. Start a production-style local run:
 
    ```bash
@@ -63,13 +69,13 @@ If you are looking for the original CC Switch project, desktop application, or u
    Linux:
 
    ```bash
-   bash scripts/run-web.sh
+   pnpm start:l
    ```
 
    Windows:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\run-web.ps1
+   pnpm start:w
    ```
 
 ### Docker Run
@@ -77,17 +83,37 @@ If you are looking for the original CC Switch project, desktop application, or u
 1. Build and start:
 
    ```bash
-   docker compose up --build -d
+   pnpm dev:d
    ```
 
-2. Open [http://localhost:8788](http://localhost:8788).
+   This runs `docker compose up --build` in the foreground.
 
-3. Stop:
+2. If the image is already built and you only want to start it in the background:
 
    ```bash
-   docker compose down
+   pnpm up:d
    ```
 
-4. Persistent data is stored in the `cc-switch-web-data` volume.
+3. Rebuild image only:
+
+   ```bash
+   pnpm build:d
+   ```
+
+4. View logs:
+
+   ```bash
+   pnpm logs:d
+   ```
+
+5. Stop:
+
+   ```bash
+   pnpm down:d
+   ```
+
+6. Open [http://localhost:8788](http://localhost:8788).
+
+7. Persistent data is stored in the `cc-switch-web-data` volume.
 
 If you want the containerized service to manage host-side CLI configuration directories directly, add bind mounts in `docker-compose.yml` for paths such as `.claude`, `.codex`, `.gemini`, `opencode`, and `openclaw`.
