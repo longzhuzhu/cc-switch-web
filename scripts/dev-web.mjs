@@ -1,10 +1,44 @@
 import { spawn } from "node:child_process";
+import net from "node:net";
 import process from "node:process";
 
 const isWindows = process.platform === "win32";
 const cargoCmd = isWindows ? "cargo.exe" : "cargo";
 
 const children = [];
+const defaultFrontendHost = "127.0.0.1";
+const defaultFrontendPort = Number(process.env.CC_SWITCH_WEB_DEV_PORT || "3000");
+
+function canListen(host, port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+
+    server.once("error", () => {
+      resolve(false);
+    });
+
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+
+    server.listen(port, host);
+  });
+}
+
+async function findAvailablePort(host, preferredPort, maxAttempts = 20) {
+  for (let offset = 0; offset < maxAttempts; offset += 1) {
+    const port = preferredPort + offset;
+    // eslint-disable-next-line no-await-in-loop
+    const available = await canListen(host, port);
+    if (available) {
+      return port;
+    }
+  }
+
+  throw new Error(
+    `[dev:web] no available frontend port found from ${preferredPort} to ${preferredPort + maxAttempts - 1}`,
+  );
+}
 
 function startProcess(name, command, args, extraEnv = {}) {
   const env = {
@@ -76,24 +110,48 @@ function shutdown(exitCode = 0) {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
-const apiBase = process.env.VITE_LOCAL_API_BASE || "http://127.0.0.1:8788";
+async function main() {
+  const apiBase = process.env.VITE_LOCAL_API_BASE || "http://127.0.0.1:8788";
+  const frontendPort = await findAvailablePort(
+    defaultFrontendHost,
+    defaultFrontendPort,
+  );
 
-console.log(`[dev:web] backend: ${apiBase}`);
-console.log("[dev:web] frontend: http://127.0.0.1:3000");
+  console.log(`[dev:web] backend: ${apiBase}`);
+  console.log(`[dev:web] frontend: http://${defaultFrontendHost}:${frontendPort}`);
 
-startProcess("web-service", cargoCmd, [
-  "run",
-  "--manifest-path",
-  "src-tauri/Cargo.toml",
-  "--bin",
-  "cc-switch-web",
-]);
+  if (frontendPort !== defaultFrontendPort) {
+    console.log(
+      `[dev:web] port ${defaultFrontendPort} is in use, switched frontend to ${frontendPort}`,
+    );
+  }
 
-startProcess(
-  "web-ui",
-  "pnpm",
-  ["exec", "vite", "--host", "127.0.0.1", "--port", "3000"],
-  {
-    VITE_LOCAL_API_BASE: apiBase,
-  },
-);
+  startProcess("web-service", cargoCmd, [
+    "run",
+    "--manifest-path",
+    "src-tauri/Cargo.toml",
+    "--bin",
+    "cc-switch-web",
+  ]);
+
+  startProcess(
+    "web-ui",
+    "pnpm",
+    [
+      "exec",
+      "vite",
+      "--host",
+      defaultFrontendHost,
+      "--port",
+      String(frontendPort),
+    ],
+    {
+      VITE_LOCAL_API_BASE: apiBase,
+    },
+  );
+}
+
+main().catch((error) => {
+  console.error("[dev:web] failed to start", error);
+  process.exit(1);
+});
