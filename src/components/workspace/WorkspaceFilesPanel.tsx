@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import {
   FileCode,
   Heart,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { workspaceApi } from "@/lib/api/workspace";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 import WorkspaceFileEditor from "./WorkspaceFileEditor";
 import DailyMemoryPanel from "./DailyMemoryPanel";
 
@@ -53,9 +55,28 @@ const WORKSPACE_FILES: WorkspaceFile[] = [
 
 const WorkspaceFilesPanel: React.FC = () => {
   const { t } = useTranslation();
+  const isWebMode = isWebRuntime();
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [fileExists, setFileExists] = useState<Record<string, boolean>>({});
   const [showDailyMemory, setShowDailyMemory] = useState(false);
+
+  const handleOpenDirectory = async (subdir: "workspace" | "memory") => {
+    try {
+      if (isWebMode) {
+        const path = await workspaceApi.getDirectoryPath(subdir);
+        await navigator.clipboard.writeText(path);
+        toast.success(t("workspace.pathCopied"), {
+          description: path,
+          closeButton: true,
+        });
+        return;
+      }
+
+      await workspaceApi.openDirectory(subdir);
+    } catch (error) {
+      toast.error(t("common.error"), { description: String(error) });
+    }
+  };
 
   const checkFileExistence = async () => {
     const results: Record<string, boolean> = {};
@@ -86,8 +107,8 @@ const WorkspaceFilesPanel: React.FC = () => {
     <div className="px-6 pt-4 pb-8">
       <p
         className="text-sm text-muted-foreground mb-6 cursor-pointer hover:text-foreground transition-colors inline-flex items-center gap-1"
-        onClick={() => workspaceApi.openDirectory("workspace")}
-        title={t("workspace.openDirectory")}
+        onClick={() => void handleOpenDirectory("workspace")}
+        title={t(isWebMode ? "workspace.copyPath" : "workspace.openDirectory")}
       >
         ~/.openclaw/workspace/
         <FolderOpen className="w-3.5 h-3.5" />

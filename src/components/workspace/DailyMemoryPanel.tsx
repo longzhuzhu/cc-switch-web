@@ -19,6 +19,7 @@ import {
   type DailyMemoryFileInfo,
   type DailyMemorySearchResult,
 } from "@/lib/api/workspace";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 
 interface DailyMemoryPanelProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
+  const isWebMode = isWebRuntime();
 
   // List state
   const [files, setFiles] = useState<DailyMemoryFileInfo[]>([]);
@@ -299,6 +301,27 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
     onClose();
   }, [onClose]);
 
+  const handleOpenDirectory = useCallback(
+    async (subdir: "workspace" | "memory") => {
+      try {
+        if (isWebMode) {
+          const path = await workspaceApi.getDirectoryPath(subdir);
+          await navigator.clipboard.writeText(path);
+          toast.success(t("workspace.pathCopied"), {
+            description: path,
+            closeButton: true,
+          });
+          return;
+        }
+
+        await workspaceApi.openDirectory(subdir);
+      } catch (error) {
+        toast.error(t("common.error"), { description: String(error) });
+      }
+    },
+    [isWebMode, t],
+  );
+
   // --- Edit mode ---
   if (editingFile) {
     return (
@@ -354,8 +377,10 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
           <div className="flex items-center justify-between gap-2">
             <p
               className="text-sm text-muted-foreground shrink-0 cursor-pointer hover:text-foreground transition-colors inline-flex items-center gap-1"
-              onClick={() => workspaceApi.openDirectory("memory")}
-              title={t("workspace.openDirectory")}
+              onClick={() => void handleOpenDirectory("memory")}
+              title={t(
+                isWebMode ? "workspace.copyPath" : "workspace.openDirectory",
+              )}
             >
               ~/.openclaw/workspace/memory/
               <FolderOpen className="w-3.5 h-3.5" />

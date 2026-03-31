@@ -1367,6 +1367,8 @@
     "saveFailed": "Failed to save",
     "loadFailed": "Failed to load",
     "openDirectory": "Open in file manager",
+    "copyPath": "Copy directory path",
+    "pathCopied": "Directory path copied",
     "dailyMemory": {
       "title": "Daily Memory",
       "sectionTitle": "Daily Memory",

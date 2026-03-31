@@ -26,6 +26,10 @@ import type {
   ProxyStatus,
   ProxyTakeoverStatus,
 } from "@/types/proxy";
+import type {
+  DailyMemoryFileInfo,
+  DailyMemorySearchResult,
+} from "@/lib/api/workspace";
 import {
   getDefaultAppProxyConfig,
   getDefaultGlobalProxyConfig,
@@ -745,5 +749,70 @@ export async function installWebSkillArchives(
   return requestFormData<SkillArchiveInstallResult[]>(
     "/api/skills/install-archives",
     formData,
+  );
+}
+
+export async function getWebWorkspaceFile(
+  filename: string,
+): Promise<string | null> {
+  return requestJson<string | null>(
+    `/api/workspace/files/${encodeURIComponent(filename)}`,
+  );
+}
+
+export async function saveWebWorkspaceFile(
+  filename: string,
+  content: string,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/workspace/files/${encodeURIComponent(filename)}`,
+    "PUT",
+    { content },
+  );
+}
+
+export async function listWebDailyMemoryFiles(): Promise<DailyMemoryFileInfo[]> {
+  return requestJson<DailyMemoryFileInfo[]>("/api/workspace/daily-memory");
+}
+
+export async function getWebDailyMemoryFile(
+  filename: string,
+): Promise<string | null> {
+  return requestJson<string | null>(
+    `/api/workspace/daily-memory/${encodeURIComponent(filename)}`,
+  );
+}
+
+export async function saveWebDailyMemoryFile(
+  filename: string,
+  content: string,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/workspace/daily-memory/${encodeURIComponent(filename)}`,
+    "PUT",
+    { content },
+  );
+}
+
+export async function deleteWebDailyMemoryFile(filename: string): Promise<void> {
+  return requestWithBody<void>(
+    `/api/workspace/daily-memory/${encodeURIComponent(filename)}`,
+    "DELETE",
+  );
+}
+
+export async function searchWebDailyMemoryFiles(
+  query: string,
+): Promise<DailyMemorySearchResult[]> {
+  return requestJson<DailyMemorySearchResult[]>(
+    `/api/workspace/daily-memory/search?query=${encodeURIComponent(query)}`,
+  );
+}
+
+export async function getWebWorkspaceDirectoryPath(
+  subdir: "workspace" | "memory",
+): Promise<string> {
+  return requestJson<string>(
+    `/api/workspace/directories/${encodeURIComponent(subdir)}/path`,
   );
 }

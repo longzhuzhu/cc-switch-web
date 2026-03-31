@@ -134,7 +134,6 @@ const VALID_VIEWS: View[] = [
 
 const WEB_BLOCKED_VIEWS: View[] = [
   "sessions",
-  "workspace",
   "openclawEnv",
   "openclawTools",
   "openclawAgents",
@@ -1207,19 +1206,19 @@ function App() {
                         >
                           {activeApp === "openclaw" ? (
                             <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleViewChange("workspace")
+                                }
+                                className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                title={t("workspace.manage")}
+                              >
+                                <FolderOpen className="w-4 h-4" />
+                              </Button>
                               {!isWebMode && (
                                 <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleViewChange("workspace")
-                                    }
-                                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                                    title={t("workspace.manage")}
-                                  >
-                                    <FolderOpen className="w-4 h-4" />
-                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"

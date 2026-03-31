@@ -1367,6 +1367,8 @@
     "saveFailed": "保存に失敗しました",
     "loadFailed": "読み込みに失敗しました",
     "openDirectory": "ファイルマネージャーで開く",
+    "copyPath": "ディレクトリパスをコピー",
+    "pathCopied": "ディレクトリパスをコピーしました",
     "dailyMemory": {
       "title": "デイリーメモリー",
       "sectionTitle": "デイリーメモリー",

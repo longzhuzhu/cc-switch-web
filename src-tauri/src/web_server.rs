@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use axum::extract::{DefaultBodyLimit, Multipart, Path, State};
+use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, get_service, post, put};
@@ -102,6 +102,18 @@ struct InstallSkillRequest {
 #[serde(rename_all = "camelCase")]
 struct CurrentAppRequest {
     current_app: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ContentRequest {
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DailyMemorySearchQuery {
+    query: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -360,6 +372,88 @@ async fn restore_skill_backup(
     )
     .map_err(|e| ApiError::internal(format!("failed to restore skill backup: {e}")))?;
     Ok(Json(restored))
+}
+
+fn resolve_workspace_directory_path(subdir: &str) -> PathBuf {
+    match subdir {
+        "memory" => crate::openclaw_config::get_openclaw_dir()
+            .join("workspace")
+            .join("memory"),
+        _ => crate::openclaw_config::get_openclaw_dir().join("workspace"),
+    }
+}
+
+async fn get_workspace_file(
+    Path(filename): Path<String>,
+) -> Result<Json<Option<String>>, ApiError> {
+    let content = crate::read_workspace_file(filename)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to read workspace file: {e}")))?;
+    Ok(Json(content))
+}
+
+async fn save_workspace_file(
+    Path(filename): Path<String>,
+    Json(payload): Json<ContentRequest>,
+) -> Result<StatusCode, ApiError> {
+    crate::write_workspace_file(filename, payload.content)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to write workspace file: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_workspace_daily_memory_files(
+) -> Result<Json<Vec<crate::DailyMemoryFileInfo>>, ApiError> {
+    let files = crate::list_daily_memory_files()
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to list daily memory files: {e}")))?;
+    Ok(Json(files))
+}
+
+async fn search_workspace_daily_memory_files(
+    Query(query): Query<DailyMemorySearchQuery>,
+) -> Result<Json<Vec<crate::DailyMemorySearchResult>>, ApiError> {
+    let results = crate::search_daily_memory_files(query.query)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to search daily memory files: {e}")))?;
+    Ok(Json(results))
+}
+
+async fn get_workspace_daily_memory_file(
+    Path(filename): Path<String>,
+) -> Result<Json<Option<String>>, ApiError> {
+    let content = crate::read_daily_memory_file(filename)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to read daily memory file: {e}")))?;
+    Ok(Json(content))
+}
+
+async fn save_workspace_daily_memory_file(
+    Path(filename): Path<String>,
+    Json(payload): Json<ContentRequest>,
+) -> Result<StatusCode, ApiError> {
+    crate::write_daily_memory_file(filename, payload.content)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to write daily memory file: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_workspace_daily_memory_file(
+    Path(filename): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    crate::delete_daily_memory_file(filename)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to delete daily memory file: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_workspace_directory_path(
+    Path(subdir): Path<String>,
+) -> Result<Json<String>, ApiError> {
+    let path = resolve_workspace_directory_path(&subdir);
+    std::fs::create_dir_all(&path)
+        .map_err(|e| ApiError::internal(format!("failed to prepare workspace directory: {e}")))?;
+    Ok(Json(path.to_string_lossy().to_string()))
 }
 
 fn sanitize_uploaded_archive_name(file_name: &str, index: usize) -> String {
@@ -1148,6 +1242,28 @@ pub async fn run_web_server() -> Result<(), String> {
             axum::routing::delete(uninstall_skill_unified),
         )
         .route("/api/skills/:id/apps/:app", put(toggle_skill_app))
+        .route(
+            "/api/workspace/files/:filename",
+            get(get_workspace_file).put(save_workspace_file),
+        )
+        .route(
+            "/api/workspace/daily-memory",
+            get(list_workspace_daily_memory_files),
+        )
+        .route(
+            "/api/workspace/daily-memory/search",
+            get(search_workspace_daily_memory_files),
+        )
+        .route(
+            "/api/workspace/daily-memory/:filename",
+            get(get_workspace_daily_memory_file)
+                .put(save_workspace_daily_memory_file)
+                .delete(delete_workspace_daily_memory_file),
+        )
+        .route(
+            "/api/workspace/directories/:subdir/path",
+            get(get_workspace_directory_path),
+        )
         .route("/api/prompts/:app", get(get_prompts))
         .route("/api/prompts/:app/import", post(import_prompt_from_file))
         .route(

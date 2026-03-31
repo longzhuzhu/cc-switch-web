@@ -54,8 +54,16 @@ import {
   deleteWebSkillBackup,
   addWebSkillRepo,
   discoverWebAvailableSkills,
+  deleteWebDailyMemoryFile,
+  getWebDailyMemoryFile,
+  getWebWorkspaceDirectoryPath,
+  getWebWorkspaceFile,
   installWebSkillArchives,
+  listWebDailyMemoryFiles,
   removeWebSkillRepo,
+  saveWebDailyMemoryFile,
+  saveWebWorkspaceFile,
+  searchWebDailyMemoryFiles,
   toggleWebSkillApp,
   updateWebProvider,
   updateWebProxyConfig,
@@ -213,6 +221,30 @@ export async function invoke<T>(
         args?.id as string,
         args?.app as AppId,
         Boolean(args?.enabled),
+      )) as T;
+    case "read_workspace_file":
+      return (await getWebWorkspaceFile(args?.filename as string)) as T;
+    case "write_workspace_file":
+      return (await saveWebWorkspaceFile(
+        args?.filename as string,
+        args?.content as string,
+      )) as T;
+    case "list_daily_memory_files":
+      return (await listWebDailyMemoryFiles()) as T;
+    case "read_daily_memory_file":
+      return (await getWebDailyMemoryFile(args?.filename as string)) as T;
+    case "write_daily_memory_file":
+      return (await saveWebDailyMemoryFile(
+        args?.filename as string,
+        args?.content as string,
+      )) as T;
+    case "delete_daily_memory_file":
+      return (await deleteWebDailyMemoryFile(args?.filename as string)) as T;
+    case "search_daily_memory_files":
+      return (await searchWebDailyMemoryFiles(args?.query as string)) as T;
+    case "get_workspace_directory_path":
+      return (await getWebWorkspaceDirectoryPath(
+        args?.subdir as "workspace" | "memory",
       )) as T;
     case "start_proxy_server":
       return (await startWebProxyServer()) as T;
