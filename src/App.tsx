@@ -992,12 +992,14 @@ function App() {
                 >
                   <Settings className="w-4 h-4" />
                 </Button>
-                <UpdateBadge
-                  onClick={() => {
-                    setSettingsDefaultTab("about");
-                    setCurrentView("settings");
-                  }}
-                />
+                {!isWebMode && (
+                  <UpdateBadge
+                    onClick={() => {
+                      setSettingsDefaultTab("about");
+                      setCurrentView("settings");
+                    }}
+                  />
+                )}
                 {isCurrentAppTakeoverActive && !isWebMode && (
                   <Button
                     variant="ghost"

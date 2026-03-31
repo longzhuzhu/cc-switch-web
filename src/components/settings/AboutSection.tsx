@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import appIcon from "@/assets/icons/app-icon.png";
 import { isWindows } from "@/lib/platform";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 
 interface AboutSectionProps {
   isPortable: boolean;
@@ -92,6 +93,7 @@ curl -fsSL https://opencode.ai/install | bash`;
 export function AboutSection({ isPortable }: AboutSectionProps) {
   // ... (use hooks as before) ...
   const { t } = useTranslation();
+  const isWebMode = isWebRuntime();
   const [version, setVersion] = useState<string | null>(null);
   const [isLoadingVersion, setIsLoadingVersion] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -200,7 +202,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
       try {
         const [appVersion] = await Promise.all([
           getVersion(),
-          ...(isWindows() ? [] : [loadAllToolVersions()]),
+          ...(isWindows() || isWebMode ? [] : [loadAllToolVersions()]),
         ]);
 
         if (active) {
@@ -226,7 +228,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
     // re-fetching all tools whenever wslShellByTool changes. Single-tool
     // refreshes are handled by refreshToolVersions in the shell/flag handlers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isWebMode]);
 
   // ... (handlers like handleOpenReleaseNotes, handleCheckUpdate) ...
 
@@ -370,41 +372,43 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
               <ExternalLink className="h-3.5 w-3.5" />
               {t("settings.releaseNotes")}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleCheckUpdate}
-              disabled={isChecking || isDownloading}
-              className="h-8 gap-1.5 text-xs"
-            >
-              {isDownloading ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t("settings.updating")}
-                </>
-              ) : hasUpdate ? (
-                <>
-                  <Download className="h-3.5 w-3.5" />
-                  {t("settings.updateTo", {
-                    version: updateInfo?.availableVersion ?? "",
-                  })}
-                </>
-              ) : isChecking ? (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  {t("settings.checking")}
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  {t("settings.checkForUpdates")}
-                </>
-              )}
-            </Button>
+            {!isWebMode && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleCheckUpdate}
+                disabled={isChecking || isDownloading}
+                className="h-8 gap-1.5 text-xs"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {t("settings.updating")}
+                  </>
+                ) : hasUpdate ? (
+                  <>
+                    <Download className="h-3.5 w-3.5" />
+                    {t("settings.updateTo", {
+                      version: updateInfo?.availableVersion ?? "",
+                    })}
+                  </>
+                ) : isChecking ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    {t("settings.checking")}
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    {t("settings.checkForUpdates")}
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
 
-        {hasUpdate && updateInfo && (
+        {!isWebMode && hasUpdate && updateInfo && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -424,7 +428,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
         )}
       </motion.div>
 
-      {!isWindows() && (
+      {!isWebMode && !isWindows() && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-sm font-medium">
@@ -560,7 +564,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
         </div>
       )}
 
-      {!isWindows() && (
+      {!isWebMode && !isWindows() && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
