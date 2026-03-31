@@ -154,6 +154,7 @@ export function useSettings(): UseSettingsResult {
 
         // 如果开机自启状态改变，调用系统 API
         if (
+          !isWebMode &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -173,6 +174,7 @@ export function useSettings(): UseSettingsResult {
         // 仅在本次更新包含 skipClaudeOnboarding 时触发，避免其它自动保存误触发
         const nextSkipClaudeOnboarding = updates.skipClaudeOnboarding;
         if (
+          !isWebMode &&
           nextSkipClaudeOnboarding !== undefined &&
           nextSkipClaudeOnboarding !== (data?.skipClaudeOnboarding ?? false)
         ) {
@@ -212,10 +214,12 @@ export function useSettings(): UseSettingsResult {
         }
 
         // 更新托盘菜单
-        try {
-          await providersApi.updateTrayMenu();
-        } catch (error) {
-          console.warn("[useSettings] Failed to refresh tray menu", error);
+        if (!isWebMode) {
+          try {
+            await providersApi.updateTrayMenu();
+          } catch (error) {
+            console.warn("[useSettings] Failed to refresh tray menu", error);
+          }
         }
 
         return { requiresRestart: false };
@@ -275,6 +279,7 @@ export function useSettings(): UseSettingsResult {
 
         // 只在开机自启状态真正改变时调用系统 API
         if (
+          !isWebMode &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -293,7 +298,10 @@ export function useSettings(): UseSettingsResult {
         // Claude Code 初次安装确认：开=写入 hasCompletedOnboarding=true；关=删除该字段
         const prevSkipClaudeOnboarding = data?.skipClaudeOnboarding ?? false;
         const nextSkipClaudeOnboarding = payload.skipClaudeOnboarding ?? false;
-        if (nextSkipClaudeOnboarding !== prevSkipClaudeOnboarding) {
+        if (
+          !isWebMode &&
+          nextSkipClaudeOnboarding !== prevSkipClaudeOnboarding
+        ) {
           try {
             if (nextSkipClaudeOnboarding) {
               await settingsApi.applyClaudeOnboardingSkip();
@@ -319,6 +327,7 @@ export function useSettings(): UseSettingsResult {
 
         // 只在 Claude 插件集成状态真正改变时调用系统 API
         if (
+          !isWebMode &&
           payload.enableClaudePluginIntegration !== undefined &&
           payload.enableClaudePluginIntegration !==
             data?.enableClaudePluginIntegration
@@ -356,10 +365,12 @@ export function useSettings(): UseSettingsResult {
           );
         }
 
-        try {
-          await providersApi.updateTrayMenu();
-        } catch (error) {
-          console.warn("[useSettings] Failed to refresh tray menu", error);
+        if (!isWebMode) {
+          try {
+            await providersApi.updateTrayMenu();
+          } catch (error) {
+            console.warn("[useSettings] Failed to refresh tray menu", error);
+          }
         }
 
         // 如果 Claude/Codex/Gemini/OpenCode 的目录覆盖发生变化，则立即将"当前使用的供应商"写回对应应用的 live 配置

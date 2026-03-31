@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { providersApi, settingsApi, openclawApi, type AppId } from "@/lib/api";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 import type {
   Provider,
   UsageScript,
@@ -26,6 +27,7 @@ import { openclawKeys } from "@/hooks/useOpenClaw";
 export function useProviderActions(activeApp: AppId, isProxyRunning?: boolean) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const isWebMode = isWebRuntime();
 
   const addProviderMutation = useAddProviderMutation(activeApp);
   const updateProviderMutation = useUpdateProviderMutation(activeApp);
@@ -35,7 +37,7 @@ export function useProviderActions(activeApp: AppId, isProxyRunning?: boolean) {
   // Claude 插件同步逻辑
   const syncClaudePlugin = useCallback(
     async (provider: Provider) => {
-      if (activeApp !== "claude") return;
+      if (isWebMode || activeApp !== "claude") return;
 
       try {
         const settings = await settingsApi.get();
@@ -56,7 +58,7 @@ export function useProviderActions(activeApp: AppId, isProxyRunning?: boolean) {
         toast.error(detail, { duration: 4200 });
       }
     },
-    [activeApp, t],
+    [activeApp, isWebMode, t],
   );
 
   // 添加供应商
