@@ -18,6 +18,7 @@ import {
   getWebIsLiveTakeoverActive,
   getWebIsProxyRunning,
   getWebLogConfig,
+  getWebConfigDir,
   getWebOpenClawAgentsDefaults,
   getWebOpenClawDefaultModel,
   getWebOpenClawEnv,
@@ -543,7 +544,7 @@ export async function invoke<T>(
     case "get_app_config_dir_override":
       return null as T;
     case "get_config_dir":
-      return "" as T;
+      return (await getWebConfigDir(args?.app as AppId)) as T;
     case "update_tray_menu":
       return false as T;
     case "set_window_theme":

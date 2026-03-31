@@ -1608,6 +1608,13 @@ async fn get_current_provider(
     Ok(Json(current_provider_id))
 }
 
+async fn get_config_dir(Path(app): Path<String>) -> Result<Json<String>, ApiError> {
+    let dir = crate::commands::get_config_dir(app)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to load config dir: {e}")))?;
+    Ok(Json(dir))
+}
+
 async fn add_provider(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
@@ -2156,6 +2163,7 @@ pub async fn run_web_server() -> Result<(), String> {
             "/api/settings/stream-check-config",
             get(get_stream_check_config).put(set_stream_check_config),
         )
+        .route("/api/settings/config-dir/:app", get(get_config_dir))
         .route("/api/backups/db", get(list_db_backups).post(create_db_backup))
         .route("/api/backups/db/rename", put(rename_db_backup))
         .route(

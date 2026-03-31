@@ -312,42 +312,42 @@ export function SettingsPage({
                       defaultValue={[]}
                       className="w-full space-y-4"
                     >
-                      {!isWebMode && (
-                        <AccordionItem
-                          value="directory"
-                          className="rounded-xl glass-card overflow-hidden"
-                        >
-                          <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
-                            <div className="flex items-center gap-3">
-                              <FolderSearch className="h-5 w-5 text-primary" />
-                              <div className="text-left">
-                                <h3 className="text-base font-semibold">
-                                  {t("settings.advanced.configDir.title")}
-                                </h3>
-                                <p className="text-sm text-muted-foreground font-normal">
-                                  {t("settings.advanced.configDir.description")}
-                                </p>
-                              </div>
+                      <AccordionItem
+                        value="directory"
+                        className="rounded-xl glass-card overflow-hidden"
+                      >
+                        <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            <FolderSearch className="h-5 w-5 text-primary" />
+                            <div className="text-left">
+                              <h3 className="text-base font-semibold">
+                                {t("settings.advanced.configDir.title")}
+                              </h3>
+                              <p className="text-sm text-muted-foreground font-normal">
+                                {t("settings.advanced.configDir.description")}
+                              </p>
                             </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
-                            <DirectorySettings
-                              appConfigDir={appConfigDir}
-                              resolvedDirs={resolvedDirs}
-                              onAppConfigChange={updateAppConfigDir}
-                              onBrowseAppConfig={browseAppConfigDir}
-                              onResetAppConfig={resetAppConfigDir}
-                              claudeDir={settings.claudeConfigDir}
-                              codexDir={settings.codexConfigDir}
-                              geminiDir={settings.geminiConfigDir}
-                              opencodeDir={settings.opencodeConfigDir}
-                              onDirectoryChange={updateDirectory}
-                              onBrowseDirectory={browseDirectory}
-                              onResetDirectory={resetDirectory}
-                            />
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+                          <DirectorySettings
+                            showAppConfigDir={!isWebMode}
+                            allowBrowse={!isWebMode}
+                            appConfigDir={appConfigDir}
+                            resolvedDirs={resolvedDirs}
+                            onAppConfigChange={updateAppConfigDir}
+                            onBrowseAppConfig={browseAppConfigDir}
+                            onResetAppConfig={resetAppConfigDir}
+                            claudeDir={settings.claudeConfigDir}
+                            codexDir={settings.codexConfigDir}
+                            geminiDir={settings.geminiConfigDir}
+                            opencodeDir={settings.opencodeConfigDir}
+                            onDirectoryChange={updateDirectory}
+                            onBrowseDirectory={browseDirectory}
+                            onResetDirectory={resetDirectory}
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
 
                       <AccordionItem
                         value="data"
@@ -498,7 +498,7 @@ export function SettingsPage({
               </TabsContent>
             </div>
 
-            {!isWebMode && activeTab === "advanced" && settings && (
+            {activeTab === "advanced" && settings && (
               <div
                 className="flex-shrink-0 py-4 border-t border-border-default"
                 style={{ backgroundColor: "hsl(var(--background))" }}

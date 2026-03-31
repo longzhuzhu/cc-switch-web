@@ -7,6 +7,8 @@ import type { AppId } from "@/lib/api";
 import type { ResolvedDirectories } from "@/hooks/useSettings";
 
 interface DirectorySettingsProps {
+  showAppConfigDir?: boolean;
+  allowBrowse?: boolean;
   appConfigDir?: string;
   resolvedDirs: ResolvedDirectories;
   onAppConfigChange: (value?: string) => void;
@@ -22,6 +24,8 @@ interface DirectorySettingsProps {
 }
 
 export function DirectorySettings({
+  showAppConfigDir = true,
+  allowBrowse = true,
   appConfigDir,
   resolvedDirs,
   onAppConfigChange,
@@ -40,41 +44,45 @@ export function DirectorySettings({
   return (
     <div className="space-y-6">
       {/* CC Switch 配置目录 - 独立区块 */}
-      <section className="space-y-4">
-        <header className="space-y-1">
-          <h3 className="text-sm font-medium">{t("settings.appConfigDir")}</h3>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.appConfigDirDescription")}
-          </p>
-        </header>
+      {showAppConfigDir && (
+        <section className="space-y-4">
+          <header className="space-y-1">
+            <h3 className="text-sm font-medium">{t("settings.appConfigDir")}</h3>
+            <p className="text-xs text-muted-foreground">
+              {t("settings.appConfigDirDescription")}
+            </p>
+          </header>
 
-        <div className="flex items-center gap-2">
-          <Input
-            value={appConfigDir ?? resolvedDirs.appConfig ?? ""}
-            placeholder={t("settings.browsePlaceholderApp")}
-            className="text-xs"
-            onChange={(event) => onAppConfigChange(event.target.value)}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onBrowseAppConfig}
-            title={t("settings.browseDirectory")}
-          >
-            <FolderSearch className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onResetAppConfig}
-            title={t("settings.resetDefault")}
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </section>
+          <div className="flex items-center gap-2">
+            <Input
+              value={appConfigDir ?? resolvedDirs.appConfig ?? ""}
+              placeholder={t("settings.browsePlaceholderApp")}
+              className="text-xs"
+              onChange={(event) => onAppConfigChange(event.target.value)}
+            />
+            {allowBrowse && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onBrowseAppConfig}
+                title={t("settings.browseDirectory")}
+              >
+                <FolderSearch className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={onResetAppConfig}
+              title={t("settings.resetDefault")}
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </section>
+      )}
 
       {/* Claude/Codex 配置目录 - 独立区块 */}
       <section className="space-y-4">
@@ -88,6 +96,7 @@ export function DirectorySettings({
         </header>
 
         <DirectoryInput
+          allowBrowse={allowBrowse}
           label={t("settings.claudeConfigDir")}
           description={undefined}
           value={claudeDir}
@@ -99,6 +108,7 @@ export function DirectorySettings({
         />
 
         <DirectoryInput
+          allowBrowse={allowBrowse}
           label={t("settings.codexConfigDir")}
           description={undefined}
           value={codexDir}
@@ -110,6 +120,7 @@ export function DirectorySettings({
         />
 
         <DirectoryInput
+          allowBrowse={allowBrowse}
           label={t("settings.geminiConfigDir")}
           description={undefined}
           value={geminiDir}
@@ -121,6 +132,7 @@ export function DirectorySettings({
         />
 
         <DirectoryInput
+          allowBrowse={allowBrowse}
           label={t("settings.opencodeConfigDir")}
           description={undefined}
           value={opencodeDir}
@@ -136,6 +148,7 @@ export function DirectorySettings({
 }
 
 interface DirectoryInputProps {
+  allowBrowse: boolean;
   label: string;
   description?: string;
   value?: string;
@@ -147,6 +160,7 @@ interface DirectoryInputProps {
 }
 
 function DirectoryInput({
+  allowBrowse,
   label,
   description,
   value,
@@ -177,15 +191,17 @@ function DirectoryInput({
           className="text-xs"
           onChange={(event) => onChange(event.target.value)}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={onBrowse}
-          title={t("settings.browseDirectory")}
-        >
-          <FolderSearch className="h-4 w-4" />
-        </Button>
+        {allowBrowse && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onBrowse}
+            title={t("settings.browseDirectory")}
+          >
+            <FolderSearch className="h-4 w-4" />
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline"

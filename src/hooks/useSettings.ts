@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { providersApi, settingsApi, type AppId } from "@/lib/api";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
 import { useSettingsQuery, useSaveSettingsMutation } from "@/lib/query";
 import type { Settings } from "@/types";
@@ -61,6 +62,7 @@ const sanitizeDir = (value?: string | null): string | undefined => {
  */
 export function useSettings(): UseSettingsResult {
   const { t } = useTranslation();
+  const isWebMode = isWebRuntime();
   const { data } = useSettingsQuery();
   const saveMutation = useSaveSettingsMutation();
 
@@ -267,7 +269,9 @@ export function useSettings(): UseSettingsResult {
 
         await saveMutation.mutateAsync(payload);
 
-        await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        if (!isWebMode) {
+          await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        }
 
         // 只在开机自启状态真正改变时调用系统 API
         if (
@@ -406,6 +410,7 @@ export function useSettings(): UseSettingsResult {
       appConfigDir,
       data,
       initialAppConfigDir,
+      isWebMode,
       saveMutation,
       settings,
       setRequiresRestart,

@@ -226,6 +226,10 @@ export async function getWebProviders(
   }
 }
 
+export async function getWebConfigDir(appId: AppId): Promise<string> {
+  return requestJson<string>(`/api/settings/config-dir/${appId}`);
+}
+
 export async function getWebLiveProviderIds(appId: AppId): Promise<string[]> {
   try {
     return await requestJson<string[]>(
