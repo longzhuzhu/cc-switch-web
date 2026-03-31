@@ -3,7 +3,9 @@ import { isTauriRuntime } from "./env";
 import {
   addWebProviderToFailoverQueue,
   addWebProvider,
+  createWebDbBackup,
   deleteWebProvider,
+  deleteWebDbBackup,
   getWebLiveProviderIds,
   getWebAutoFailoverEnabled,
   getWebAvailableProvidersForFailover,
@@ -14,6 +16,7 @@ import {
   getWebGlobalProxyConfig,
   getWebIsLiveTakeoverActive,
   getWebIsProxyRunning,
+  getWebLogConfig,
   getWebOpenClawAgentsDefaults,
   getWebOpenClawDefaultModel,
   getWebOpenClawEnv,
@@ -33,18 +36,24 @@ import {
   getWebSettings,
   getWebCurrentPromptFileContent,
   getWebInstalledSkills,
+  getWebStreamCheckConfig,
   getWebSkillRepos,
   getWebSkillBackups,
   getWebUnmanagedSkills,
   getWebOptimizerConfig,
+  listWebDbBackups,
+  renameWebDbBackup,
   removeWebProviderFromFailoverQueue,
+  restoreWebDbBackup,
   saveWebSettings,
   getWebRectifierConfig,
   setWebAutoFailoverEnabled,
   setWebDefaultCostMultiplier,
+  setWebLogConfig,
   setWebOptimizerConfig,
   setWebPricingModelSource,
   setWebRectifierConfig,
+  setWebStreamCheckConfig,
   toggleWebMcpApp,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
@@ -139,6 +148,27 @@ export async function invoke<T>(
       return (await getWebOptimizerConfig()) as T;
     case "set_optimizer_config":
       return (await setWebOptimizerConfig(args?.config as any)) as T;
+    case "get_log_config":
+      return (await getWebLogConfig()) as T;
+    case "set_log_config":
+      return (await setWebLogConfig(args?.config as any)) as T;
+    case "get_stream_check_config":
+      return (await getWebStreamCheckConfig()) as T;
+    case "save_stream_check_config":
+      return (await setWebStreamCheckConfig(args?.config as any)) as T;
+    case "create_db_backup":
+      return (await createWebDbBackup()) as T;
+    case "list_db_backups":
+      return (await listWebDbBackups()) as T;
+    case "restore_db_backup":
+      return (await restoreWebDbBackup(args?.filename as string)) as T;
+    case "rename_db_backup":
+      return (await renameWebDbBackup(
+        args?.oldFilename as string,
+        args?.newName as string,
+      )) as T;
+    case "delete_db_backup":
+      return (await deleteWebDbBackup(args?.filename as string)) as T;
     case "get_providers": {
       const appId = args?.app as AppId | undefined;
       if (!appId) {

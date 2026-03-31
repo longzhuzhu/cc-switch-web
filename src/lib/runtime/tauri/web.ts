@@ -14,9 +14,12 @@ import type { SessionMessage, SessionMeta } from "@/types";
 import type { AppId } from "@/lib/api";
 import type { Prompt } from "@/lib/api";
 import type {
+  BackupEntry,
+  LogConfig,
   OptimizerConfig,
   RectifierConfig,
 } from "@/lib/api/settings";
+import type { StreamCheckConfig } from "@/lib/api/model-test";
 import type { DeleteSessionOptions, DeleteSessionResult } from "@/lib/api/sessions";
 import type {
   DiscoverableSkill,
@@ -557,6 +560,56 @@ export async function setWebOptimizerConfig(
   config: OptimizerConfig,
 ): Promise<boolean> {
   return requestWithBody<boolean>("/api/settings/optimizer", "PUT", config);
+}
+
+export async function getWebLogConfig(): Promise<LogConfig> {
+  return requestJson<LogConfig>("/api/settings/log-config");
+}
+
+export async function setWebLogConfig(config: LogConfig): Promise<boolean> {
+  return requestWithBody<boolean>("/api/settings/log-config", "PUT", config);
+}
+
+export async function getWebStreamCheckConfig(): Promise<StreamCheckConfig> {
+  return requestJson<StreamCheckConfig>("/api/settings/stream-check-config");
+}
+
+export async function setWebStreamCheckConfig(
+  config: StreamCheckConfig,
+): Promise<void> {
+  return requestWithBody<void>("/api/settings/stream-check-config", "PUT", config);
+}
+
+export async function createWebDbBackup(): Promise<string> {
+  return requestWithBody<string>("/api/backups/db", "POST");
+}
+
+export async function listWebDbBackups(): Promise<BackupEntry[]> {
+  return requestJson<BackupEntry[]>("/api/backups/db");
+}
+
+export async function restoreWebDbBackup(filename: string): Promise<string> {
+  return requestWithBody<string>(
+    `/api/backups/db/${encodeURIComponent(filename)}/restore`,
+    "POST",
+  );
+}
+
+export async function renameWebDbBackup(
+  oldFilename: string,
+  newName: string,
+): Promise<string> {
+  return requestWithBody<string>("/api/backups/db/rename", "PUT", {
+    oldFilename,
+    newName,
+  });
+}
+
+export async function deleteWebDbBackup(filename: string): Promise<void> {
+  return requestWithBody<void>(
+    `/api/backups/db/${encodeURIComponent(filename)}`,
+    "DELETE",
+  );
 }
 
 export async function addWebProvider(

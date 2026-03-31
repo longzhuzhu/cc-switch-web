@@ -18,8 +18,8 @@ use crate::database::FailoverQueueItem;
 use crate::provider::Provider;
 use crate::proxy::circuit_breaker::{CircuitBreakerConfig, CircuitBreakerStats};
 use crate::proxy::types::{
-    AppProxyConfig, GlobalProxyConfig, OptimizerConfig, ProviderHealth, ProxyConfig,
-    ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
+    AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, ProviderHealth,
+    ProxyConfig, ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
 };
 use crate::prompt::Prompt;
 use crate::services::skill::{
@@ -109,6 +109,13 @@ struct CurrentAppRequest {
 #[serde(rename_all = "camelCase")]
 struct ContentRequest {
     content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameBackupRequest {
+    old_filename: String,
+    new_name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1116,6 +1123,106 @@ async fn set_optimizer_config(
     Ok(Json(true))
 }
 
+async fn get_log_config(State(state): State<WebApiState>) -> Result<Json<LogConfig>, ApiError> {
+    let config = state
+        .app_state
+        .db
+        .get_log_config()
+        .map_err(|e| ApiError::internal(format!("failed to load log config: {e}")))?;
+    Ok(Json(config))
+}
+
+async fn set_log_config(
+    State(state): State<WebApiState>,
+    Json(config): Json<LogConfig>,
+) -> Result<Json<bool>, ApiError> {
+    state
+        .app_state
+        .db
+        .set_log_config(&config)
+        .map_err(|e| ApiError::internal(format!("failed to save log config: {e}")))?;
+    log::set_max_level(config.to_level_filter());
+    Ok(Json(true))
+}
+
+async fn get_stream_check_config(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::services::stream_check::StreamCheckConfig>, ApiError> {
+    let config = state
+        .app_state
+        .db
+        .get_stream_check_config()
+        .map_err(|e| ApiError::internal(format!("failed to load stream check config: {e}")))?;
+    Ok(Json(config))
+}
+
+async fn set_stream_check_config(
+    State(state): State<WebApiState>,
+    Json(config): Json<crate::services::stream_check::StreamCheckConfig>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .app_state
+        .db
+        .save_stream_check_config(&config)
+        .map_err(|e| ApiError::internal(format!("failed to save stream check config: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn create_db_backup(
+    State(state): State<WebApiState>,
+) -> Result<Json<String>, ApiError> {
+    let db = state.app_state.db.clone();
+    let filename = tokio::task::spawn_blocking(move || match db.backup_database_file()? {
+        Some(path) => Ok(path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()),
+        None => Err(crate::error::AppError::Config(
+            "Database file not found, backup skipped".to_string(),
+        )),
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to create database backup: {e}")))?
+    .map_err(|e| ApiError::internal(format!("failed to create database backup: {e}")))?;
+
+    Ok(Json(filename))
+}
+
+async fn list_db_backups(
+) -> Result<Json<Vec<crate::database::backup::BackupEntry>>, ApiError> {
+    let backups = crate::Database::list_backups()
+        .map_err(|e| ApiError::internal(format!("failed to list database backups: {e}")))?;
+    Ok(Json(backups))
+}
+
+async fn restore_db_backup(
+    State(state): State<WebApiState>,
+    Path(filename): Path<String>,
+) -> Result<Json<String>, ApiError> {
+    let db = state.app_state.db.clone();
+    let safety_backup_id = tokio::task::spawn_blocking(move || db.restore_from_backup(&filename))
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to restore database backup: {e}")))?
+        .map_err(|e| ApiError::internal(format!("failed to restore database backup: {e}")))?;
+    Ok(Json(safety_backup_id))
+}
+
+async fn rename_db_backup(
+    Json(payload): Json<RenameBackupRequest>,
+) -> Result<Json<String>, ApiError> {
+    let filename = crate::Database::rename_backup(&payload.old_filename, &payload.new_name)
+        .map_err(|e| ApiError::internal(format!("failed to rename database backup: {e}")))?;
+    Ok(Json(filename))
+}
+
+async fn delete_db_backup(
+    Path(filename): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    crate::Database::delete_backup(&filename)
+        .map_err(|e| ApiError::internal(format!("failed to delete database backup: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn get_providers(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
@@ -1684,6 +1791,21 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/settings/optimizer",
             get(get_optimizer_config).put(set_optimizer_config),
+        )
+        .route("/api/settings/log-config", get(get_log_config).put(set_log_config))
+        .route(
+            "/api/settings/stream-check-config",
+            get(get_stream_check_config).put(set_stream_check_config),
+        )
+        .route("/api/backups/db", get(list_db_backups).post(create_db_backup))
+        .route("/api/backups/db/rename", put(rename_db_backup))
+        .route(
+            "/api/backups/db/:filename",
+            axum::routing::delete(delete_db_backup),
+        )
+        .route(
+            "/api/backups/db/:filename/restore",
+            post(restore_db_backup),
         )
         .route("/api/providers/:app", get(get_providers).post(add_provider))
         .route("/api/providers/:app/current", get(get_current_provider))

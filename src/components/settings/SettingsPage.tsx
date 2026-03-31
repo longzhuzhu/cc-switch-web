@@ -104,9 +104,7 @@ export function SettingsPage({
   useEffect(() => {
     if (open) {
       const initialTab =
-        isWebMode && ["auth", "advanced"].includes(defaultTab)
-          ? "general"
-          : defaultTab;
+        isWebMode && ["auth"].includes(defaultTab) ? "general" : defaultTab;
       setActiveTab(initialTab);
       resetStatus();
     }
@@ -198,7 +196,7 @@ export function SettingsPage({
           className="flex flex-col h-full"
         >
           <TabsList
-            className={`grid w-full mb-6 glass rounded-lg ${isWebMode ? "grid-cols-4" : "grid-cols-6"}`}
+            className={`grid w-full mb-6 glass rounded-lg ${isWebMode ? "grid-cols-5" : "grid-cols-6"}`}
           >
             <TabsTrigger value="general">
               {t("settings.tabGeneral")}
@@ -209,11 +207,9 @@ export function SettingsPage({
                 {t("settings.tabAuth", { defaultValue: "认证" })}
               </TabsTrigger>
             )}
-            {!isWebMode && (
-              <TabsTrigger value="advanced">
-                {t("settings.tabAdvanced")}
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="advanced">
+              {t("settings.tabAdvanced")}
+            </TabsTrigger>
             <TabsTrigger value="usage">{t("usage.title")}</TabsTrigger>
             <TabsTrigger value="about">{t("common.about")}</TabsTrigger>
           </TabsList>
@@ -302,20 +298,20 @@ export function SettingsPage({
                 </TabsContent>
               )}
 
-              {!isWebMode && (
-                <TabsContent value="advanced" className="space-y-6 mt-0 pb-4">
-                  {settings ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="space-y-4"
+              <TabsContent value="advanced" className="space-y-6 mt-0 pb-4">
+                {settings ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-4"
+                  >
+                    <Accordion
+                      type="multiple"
+                      defaultValue={[]}
+                      className="w-full space-y-4"
                     >
-                      <Accordion
-                        type="multiple"
-                        defaultValue={[]}
-                        className="w-full space-y-4"
-                      >
+                      {!isWebMode && (
                         <AccordionItem
                           value="directory"
                           className="rounded-xl glass-card overflow-hidden"
@@ -350,7 +346,9 @@ export function SettingsPage({
                             />
                           </AccordionContent>
                         </AccordionItem>
+                      )}
 
+                      {!isWebMode && (
                         <AccordionItem
                           value="data"
                           className="rounded-xl glass-card overflow-hidden"
@@ -382,40 +380,42 @@ export function SettingsPage({
                             />
                           </AccordionContent>
                         </AccordionItem>
+                      )}
 
-                        <AccordionItem
-                          value="backup"
-                          className="rounded-xl glass-card overflow-hidden"
-                        >
-                          <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
-                            <div className="flex items-center gap-3">
-                              <HardDriveDownload className="h-5 w-5 text-amber-500" />
-                              <div className="text-left">
-                                <h3 className="text-base font-semibold">
-                                  {t("settings.advanced.backup.title", {
-                                    defaultValue: "Backup & Restore",
-                                  })}
-                                </h3>
-                                <p className="text-sm text-muted-foreground font-normal">
-                                  {t("settings.advanced.backup.description", {
-                                    defaultValue:
-                                      "Manage automatic backups, view and restore database snapshots",
-                                  })}
-                                </p>
-                              </div>
+                      <AccordionItem
+                        value="backup"
+                        className="rounded-xl glass-card overflow-hidden"
+                      >
+                        <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            <HardDriveDownload className="h-5 w-5 text-amber-500" />
+                            <div className="text-left">
+                              <h3 className="text-base font-semibold">
+                                {t("settings.advanced.backup.title", {
+                                  defaultValue: "Backup & Restore",
+                                })}
+                              </h3>
+                              <p className="text-sm text-muted-foreground font-normal">
+                                {t("settings.advanced.backup.description", {
+                                  defaultValue:
+                                    "Manage automatic backups, view and restore database snapshots",
+                                })}
+                              </p>
                             </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
-                            <BackupListSection
-                              backupIntervalHours={settings.backupIntervalHours}
-                              backupRetainCount={settings.backupRetainCount}
-                              onSettingsChange={(updates) =>
-                                handleAutoSave(updates)
-                              }
-                            />
-                          </AccordionContent>
-                        </AccordionItem>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+                          <BackupListSection
+                            backupIntervalHours={settings.backupIntervalHours}
+                            backupRetainCount={settings.backupRetainCount}
+                            onSettingsChange={(updates) =>
+                              handleAutoSave(updates)
+                            }
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
 
+                      {!isWebMode && (
                         <AccordionItem
                           value="cloudSync"
                           className="rounded-xl glass-card overflow-hidden"
@@ -441,55 +441,55 @@ export function SettingsPage({
                             />
                           </AccordionContent>
                         </AccordionItem>
+                      )}
 
-                        <AccordionItem
-                          value="test"
-                          className="rounded-xl glass-card overflow-hidden"
-                        >
-                          <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
-                            <div className="flex items-center gap-3">
-                              <FlaskConical className="h-5 w-5 text-emerald-500" />
-                              <div className="text-left">
-                                <h3 className="text-base font-semibold">
-                                  {t("settings.advanced.modelTest.title")}
-                                </h3>
-                                <p className="text-sm text-muted-foreground font-normal">
-                                  {t("settings.advanced.modelTest.description")}
-                                </p>
-                              </div>
+                      <AccordionItem
+                        value="test"
+                        className="rounded-xl glass-card overflow-hidden"
+                      >
+                        <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            <FlaskConical className="h-5 w-5 text-emerald-500" />
+                            <div className="text-left">
+                              <h3 className="text-base font-semibold">
+                                {t("settings.advanced.modelTest.title")}
+                              </h3>
+                              <p className="text-sm text-muted-foreground font-normal">
+                                {t("settings.advanced.modelTest.description")}
+                              </p>
                             </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
-                            <ModelTestConfigPanel />
-                          </AccordionContent>
-                        </AccordionItem>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+                          <ModelTestConfigPanel />
+                        </AccordionContent>
+                      </AccordionItem>
 
-                        <AccordionItem
-                          value="logConfig"
-                          className="rounded-xl glass-card overflow-hidden"
-                        >
-                          <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
-                            <div className="flex items-center gap-3">
-                              <ScrollText className="h-5 w-5 text-cyan-500" />
-                              <div className="text-left">
-                                <h3 className="text-base font-semibold">
-                                  {t("settings.advanced.logConfig.title")}
-                                </h3>
-                                <p className="text-sm text-muted-foreground font-normal">
-                                  {t("settings.advanced.logConfig.description")}
-                                </p>
-                              </div>
+                      <AccordionItem
+                        value="logConfig"
+                        className="rounded-xl glass-card overflow-hidden"
+                      >
+                        <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            <ScrollText className="h-5 w-5 text-cyan-500" />
+                            <div className="text-left">
+                              <h3 className="text-base font-semibold">
+                                {t("settings.advanced.logConfig.title")}
+                              </h3>
+                              <p className="text-sm text-muted-foreground font-normal">
+                                {t("settings.advanced.logConfig.description")}
+                              </p>
                             </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
-                            <LogConfigPanel />
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
-                    </motion.div>
-                  ) : null}
-                </TabsContent>
-              )}
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+                          <LogConfigPanel />
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  </motion.div>
+                ) : null}
+              </TabsContent>
 
               <TabsContent value="usage" className="mt-0">
                 <UsageDashboard />
