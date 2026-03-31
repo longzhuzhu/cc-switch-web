@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { settingsApi } from "@/lib/api";
-import { isWebRuntime } from "@/lib/runtime/tauri/env";
+import { useCallback, useState } from "react";
 
 export interface UseSettingsMetadataResult {
-  isPortable: boolean;
   requiresRestart: boolean;
   isLoading: boolean;
   acknowledgeRestart: () => void;
@@ -13,54 +10,17 @@ export interface UseSettingsMetadataResult {
 /**
  * useSettingsMetadata - 元数据管理
  * 负责：
- * - isPortable（便携模式）
  * - requiresRestart（需要重启标志）
  */
 export function useSettingsMetadata(): UseSettingsMetadataResult {
-  const [isPortable, setIsPortable] = useState(false);
   const [requiresRestart, setRequiresRestart] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const webRuntime = isWebRuntime();
-
-  // 加载元数据
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-
-    const load = async () => {
-      try {
-        if (webRuntime) {
-          if (!active) return;
-          setIsPortable(false);
-          return;
-        }
-
-        const portable = await settingsApi.isPortable();
-
-        if (!active) return;
-
-        setIsPortable(portable);
-      } catch (error) {
-        console.error("[useSettingsMetadata] Failed to load metadata", error);
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [webRuntime]);
+  const [isLoading] = useState(false);
 
   const acknowledgeRestart = useCallback(() => {
     setRequiresRestart(false);
   }, []);
 
   return {
-    isPortable,
     requiresRestart,
     isLoading,
     acknowledgeRestart,

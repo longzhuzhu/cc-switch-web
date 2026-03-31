@@ -37,20 +37,8 @@ export const settingsApi = {
     return await invoke("restart_app");
   },
 
-  async checkUpdates(): Promise<void> {
-    await invoke("check_for_updates");
-  },
-
-  async isPortable(): Promise<boolean> {
-    return await invoke("is_portable_mode");
-  },
-
   async getConfigDir(appId: AppId): Promise<string> {
     return await invoke("get_config_dir", { app: appId });
-  },
-
-  async openConfigFolder(appId: AppId): Promise<void> {
-    await invoke("open_config_folder", { app: appId });
   },
 
   async selectConfigDirectory(defaultPath?: string): Promise<string | null> {
@@ -63,10 +51,6 @@ export const settingsApi = {
 
   async getAppConfigPath(): Promise<string> {
     return await invoke("get_app_config_path");
-  },
-
-  async openAppConfigFolder(): Promise<void> {
-    await invoke("open_app_config_folder");
   },
 
   async getAppConfigDirOverride(): Promise<string | null> {
@@ -179,10 +163,6 @@ export const settingsApi = {
 
   async setAutoLaunch(enabled: boolean): Promise<boolean> {
     return await invoke("set_auto_launch", { enabled });
-  },
-
-  async getAutoLaunchStatus(): Promise<boolean> {
-    return await invoke("get_auto_launch_status");
   },
 
   async getToolVersions(

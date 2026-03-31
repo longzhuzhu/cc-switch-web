@@ -23,7 +23,6 @@ export interface UseSettingsResult {
   settings: SettingsFormState | null;
   isLoading: boolean;
   isSaving: boolean;
-  isPortable: boolean;
   appConfigDir?: string;
   resolvedDirs: ResolvedDirectories;
   requiresRestart: boolean;
@@ -96,7 +95,6 @@ export function useSettings(): UseSettingsResult {
 
   // 3️⃣ 元数据管理
   const {
-    isPortable,
     requiresRestart,
     isLoading: isMetadataLoading,
     acknowledgeRestart,
@@ -438,7 +436,6 @@ export function useSettings(): UseSettingsResult {
     settings,
     isLoading,
     isSaving: saveMutation.isPending,
-    isPortable,
     appConfigDir,
     resolvedDirs,
     requiresRestart,
