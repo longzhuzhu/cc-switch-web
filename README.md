@@ -28,6 +28,19 @@ If you are looking for the original CC Switch project, desktop application, or u
 
 ## Run
 
+### Quick Commands
+
+| Scenario | Command |
+| --- | --- |
+| Default Web development | `pnpm dev` |
+| Foreground Docker stack | `pnpm dev:d` |
+| Standard Docker build | `pnpm build` |
+| Background Docker start | `pnpm up:d` |
+| Follow Docker logs | `pnpm logs:d` |
+| Stop Docker stack | `pnpm down:d` |
+| Direct run on Linux | `pnpm start:l` |
+| Direct run on Windows | `pnpm start:w` |
+
 ### Local Run
 
 1. Install dependencies:
