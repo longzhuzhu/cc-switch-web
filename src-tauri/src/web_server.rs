@@ -20,7 +20,8 @@ use crate::proxy::types::{
     AppProxyConfig, GlobalProxyConfig, ProviderHealth, ProxyConfig, ProxyServerInfo,
     ProxyStatus, ProxyTakeoverStatus,
 };
-use crate::services::{McpService, ProviderService, SwitchResult};
+use crate::prompt::Prompt;
+use crate::services::{McpService, PromptService, ProviderService, SwitchResult};
 use crate::store::AppState;
 use crate::Database;
 
@@ -125,6 +126,66 @@ async fn import_mcp_from_apps(State(state): State<WebApiState>) -> Result<Json<u
     total += McpService::import_from_gemini(state.app_state.as_ref()).unwrap_or(0);
     total += McpService::import_from_opencode(state.app_state.as_ref()).unwrap_or(0);
     Ok(Json(total))
+}
+
+async fn get_prompts(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+) -> Result<Json<indexmap::IndexMap<String, Prompt>>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let prompts = PromptService::get_prompts(state.app_state.as_ref(), app_type)
+        .map_err(|e| ApiError::internal(format!("failed to load prompts: {e}")))?;
+    Ok(Json(prompts))
+}
+
+async fn upsert_prompt(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(prompt): Json<Prompt>,
+) -> Result<StatusCode, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    PromptService::upsert_prompt(state.app_state.as_ref(), app_type, &id, prompt)
+        .map_err(|e| ApiError::internal(format!("failed to save prompt: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_prompt(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    PromptService::delete_prompt(state.app_state.as_ref(), app_type, &id)
+        .map_err(|e| ApiError::internal(format!("failed to delete prompt: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn enable_prompt(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    PromptService::enable_prompt(state.app_state.as_ref(), app_type, &id)
+        .map_err(|e| ApiError::internal(format!("failed to enable prompt: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn import_prompt_from_file(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+) -> Result<Json<String>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let id = PromptService::import_from_file(state.app_state.as_ref(), app_type)
+        .map_err(|e| ApiError::internal(format!("failed to import prompt from file: {e}")))?;
+    Ok(Json(id))
+}
+
+async fn get_current_prompt_file_content(
+    Path(app): Path<String>,
+) -> Result<Json<Option<String>>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let content = PromptService::get_current_file_content(app_type)
+        .map_err(|e| ApiError::internal(format!("failed to load current prompt file: {e}")))?;
+    Ok(Json(content))
 }
 
 fn merge_settings_for_save(
@@ -765,6 +826,17 @@ pub async fn run_web_server() -> Result<(), String> {
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/providers/:app", get(get_providers).post(add_provider))
         .route("/api/providers/:app/current", get(get_current_provider))
+        .route("/api/prompts/:app", get(get_prompts))
+        .route("/api/prompts/:app/import", post(import_prompt_from_file))
+        .route(
+            "/api/prompts/:app/current-file",
+            get(get_current_prompt_file_content),
+        )
+        .route(
+            "/api/prompts/:app/:id",
+            put(upsert_prompt).delete(delete_prompt),
+        )
+        .route("/api/prompts/:app/:id/enable", post(enable_prompt))
         .route("/api/mcp/servers", get(get_mcp_servers).post(upsert_mcp_server))
         .route("/api/mcp/servers/import", post(import_mcp_from_apps))
         .route("/api/mcp/servers/:id", axum::routing::delete(delete_mcp_server))

@@ -2,6 +2,7 @@ import type { Settings } from "@/types";
 import type { Provider } from "@/types";
 import type { McpServer, McpServersMap } from "@/types";
 import type { AppId } from "@/lib/api";
+import type { Prompt } from "@/lib/api";
 import type { SwitchResult } from "@/lib/api/providers";
 import type {
   AppProxyConfig,
@@ -112,12 +113,17 @@ export async function getWebSettings(): Promise<Settings> {
   try {
     return await requestJson<Settings>("/api/settings");
   } catch (error) {
-    console.warn("[runtime:web] failed to load settings from local service", error);
+    console.warn(
+      "[runtime:web] failed to load settings from local service",
+      error,
+    );
     return getDefaultSettings();
   }
 }
 
-export async function getWebProviders(appId: AppId): Promise<ProvidersResponse> {
+export async function getWebProviders(
+  appId: AppId,
+): Promise<ProvidersResponse> {
   try {
     return await requestJson<ProvidersResponse>(`/api/providers/${appId}`);
   } catch (error) {
@@ -136,7 +142,10 @@ export async function getWebProxyStatus(): Promise<ProxyStatus> {
   try {
     return await requestJson<ProxyStatus>("/api/proxy/status");
   } catch (error) {
-    console.warn("[runtime:web] failed to load proxy status from local service", error);
+    console.warn(
+      "[runtime:web] failed to load proxy status from local service",
+      error,
+    );
     return getDefaultProxyStatus();
   }
 }
@@ -157,7 +166,10 @@ export async function getWebProxyConfig(): Promise<ProxyConfig> {
   try {
     return await requestJson<ProxyConfig>("/api/proxy/config");
   } catch (error) {
-    console.warn("[runtime:web] failed to load proxy config from local service", error);
+    console.warn(
+      "[runtime:web] failed to load proxy config from local service",
+      error,
+    );
     return getDefaultProxyConfig();
   }
 }
@@ -253,8 +265,12 @@ export async function updateWebProxyConfigForApp(
   );
 }
 
-export async function getWebDefaultCostMultiplier(appId: AppId): Promise<string> {
-  return requestJson<string>(`/api/proxy/apps/${appId}/default-cost-multiplier`);
+export async function getWebDefaultCostMultiplier(
+  appId: AppId,
+): Promise<string> {
+  return requestJson<string>(
+    `/api/proxy/apps/${appId}/default-cost-multiplier`,
+  );
 }
 
 export async function setWebDefaultCostMultiplier(
@@ -360,7 +376,9 @@ export async function getWebFailoverQueue(
   appId: AppId,
 ): Promise<FailoverQueueItem[]> {
   try {
-    return await requestJson<FailoverQueueItem[]>(`/api/failover/apps/${appId}/queue`);
+    return await requestJson<FailoverQueueItem[]>(
+      `/api/failover/apps/${appId}/queue`,
+    );
   } catch (error) {
     console.warn(
       `[runtime:web] failed to load failover queue for ${appId} from local service`,
@@ -405,9 +423,13 @@ export async function removeWebProviderFromFailoverQueue(
   );
 }
 
-export async function getWebAutoFailoverEnabled(appId: AppId): Promise<boolean> {
+export async function getWebAutoFailoverEnabled(
+  appId: AppId,
+): Promise<boolean> {
   try {
-    return await requestJson<boolean>(`/api/failover/apps/${appId}/auto-enabled`);
+    return await requestJson<boolean>(
+      `/api/failover/apps/${appId}/auto-enabled`,
+    );
   } catch (error) {
     console.warn(
       `[runtime:web] failed to load auto failover flag for ${appId}`,
@@ -471,7 +493,10 @@ export async function getWebMcpServers(): Promise<McpServersMap> {
   try {
     return await requestJson<McpServersMap>("/api/mcp/servers");
   } catch (error) {
-    console.warn("[runtime:web] failed to load mcp servers from local service", error);
+    console.warn(
+      "[runtime:web] failed to load mcp servers from local service",
+      error,
+    );
     return {};
   }
 }
@@ -489,11 +514,65 @@ export async function toggleWebMcpApp(
   appId: AppId,
   enabled: boolean,
 ): Promise<void> {
-  return requestWithBody<void>(`/api/mcp/servers/${serverId}/apps/${appId}`, "PUT", {
-    enabled,
-  });
+  return requestWithBody<void>(
+    `/api/mcp/servers/${serverId}/apps/${appId}`,
+    "PUT",
+    {
+      enabled,
+    },
+  );
 }
 
 export async function importWebMcpFromApps(): Promise<number> {
   return requestWithBody<number>("/api/mcp/servers/import", "POST");
+}
+
+export async function getWebPrompts(
+  appId: AppId,
+): Promise<Record<string, Prompt>> {
+  try {
+    return await requestJson<Record<string, Prompt>>(`/api/prompts/${appId}`);
+  } catch (error) {
+    console.warn(
+      `[runtime:web] failed to load prompts for ${appId} from local service`,
+      error,
+    );
+    return {};
+  }
+}
+
+export async function upsertWebPrompt(
+  appId: AppId,
+  id: string,
+  prompt: Prompt,
+): Promise<void> {
+  return requestWithBody<void>(`/api/prompts/${appId}/${id}`, "PUT", prompt);
+}
+
+export async function deleteWebPrompt(appId: AppId, id: string): Promise<void> {
+  return requestWithBody<void>(`/api/prompts/${appId}/${id}`, "DELETE");
+}
+
+export async function enableWebPrompt(appId: AppId, id: string): Promise<void> {
+  return requestWithBody<void>(`/api/prompts/${appId}/${id}/enable`, "POST");
+}
+
+export async function importWebPromptFromFile(appId: AppId): Promise<string> {
+  return requestWithBody<string>(`/api/prompts/${appId}/import`, "POST");
+}
+
+export async function getWebCurrentPromptFileContent(
+  appId: AppId,
+): Promise<string | null> {
+  try {
+    return await requestJson<string | null>(
+      `/api/prompts/${appId}/current-file`,
+    );
+  } catch (error) {
+    console.warn(
+      `[runtime:web] failed to load current prompt file for ${appId} from local service`,
+      error,
+    );
+    return null;
+  }
 }

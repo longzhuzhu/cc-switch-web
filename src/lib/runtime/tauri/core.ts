@@ -1,6 +1,4 @@
-import {
-  getDefaultAppProxyConfig,
-} from "./defaults";
+import { getDefaultAppProxyConfig } from "./defaults";
 import { isTauriRuntime } from "./env";
 import {
   addWebProviderToFailoverQueue,
@@ -22,8 +20,10 @@ import {
   getWebProxyConfigForApp,
   getWebProxyStatus,
   getWebProxyTakeoverStatus,
+  getWebPrompts,
   getWebProviders,
   getWebSettings,
+  getWebCurrentPromptFileContent,
   removeWebProviderFromFailoverQueue,
   saveWebSettings,
   setWebAutoFailoverEnabled,
@@ -36,13 +36,17 @@ import {
   switchWebProvider,
   switchWebProxyProvider,
   importWebMcpFromApps,
+  importWebPromptFromFile,
   upsertWebMcpServer,
+  upsertWebPrompt,
   updateWebCircuitBreakerConfig,
   updateWebGlobalProxyConfig,
   deleteWebMcpServer,
+  deleteWebPrompt,
   updateWebProvider,
   updateWebProxyConfig,
   updateWebProxyConfigForApp,
+  enableWebPrompt,
 } from "./web";
 
 type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
@@ -130,6 +134,28 @@ export async function invoke<T>(
       )) as T;
     case "import_mcp_from_apps":
       return (await importWebMcpFromApps()) as T;
+    case "get_prompts":
+      return (await getWebPrompts(args?.app as AppId)) as T;
+    case "upsert_prompt":
+      return (await upsertWebPrompt(
+        args?.app as AppId,
+        args?.id as string,
+        args?.prompt as any,
+      )) as T;
+    case "delete_prompt":
+      return (await deleteWebPrompt(
+        args?.app as AppId,
+        args?.id as string,
+      )) as T;
+    case "enable_prompt":
+      return (await enableWebPrompt(
+        args?.app as AppId,
+        args?.id as string,
+      )) as T;
+    case "import_prompt_from_file":
+      return (await importWebPromptFromFile(args?.app as AppId)) as T;
+    case "get_current_prompt_file_content":
+      return (await getWebCurrentPromptFileContent(args?.app as AppId)) as T;
     case "start_proxy_server":
       return (await startWebProxyServer()) as T;
     case "stop_proxy_with_restore":
@@ -153,9 +179,11 @@ export async function invoke<T>(
       return (await updateWebGlobalProxyConfig(args?.config as any)) as T;
     case "get_proxy_config_for_app": {
       const appType = args?.appType as AppId | undefined;
-      return (appType
-        ? await getWebProxyConfigForApp(appType)
-        : getDefaultAppProxyConfig()) as T;
+      return (
+        appType
+          ? await getWebProxyConfigForApp(appType)
+          : getDefaultAppProxyConfig()
+      ) as T;
     }
     case "update_proxy_config_for_app":
       return (await updateWebProxyConfigForApp(args?.config as any)) as T;
@@ -238,4 +266,3 @@ export async function invoke<T>(
       throw webUnsupportedError(command);
   }
 }
-
