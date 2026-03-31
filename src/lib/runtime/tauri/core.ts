@@ -3,9 +3,11 @@ import {
   getDefaultProxyConfig,
   getDefaultProxyStatus,
   getDefaultProxyTakeoverStatus,
-  getDefaultSettings,
 } from "./defaults";
 import { isTauriRuntime } from "./env";
+import { getWebProviders, getWebSettings } from "./web";
+
+type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
 
 type InvokeArgs = Record<string, unknown> | undefined;
 
@@ -17,7 +19,7 @@ export async function invoke<T>(
   args?: InvokeArgs,
 ): Promise<T> {
   if (isTauriRuntime()) {
-    const mod = await import("@/lib/runtime/tauri/core");
+    const mod = await import("@tauri-apps/api/core");
     return mod.invoke<T>(command, args);
   }
 
@@ -29,11 +31,23 @@ export async function invoke<T>(
     case "get_skills_migration_result":
       return null as T;
     case "get_settings":
-      return getDefaultSettings() as T;
-    case "get_providers":
-      return {} as T;
-    case "get_current_provider":
-      return "" as T;
+      return (await getWebSettings()) as T;
+    case "get_providers": {
+      const appId = args?.app as AppId | undefined;
+      if (!appId) {
+        return {} as T;
+      }
+      const result = await getWebProviders(appId);
+      return result.providers as T;
+    }
+    case "get_current_provider": {
+      const appId = args?.app as AppId | undefined;
+      if (!appId) {
+        return "" as T;
+      }
+      const result = await getWebProviders(appId);
+      return result.currentProviderId as T;
+    }
     case "get_universal_providers":
       return {} as T;
     case "get_universal_provider":
