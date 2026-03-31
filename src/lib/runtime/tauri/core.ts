@@ -52,6 +52,7 @@ import {
   renameWebDbBackup,
   removeWebProviderFromFailoverQueue,
   removeWebManagedAuthAccount,
+  resetWebCircuitBreaker,
   restoreWebDbBackup,
   saveWebSettings,
   getWebRectifierConfig,
@@ -545,6 +546,11 @@ export async function invoke<T>(
       )) as T;
     case "get_provider_health":
       return (await getWebProviderHealth(
+        args?.appType as AppId,
+        args?.providerId as string,
+      )) as T;
+    case "reset_circuit_breaker":
+      return (await resetWebCircuitBreaker(
         args?.appType as AppId,
         args?.providerId as string,
       )) as T;

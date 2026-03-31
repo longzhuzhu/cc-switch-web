@@ -537,6 +537,16 @@ export async function getWebProviderHealth(
   }
 }
 
+export async function resetWebCircuitBreaker(
+  appId: AppId,
+  providerId: string,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/failover/apps/${appId}/providers/${encodeURIComponent(providerId)}/reset-circuit-breaker`,
+    "POST",
+  );
+}
+
 export async function getWebCircuitBreakerConfig(): Promise<CircuitBreakerConfig> {
   try {
     return await requestJson<CircuitBreakerConfig>(

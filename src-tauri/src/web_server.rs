@@ -2019,6 +2019,83 @@ async fn get_provider_health(
     Ok(Json(value))
 }
 
+async fn reset_circuit_breaker(
+    State(state): State<WebApiState>,
+    Path((app, provider_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let app_type_str = app_type.as_str().to_string();
+
+    state
+        .app_state
+        .db
+        .update_provider_health(&provider_id, &app_type_str, true, None)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to reset provider health: {e}")))?;
+
+    state
+        .app_state
+        .proxy_service
+        .reset_provider_circuit_breaker(&provider_id, &app_type_str)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to reset in-memory circuit breaker: {e}")))?;
+
+    let (app_enabled, auto_failover_enabled) = match state
+        .app_state
+        .db
+        .get_proxy_config_for_app(&app_type_str)
+        .await
+    {
+        Ok(config) => (config.enabled, config.auto_failover_enabled),
+        Err(e) => {
+            log::error!("[{app_type_str}] Failed to read proxy_config: {e}, defaulting to disabled");
+            (false, false)
+        }
+    };
+
+    if app_enabled
+        && auto_failover_enabled
+        && state.app_state.proxy_service.is_running().await
+    {
+        let current_id = state
+            .app_state
+            .db
+            .get_current_provider(&app_type_str)
+            .map_err(|e| ApiError::internal(format!("failed to load current provider: {e}")))?;
+
+        if let Some(current_id) = current_id {
+            let queue = state
+                .app_state
+                .db
+                .get_failover_queue(&app_type_str)
+                .map_err(|e| ApiError::internal(format!("failed to load failover queue: {e}")))?;
+
+            let restored_order = queue
+                .iter()
+                .find(|item| item.provider_id == provider_id)
+                .and_then(|item| item.sort_index);
+
+            let current_order = queue
+                .iter()
+                .find(|item| item.provider_id == current_id)
+                .and_then(|item| item.sort_index);
+
+            if let (Some(restored), Some(current)) = (restored_order, current_order) {
+                if restored < current {
+                    state
+                        .app_state
+                        .proxy_service
+                        .switch_proxy_target(&app_type_str, &provider_id)
+                        .await
+                        .map_err(|e| ApiError::internal(format!("failed to switch recovered provider: {e}")))?;
+                }
+            }
+        }
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn get_circuit_breaker_config(
     State(state): State<WebApiState>,
 ) -> Result<Json<CircuitBreakerConfig>, ApiError> {
@@ -2479,6 +2556,10 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/failover/apps/:app/providers/:provider_id/health",
             get(get_provider_health),
+        )
+        .route(
+            "/api/failover/apps/:app/providers/:provider_id/reset-circuit-breaker",
+            post(reset_circuit_breaker),
         )
         .route(
             "/api/failover/circuit-breaker-config",
