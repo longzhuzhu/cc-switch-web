@@ -58,6 +58,14 @@ import {
   getWebDailyMemoryFile,
   getWebSessionMessages,
   getWebSessions,
+  getWebModelPricing,
+  getWebModelStats,
+  getWebProviderLimits,
+  getWebProviderStats,
+  getWebRequestDetail,
+  getWebRequestLogs,
+  getWebUsageSummary,
+  getWebUsageTrends,
   getWebWorkspaceDirectoryPath,
   getWebWorkspaceFile,
   installWebSkillArchives,
@@ -68,7 +76,9 @@ import {
   searchWebDailyMemoryFiles,
   deleteWebSession,
   deleteWebSessions,
+  deleteWebModelPricing,
   toggleWebSkillApp,
+  updateWebModelPricing,
   updateWebProvider,
   updateWebProxyConfig,
   updateWebProxyConfigForApp,
@@ -270,6 +280,46 @@ export async function invoke<T>(
           sessionId: string;
           sourcePath: string;
         }[]) ?? [],
+      )) as T;
+    case "get_usage_summary":
+      return (await getWebUsageSummary(
+        args?.startDate as number | undefined,
+        args?.endDate as number | undefined,
+      )) as T;
+    case "get_usage_trends":
+      return (await getWebUsageTrends(
+        args?.startDate as number | undefined,
+        args?.endDate as number | undefined,
+      )) as T;
+    case "get_provider_stats":
+      return (await getWebProviderStats()) as T;
+    case "get_model_stats":
+      return (await getWebModelStats()) as T;
+    case "get_request_logs":
+      return (await getWebRequestLogs(
+        args?.filters as any,
+        (args?.page as number | undefined) ?? 0,
+        (args?.pageSize as number | undefined) ?? 20,
+      )) as T;
+    case "get_request_detail":
+      return (await getWebRequestDetail(args?.requestId as string)) as T;
+    case "get_model_pricing":
+      return (await getWebModelPricing()) as T;
+    case "update_model_pricing":
+      return (await updateWebModelPricing(
+        args?.modelId as string,
+        args?.displayName as string,
+        args?.inputCost as string,
+        args?.outputCost as string,
+        args?.cacheReadCost as string,
+        args?.cacheCreationCost as string,
+      )) as T;
+    case "delete_model_pricing":
+      return (await deleteWebModelPricing(args?.modelId as string)) as T;
+    case "check_provider_limits":
+      return (await getWebProviderLimits(
+        args?.providerId as string,
+        args?.appType as string,
       )) as T;
     case "start_proxy_server":
       return (await startWebProxyServer()) as T;

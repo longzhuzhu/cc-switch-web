@@ -123,6 +123,42 @@ struct SessionMessagesQuery {
     source_path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageRangeQuery {
+    start_date: Option<i64>,
+    end_date: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RequestLogsPayload {
+    filters: crate::services::usage_stats::LogFilters,
+    page: Option<u32>,
+    page_size: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateModelPricingPayload {
+    display_name: String,
+    input_cost: String,
+    output_cost: String,
+    cache_read_cost: String,
+    cache_creation_cost: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageModelPricingInfo {
+    model_id: String,
+    display_name: String,
+    input_cost_per_million: String,
+    output_cost_per_million: String,
+    cache_read_cost_per_million: String,
+    cache_creation_cost_per_million: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SkillArchiveInstallResult {
@@ -495,6 +531,184 @@ async fn delete_sessions(
         .await
         .map_err(|e| ApiError::internal(format!("failed to delete sessions: {e}")))?;
     Ok(Json(results))
+}
+
+async fn get_usage_summary(
+    State(state): State<WebApiState>,
+    Query(query): Query<UsageRangeQuery>,
+) -> Result<Json<crate::services::usage_stats::UsageSummary>, ApiError> {
+    let summary = state
+        .app_state
+        .db
+        .get_usage_summary(query.start_date, query.end_date)
+        .map_err(|e| ApiError::internal(format!("failed to load usage summary: {e}")))?;
+    Ok(Json(summary))
+}
+
+async fn get_usage_trends(
+    State(state): State<WebApiState>,
+    Query(query): Query<UsageRangeQuery>,
+) -> Result<Json<Vec<crate::services::usage_stats::DailyStats>>, ApiError> {
+    let trends = state
+        .app_state
+        .db
+        .get_daily_trends(query.start_date, query.end_date)
+        .map_err(|e| ApiError::internal(format!("failed to load usage trends: {e}")))?;
+    Ok(Json(trends))
+}
+
+async fn get_usage_provider_stats(
+    State(state): State<WebApiState>,
+) -> Result<Json<Vec<crate::services::usage_stats::ProviderStats>>, ApiError> {
+    let stats = state
+        .app_state
+        .db
+        .get_provider_stats()
+        .map_err(|e| ApiError::internal(format!("failed to load provider stats: {e}")))?;
+    Ok(Json(stats))
+}
+
+async fn get_usage_model_stats(
+    State(state): State<WebApiState>,
+) -> Result<Json<Vec<crate::services::usage_stats::ModelStats>>, ApiError> {
+    let stats = state
+        .app_state
+        .db
+        .get_model_stats()
+        .map_err(|e| ApiError::internal(format!("failed to load model stats: {e}")))?;
+    Ok(Json(stats))
+}
+
+async fn get_usage_request_logs(
+    State(state): State<WebApiState>,
+    Json(payload): Json<RequestLogsPayload>,
+) -> Result<Json<crate::services::usage_stats::PaginatedLogs>, ApiError> {
+    let logs = state
+        .app_state
+        .db
+        .get_request_logs(
+            &payload.filters,
+            payload.page.unwrap_or(0),
+            payload.page_size.unwrap_or(20),
+        )
+        .map_err(|e| ApiError::internal(format!("failed to load request logs: {e}")))?;
+    Ok(Json(logs))
+}
+
+async fn get_usage_request_detail(
+    State(state): State<WebApiState>,
+    Path(request_id): Path<String>,
+) -> Result<Json<Option<crate::services::usage_stats::RequestLogDetail>>, ApiError> {
+    let detail = state
+        .app_state
+        .db
+        .get_request_detail(&request_id)
+        .map_err(|e| ApiError::internal(format!("failed to load request detail: {e}")))?;
+    Ok(Json(detail))
+}
+
+async fn get_usage_model_pricing(
+    State(state): State<WebApiState>,
+) -> Result<Json<Vec<UsageModelPricingInfo>>, ApiError> {
+    state
+        .app_state
+        .db
+        .ensure_model_pricing_seeded()
+        .map_err(|e| ApiError::internal(format!("failed to seed model pricing: {e}")))?;
+
+    let db = state.app_state.db.clone();
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| ApiError::internal(format!("failed to lock database connection: {e}")))?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT model_id, display_name, input_cost_per_million, output_cost_per_million,
+                    cache_read_cost_per_million, cache_creation_cost_per_million
+             FROM model_pricing
+             ORDER BY display_name",
+        )
+        .map_err(|e| ApiError::internal(format!("failed to prepare pricing query: {e}")))?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(UsageModelPricingInfo {
+                model_id: row.get(0)?,
+                display_name: row.get(1)?,
+                input_cost_per_million: row.get(2)?,
+                output_cost_per_million: row.get(3)?,
+                cache_read_cost_per_million: row.get(4)?,
+                cache_creation_cost_per_million: row.get(5)?,
+            })
+        })
+        .map_err(|e| ApiError::internal(format!("failed to query pricing rows: {e}")))?;
+
+    let mut pricing = Vec::new();
+    for row in rows {
+        pricing.push(
+            row.map_err(|e| ApiError::internal(format!("failed to decode pricing row: {e}")))?,
+        );
+    }
+
+    Ok(Json(pricing))
+}
+
+async fn update_usage_model_pricing(
+    State(state): State<WebApiState>,
+    Path(model_id): Path<String>,
+    Json(payload): Json<UpdateModelPricingPayload>,
+) -> Result<StatusCode, ApiError> {
+    let db = state.app_state.db.clone();
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| ApiError::internal(format!("failed to lock database connection: {e}")))?;
+    conn.execute(
+        "INSERT OR REPLACE INTO model_pricing (
+            model_id, display_name, input_cost_per_million, output_cost_per_million,
+            cache_read_cost_per_million, cache_creation_cost_per_million
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![
+            model_id,
+            payload.display_name,
+            payload.input_cost,
+            payload.output_cost,
+            payload.cache_read_cost,
+            payload.cache_creation_cost
+        ],
+    )
+    .map_err(|e| ApiError::internal(format!("failed to update model pricing: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_usage_model_pricing(
+    State(state): State<WebApiState>,
+    Path(model_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let db = state.app_state.db.clone();
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| ApiError::internal(format!("failed to lock database connection: {e}")))?;
+    conn.execute(
+        "DELETE FROM model_pricing WHERE model_id = ?1",
+        rusqlite::params![model_id],
+    )
+    .map_err(|e| ApiError::internal(format!("failed to delete model pricing: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_usage_provider_limits(
+    State(state): State<WebApiState>,
+    Path((app_type, provider_id)): Path<(String, String)>,
+) -> Result<Json<crate::services::usage_stats::ProviderLimitStatus>, ApiError> {
+    let limits = state
+        .app_state
+        .db
+        .check_provider_limits(&provider_id, &app_type)
+        .map_err(|e| ApiError::internal(format!("failed to load provider limits: {e}")))?;
+    Ok(Json(limits))
 }
 
 fn sanitize_uploaded_archive_name(file_name: &str, index: usize) -> String {
@@ -1308,6 +1522,24 @@ pub async fn run_web_server() -> Result<(), String> {
         .route("/api/sessions", get(list_sessions).delete(delete_session))
         .route("/api/sessions/messages", get(get_session_messages))
         .route("/api/sessions/delete-batch", post(delete_sessions))
+        .route("/api/usage/summary", get(get_usage_summary))
+        .route("/api/usage/trends", get(get_usage_trends))
+        .route("/api/usage/provider-stats", get(get_usage_provider_stats))
+        .route("/api/usage/model-stats", get(get_usage_model_stats))
+        .route("/api/usage/request-logs", post(get_usage_request_logs))
+        .route(
+            "/api/usage/request-logs/:request_id",
+            get(get_usage_request_detail),
+        )
+        .route("/api/usage/model-pricing", get(get_usage_model_pricing))
+        .route(
+            "/api/usage/model-pricing/:model_id",
+            put(update_usage_model_pricing).delete(delete_usage_model_pricing),
+        )
+        .route(
+            "/api/usage/provider-limits/:app_type/:provider_id",
+            get(get_usage_provider_limits),
+        )
         .route("/api/prompts/:app", get(get_prompts))
         .route("/api/prompts/:app/import", post(import_prompt_from_file))
         .route(

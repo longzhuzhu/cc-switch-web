@@ -104,7 +104,7 @@ export function SettingsPage({
   useEffect(() => {
     if (open) {
       const initialTab =
-        isWebMode && ["auth", "advanced", "usage"].includes(defaultTab)
+        isWebMode && ["auth", "advanced"].includes(defaultTab)
           ? "general"
           : defaultTab;
       setActiveTab(initialTab);
@@ -198,7 +198,7 @@ export function SettingsPage({
           className="flex flex-col h-full"
         >
           <TabsList
-            className={`grid w-full mb-6 glass rounded-lg ${isWebMode ? "grid-cols-3" : "grid-cols-6"}`}
+            className={`grid w-full mb-6 glass rounded-lg ${isWebMode ? "grid-cols-4" : "grid-cols-6"}`}
           >
             <TabsTrigger value="general">
               {t("settings.tabGeneral")}
@@ -214,9 +214,7 @@ export function SettingsPage({
                 {t("settings.tabAdvanced")}
               </TabsTrigger>
             )}
-            {!isWebMode && (
-              <TabsTrigger value="usage">{t("usage.title")}</TabsTrigger>
-            )}
+            <TabsTrigger value="usage">{t("usage.title")}</TabsTrigger>
             <TabsTrigger value="about">{t("common.about")}</TabsTrigger>
           </TabsList>
 
@@ -493,9 +491,9 @@ export function SettingsPage({
                 </TabsContent>
               )}
 
-              {!isWebMode && <TabsContent value="usage" className="mt-0">
+              <TabsContent value="usage" className="mt-0">
                 <UsageDashboard />
-              </TabsContent>}
+              </TabsContent>
               <TabsContent value="about" className="mt-0">
                 <AboutSection isPortable={isPortable} />
               </TabsContent>

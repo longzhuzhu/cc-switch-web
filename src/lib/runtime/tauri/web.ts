@@ -32,6 +32,17 @@ import type {
   DailyMemoryFileInfo,
   DailyMemorySearchResult,
 } from "@/lib/api/workspace";
+import type {
+  DailyStats,
+  LogFilters,
+  ModelPricing,
+  ModelStats,
+  PaginatedLogs,
+  ProviderLimitStatus,
+  ProviderStats,
+  RequestLog,
+  UsageSummary,
+} from "@/types/usage";
 import {
   getDefaultAppProxyConfig,
   getDefaultGlobalProxyConfig,
@@ -845,5 +856,100 @@ export async function deleteWebSessions(
     "/api/sessions/delete-batch",
     "POST",
     items,
+  );
+}
+
+export async function getWebUsageSummary(
+  startDate?: number,
+  endDate?: number,
+): Promise<UsageSummary> {
+  const params = new URLSearchParams();
+  if (typeof startDate === "number") params.set("startDate", String(startDate));
+  if (typeof endDate === "number") params.set("endDate", String(endDate));
+  const query = params.toString();
+  return requestJson<UsageSummary>(
+    `/api/usage/summary${query ? `?${query}` : ""}`,
+  );
+}
+
+export async function getWebUsageTrends(
+  startDate?: number,
+  endDate?: number,
+): Promise<DailyStats[]> {
+  const params = new URLSearchParams();
+  if (typeof startDate === "number") params.set("startDate", String(startDate));
+  if (typeof endDate === "number") params.set("endDate", String(endDate));
+  const query = params.toString();
+  return requestJson<DailyStats[]>(
+    `/api/usage/trends${query ? `?${query}` : ""}`,
+  );
+}
+
+export async function getWebProviderStats(): Promise<ProviderStats[]> {
+  return requestJson<ProviderStats[]>("/api/usage/provider-stats");
+}
+
+export async function getWebModelStats(): Promise<ModelStats[]> {
+  return requestJson<ModelStats[]>("/api/usage/model-stats");
+}
+
+export async function getWebRequestLogs(
+  filters: LogFilters,
+  page: number,
+  pageSize: number,
+): Promise<PaginatedLogs> {
+  return requestWithBody<PaginatedLogs>("/api/usage/request-logs", "POST", {
+    filters,
+    page,
+    pageSize,
+  });
+}
+
+export async function getWebRequestDetail(
+  requestId: string,
+): Promise<RequestLog | null> {
+  return requestJson<RequestLog | null>(
+    `/api/usage/request-logs/${encodeURIComponent(requestId)}`,
+  );
+}
+
+export async function getWebModelPricing(): Promise<ModelPricing[]> {
+  return requestJson<ModelPricing[]>("/api/usage/model-pricing");
+}
+
+export async function updateWebModelPricing(
+  modelId: string,
+  displayName: string,
+  inputCost: string,
+  outputCost: string,
+  cacheReadCost: string,
+  cacheCreationCost: string,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/usage/model-pricing/${encodeURIComponent(modelId)}`,
+    "PUT",
+    {
+      displayName,
+      inputCost,
+      outputCost,
+      cacheReadCost,
+      cacheCreationCost,
+    },
+  );
+}
+
+export async function deleteWebModelPricing(modelId: string): Promise<void> {
+  return requestWithBody<void>(
+    `/api/usage/model-pricing/${encodeURIComponent(modelId)}`,
+    "DELETE",
+  );
+}
+
+export async function getWebProviderLimits(
+  providerId: string,
+  appType: string,
+): Promise<ProviderLimitStatus> {
+  return requestJson<ProviderLimitStatus>(
+    `/api/usage/provider-limits/${encodeURIComponent(appType)}/${encodeURIComponent(providerId)}`,
   );
 }

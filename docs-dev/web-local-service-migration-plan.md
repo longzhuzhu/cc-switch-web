@@ -148,6 +148,7 @@ Local Rust Service
 - 已打通 `Skills` 的 Web ZIP 上传安装路径（批量选择、拖拽上传、多归档安装）
 - 已打通 `Workspace` 的 Web API 主路径（工作区文件读写、Daily Memory 列表/搜索/编辑/删除）
 - 已打通 `Sessions` 的 Web API 主路径（会话列表、消息详情、单个/批量删除）
+- 已打通 `Usage` 的 Web API 主路径（统计看板、请求日志、模型定价、Provider 限额）
 - 已提供：
   - `pnpm dev` / `pnpm dev:web`
   - `pnpm build` / `pnpm build:d`
@@ -188,7 +189,6 @@ Local Rust Service
 当前仍未完成、需要继续迁移的重点：
 
 - Skills
-- Usage 统计
 - OpenClaw 专属页面
 - 整流器、全局出站代理等桌面设置区块
 - Windows / Linux 直接运行的更完整包装方式（如脚本、服务化说明）
