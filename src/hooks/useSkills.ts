@@ -6,12 +6,27 @@ import {
 } from "@tanstack/react-query";
 import {
   skillsApi,
+  type SkillArchiveInstallResult,
   type SkillBackupEntry,
   type DiscoverableSkill,
   type ImportSkillSelection,
   type InstalledSkill,
 } from "@/lib/api/skills";
 import type { AppId } from "@/lib/api/types";
+
+function mergeInstalledSkills(
+  existing: InstalledSkill[] | undefined,
+  incoming: InstalledSkill[],
+): InstalledSkill[] {
+  const merged = new Map<string, InstalledSkill>();
+  existing?.forEach((skill) => {
+    merged.set(skill.id, skill);
+  });
+  incoming.forEach((skill) => {
+    merged.set(skill.id, skill);
+  });
+  return Array.from(merged.values());
+}
 
 /**
  * 查询所有已安装的 Skills
@@ -207,8 +222,7 @@ export function useImportSkillsFromApps() {
       queryClient.setQueryData<InstalledSkill[]>(
         ["skills", "installed"],
         (oldData) => {
-          if (!oldData) return importedSkills;
-          return [...oldData, ...importedSkills];
+          return mergeInstalledSkills(oldData, importedSkills);
         },
       );
       // 刷新 unmanaged 列表（已被导入的应该移除）
@@ -275,9 +289,36 @@ export function useInstallSkillsFromZip() {
       queryClient.setQueryData<InstalledSkill[]>(
         ["skills", "installed"],
         (oldData) => {
-          if (!oldData) return installedSkills;
-          return [...oldData, ...installedSkills];
+          return mergeInstalledSkills(oldData, installedSkills);
         },
+      );
+    },
+  });
+}
+
+/**
+ * Web 模式下从上传的多个 ZIP 归档安装 Skills
+ * 成功后直接更新缓存，不触发重新加载/刷新
+ */
+export function useInstallSkillArchives() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      files,
+      currentApp,
+    }: {
+      files: File[];
+      currentApp: AppId;
+    }) => skillsApi.installFromArchives(files, currentApp),
+    onSuccess: (results) => {
+      const installedSkills = results.flatMap((result) => result.installed);
+      if (installedSkills.length === 0) {
+        return;
+      }
+
+      queryClient.setQueryData<InstalledSkill[]>(
+        ["skills", "installed"],
+        (oldData) => mergeInstalledSkills(oldData, installedSkills),
       );
     },
   });
@@ -290,5 +331,6 @@ export type {
   DiscoverableSkill,
   ImportSkillSelection,
   SkillBackupEntry,
+  SkillArchiveInstallResult,
   AppId,
 };

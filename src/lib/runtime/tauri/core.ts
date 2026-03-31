@@ -54,6 +54,7 @@ import {
   deleteWebSkillBackup,
   addWebSkillRepo,
   discoverWebAvailableSkills,
+  installWebSkillArchives,
   removeWebSkillRepo,
   toggleWebSkillApp,
   updateWebProvider,
@@ -200,6 +201,11 @@ export async function invoke<T>(
       )) as T;
     case "delete_skill_backup":
       return (await deleteWebSkillBackup(args?.backupId as string)) as T;
+    case "install_skills_from_archives":
+      return (await installWebSkillArchives(
+        (args?.files as File[]) ?? [],
+        args?.currentApp as AppId,
+      )) as T;
     case "uninstall_skill_unified":
       return (await uninstallWebSkillUnified(args?.id as string)) as T;
     case "toggle_skill_app":

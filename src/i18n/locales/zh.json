@@ -1663,9 +1663,30 @@
     "installFromZip": {
       "button": "从 ZIP 安装",
       "installing": "安装中...",
+      "dialogTitle": "批量安装 Skills",
+      "dialogDescription": "将本地 ZIP 文件上传到当前机器上的 Rust 服务进行安装，支持批量选择和拖拽上传。",
+      "dropTitle": "拖拽 ZIP 文件到这里",
+      "dropActive": "松开以上传 ZIP 文件",
+      "dropHint": "支持一次上传多个 .zip 文件",
+      "selectFiles": "选择 ZIP 文件",
+      "clearSelection": "清空选择",
+      "selectedFiles": "已选择 {{count}} 个 ZIP 文件",
+      "installSelected": "安装已选 ZIP（{{count}}）",
+      "removeFile": "移除文件",
+      "empty": "还没有选择 ZIP 文件",
+      "emptySelection": "请先选择至少一个 ZIP 文件",
+      "invalidFilesTitle": "包含不支持的文件",
+      "invalidFilesDescription": "已忽略 {{count}} 个非 ZIP 文件",
       "successSingle": "技能 {{name}} 已安装",
       "successMultiple": "成功安装 {{count}} 个技能",
-      "noSkillsFound": "ZIP 文件中未找到技能（需包含 SKILL.md 文件）"
+      "partialSuccess": "成功安装 {{count}} 个技能",
+      "partialSuccessDescription": "{{count}} 个 ZIP 安装失败：{{files}}",
+      "failed": "{{count}} 个 ZIP 安装失败",
+      "failedDescription": "失败文件：{{files}}",
+      "skippedDescription": "另有 {{count}} 个 ZIP 未安装出新技能",
+      "noSkillsFound": "ZIP 文件中未找到技能（需包含 SKILL.md 文件）",
+      "noNewSkills": "没有安装出新的技能",
+      "noNewSkillsDescription": "{{count}} 个 ZIP 已处理，但没有新增 skill"
     }
   },
   "deeplink": {

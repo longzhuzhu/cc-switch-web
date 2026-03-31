@@ -1663,9 +1663,30 @@
     "installFromZip": {
       "button": "ZIP からインストール",
       "installing": "インストール中...",
+      "dialogTitle": "スキルを一括インストール",
+      "dialogDescription": "ローカルの ZIP ファイルをこのマシン上の Rust サービスへアップロードしてインストールします。複数選択とドラッグ＆ドロップに対応します。",
+      "dropTitle": "ここに ZIP ファイルをドラッグ",
+      "dropActive": "ドロップして ZIP ファイルをアップロード",
+      "dropHint": "複数の .zip ファイルを一度にアップロードできます",
+      "selectFiles": "ZIP ファイルを選択",
+      "clearSelection": "選択をクリア",
+      "selectedFiles": "{{count}} 件の ZIP ファイルを選択中",
+      "installSelected": "選択した ZIP をインストール（{{count}}）",
+      "removeFile": "ファイルを削除",
+      "empty": "ZIP ファイルはまだ選択されていません",
+      "emptySelection": "先に ZIP ファイルを 1 つ以上選択してください",
+      "invalidFilesTitle": "未対応のファイルが含まれています",
+      "invalidFilesDescription": "{{count}} 件の非 ZIP ファイルを無視しました",
       "successSingle": "スキル {{name}} をインストールしました",
       "successMultiple": "{{count}} 件のスキルをインストールしました",
-      "noSkillsFound": "ZIP ファイルにスキルが見つかりません（SKILL.md が必要です）"
+      "partialSuccess": "{{count}} 件のスキルをインストールしました",
+      "partialSuccessDescription": "{{count}} 件の ZIP インストールに失敗しました: {{files}}",
+      "failed": "{{count}} 件の ZIP インストールに失敗しました",
+      "failedDescription": "失敗したファイル: {{files}}",
+      "skippedDescription": "{{count}} 件の ZIP では新しいスキルは追加されませんでした",
+      "noSkillsFound": "ZIP ファイルにスキルが見つかりません（SKILL.md が必要です）",
+      "noNewSkills": "新しいスキルはインストールされませんでした",
+      "noNewSkillsDescription": "{{count}} 件の ZIP を処理しましたが、新しいスキルは追加されませんでした"
     }
   },
   "deeplink": {

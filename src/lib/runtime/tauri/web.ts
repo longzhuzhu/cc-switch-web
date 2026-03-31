@@ -5,6 +5,7 @@ import type { AppId } from "@/lib/api";
 import type { Prompt } from "@/lib/api";
 import type {
   DiscoverableSkill,
+  SkillArchiveInstallResult,
   ImportSkillSelection,
   InstalledSkill,
   SkillBackupEntry,
@@ -113,6 +114,23 @@ async function requestWithBody<T>(
 
   if (response.status === 204) {
     return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
+async function requestFormData<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(`${getWebApiBase()}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const fallback = `HTTP ${response.status} for POST ${path}`;
+    throw new Error(await getErrorMessage(response, fallback));
   }
 
   return (await response.json()) as T;
@@ -712,5 +730,20 @@ export async function restoreWebSkillBackup(
     {
       currentApp,
     },
+  );
+}
+
+export async function installWebSkillArchives(
+  files: File[],
+  currentApp: AppId,
+): Promise<SkillArchiveInstallResult[]> {
+  const formData = new FormData();
+  formData.append("currentApp", currentApp);
+  files.forEach((file) => {
+    formData.append("archives", file, file.name);
+  });
+  return requestFormData<SkillArchiveInstallResult[]>(
+    "/api/skills/install-archives",
+    formData,
   );
 }

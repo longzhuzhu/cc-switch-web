@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{DefaultBodyLimit, Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, get_service, post, put};
@@ -102,6 +102,15 @@ struct InstallSkillRequest {
 #[serde(rename_all = "camelCase")]
 struct CurrentAppRequest {
     current_app: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillArchiveInstallResult {
+    file_name: String,
+    installed: Vec<crate::app_config::InstalledSkill>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 async fn get_mcp_servers(
@@ -351,6 +360,133 @@ async fn restore_skill_backup(
     )
     .map_err(|e| ApiError::internal(format!("failed to restore skill backup: {e}")))?;
     Ok(Json(restored))
+}
+
+fn sanitize_uploaded_archive_name(file_name: &str, index: usize) -> String {
+    let fallback = format!("skill-archive-{}.zip", index + 1);
+    let candidate = std::path::Path::new(file_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or(&fallback);
+
+    let mut sanitized = candidate
+        .chars()
+        .map(|ch| match ch {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            _ => ch,
+        })
+        .collect::<String>();
+
+    if sanitized.trim().is_empty() {
+        sanitized = fallback;
+    }
+
+    if !sanitized.to_ascii_lowercase().ends_with(".zip") {
+        sanitized.push_str(".zip");
+    }
+
+    sanitized
+}
+
+async fn install_skill_archives(
+    State(state): State<WebApiState>,
+    mut multipart: Multipart,
+) -> Result<Json<Vec<SkillArchiveInstallResult>>, ApiError> {
+    let mut current_app: Option<String> = None;
+    let mut uploads: Vec<(String, bytes::Bytes)> = Vec::new();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::bad_request(format!("failed to read upload field: {e}")))?
+    {
+        match field.name() {
+            Some("currentApp") => {
+                current_app = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|e| {
+                            ApiError::bad_request(format!(
+                                "failed to read currentApp from upload payload: {e}"
+                            ))
+                        })?
+                        .trim()
+                        .to_string(),
+                );
+            }
+            Some("archives") => {
+                let file_name = field.file_name().unwrap_or("skill-archive.zip").to_string();
+                let bytes = field.bytes().await.map_err(|e| {
+                    ApiError::bad_request(format!(
+                        "failed to read uploaded archive {file_name}: {e}"
+                    ))
+                })?;
+                uploads.push((file_name, bytes));
+            }
+            _ => {}
+        }
+    }
+
+    let current_app = current_app
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| ApiError::bad_request("missing currentApp in upload payload"))?;
+    let app_type = AppType::from_str(&current_app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+    if uploads.is_empty() {
+        return Err(ApiError::bad_request("missing archives in upload payload"));
+    }
+
+    let temp_dir = tempfile::tempdir()
+        .map_err(|e| ApiError::internal(format!("failed to prepare upload temp dir: {e}")))?;
+    let mut results = Vec::with_capacity(uploads.len());
+
+    for (index, (original_name, bytes)) in uploads.into_iter().enumerate() {
+        let is_zip = std::path::Path::new(&original_name)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("zip"))
+            .unwrap_or(false);
+        let file_name = sanitize_uploaded_archive_name(&original_name, index);
+        if !is_zip {
+            results.push(SkillArchiveInstallResult {
+                file_name,
+                installed: Vec::new(),
+                error: Some("only .zip archives are supported".to_string()),
+            });
+            continue;
+        }
+
+        let archive_path = temp_dir.path().join(&file_name);
+        std::fs::write(&archive_path, &bytes).map_err(|e| {
+            ApiError::internal(format!(
+                "failed to persist uploaded archive {}: {e}",
+                archive_path.display()
+            ))
+        })?;
+
+        let install_result =
+            crate::services::skill::SkillService::install_from_zip(&state.app_state.db, &archive_path, &app_type);
+
+        let _ = std::fs::remove_file(&archive_path);
+
+        match install_result {
+            Ok(installed) => results.push(SkillArchiveInstallResult {
+                file_name,
+                installed,
+                error: None,
+            }),
+            Err(error) => results.push(SkillArchiveInstallResult {
+                file_name,
+                installed: Vec::new(),
+                error: Some(error.to_string()),
+            }),
+        }
+    }
+
+    Ok(Json(results))
 }
 
 fn merge_settings_for_save(
@@ -1002,6 +1138,7 @@ pub async fn run_web_server() -> Result<(), String> {
         )
         .route("/api/skills/discover", get(discover_available_skills))
         .route("/api/skills/install", post(install_skill_unified))
+        .route("/api/skills/install-archives", post(install_skill_archives))
         .route(
             "/api/skills/backups/:backup_id",
             post(restore_skill_backup).delete(delete_skill_backup),
@@ -1096,6 +1233,7 @@ pub async fn run_web_server() -> Result<(), String> {
             "/api/failover/apps/:app/providers/:provider_id/circuit-breaker-stats",
             get(get_circuit_breaker_stats),
         )
+        .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

@@ -1663,9 +1663,30 @@
     "installFromZip": {
       "button": "Install from ZIP",
       "installing": "Installing...",
+      "dialogTitle": "Install Skills in Batch",
+      "dialogDescription": "Upload local ZIP files to the Rust service running on this machine. Supports multi-select and drag-and-drop.",
+      "dropTitle": "Drag ZIP files here",
+      "dropActive": "Release to upload ZIP files",
+      "dropHint": "You can upload multiple .zip files at once",
+      "selectFiles": "Choose ZIP Files",
+      "clearSelection": "Clear Selection",
+      "selectedFiles": "{{count}} ZIP files selected",
+      "installSelected": "Install Selected ZIPs ({{count}})",
+      "removeFile": "Remove file",
+      "empty": "No ZIP files selected yet",
+      "emptySelection": "Select at least one ZIP file first",
+      "invalidFilesTitle": "Unsupported files detected",
+      "invalidFilesDescription": "{{count}} non-ZIP file(s) were ignored",
       "successSingle": "Skill {{name}} installed",
       "successMultiple": "Successfully installed {{count}} skills",
-      "noSkillsFound": "No skills found in ZIP file (requires SKILL.md file)"
+      "partialSuccess": "Installed {{count}} skill(s)",
+      "partialSuccessDescription": "{{count}} ZIP upload(s) failed: {{files}}",
+      "failed": "{{count}} ZIP upload(s) failed",
+      "failedDescription": "Failed files: {{files}}",
+      "skippedDescription": "{{count}} ZIP file(s) did not add new skills",
+      "noSkillsFound": "No skills found in ZIP file (requires SKILL.md file)",
+      "noNewSkills": "No new skills were installed",
+      "noNewSkillsDescription": "{{count}} ZIP file(s) were processed but added no new skills"
     }
   },
   "deeplink": {

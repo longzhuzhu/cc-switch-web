@@ -1,4 +1,5 @@
 import { invoke } from "@/lib/runtime/tauri/core";
+import { isTauriRuntime } from "@/lib/runtime/tauri/env";
 
 import type { AppId } from "@/lib/api/types";
 
@@ -36,6 +37,12 @@ export interface SkillBackupEntry {
   backupPath: string;
   createdAt: number;
   skill: InstalledSkill;
+}
+
+export interface SkillArchiveInstallResult {
+  fileName: string;
+  installed: InstalledSkill[];
+  error?: string;
 }
 
 /** 可发现的 Skill（来自仓库） */
@@ -208,6 +215,20 @@ export const skillsApi = {
     currentApp: AppId,
   ): Promise<InstalledSkill[]> {
     return await invoke("install_skills_from_zip", { filePath, currentApp });
+  },
+
+  /** Web 模式下从上传的 ZIP 归档安装 Skills */
+  async installFromArchives(
+    files: File[],
+    currentApp: AppId,
+  ): Promise<SkillArchiveInstallResult[]> {
+    if (isTauriRuntime()) {
+      throw new Error("installFromArchives is only available in web runtime");
+    }
+    return await invoke("install_skills_from_archives", {
+      files,
+      currentApp,
+    });
   },
 };
 

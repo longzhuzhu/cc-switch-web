@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, Trash2, ExternalLink } from "lucide-react";
+import { ExternalLink, FileArchive, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   type ImportSkillSelection,
+  type SkillArchiveInstallResult,
   type SkillBackupEntry,
+  useInstallSkillArchives,
   useDeleteSkillBackup,
   useInstalledSkills,
   useSkillBackups,
@@ -20,6 +22,7 @@ import {
 import type { AppId } from "@/lib/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi, skillsApi } from "@/lib/api";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 import { toast } from "sonner";
 import { MCP_SKILLS_APP_IDS } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
@@ -53,6 +56,42 @@ function formatSkillBackupDate(unixSeconds: number): string {
     : date.toLocaleString();
 }
 
+function buildArchiveFileKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function isZipArchiveFile(file: File): boolean {
+  return file.name.toLowerCase().endsWith(".zip");
+}
+
+function mergeArchiveFiles(current: File[], incoming: File[]): File[] {
+  const merged = new Map<string, File>();
+  current.forEach((file) => {
+    merged.set(buildArchiveFileKey(file), file);
+  });
+  incoming.forEach((file) => {
+    merged.set(buildArchiveFileKey(file), file);
+  });
+  return Array.from(merged.values());
+}
+
+function formatArchiveFileSize(size: number): string {
+  if (size >= 1024 * 1024) {
+    return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  }
+  if (size >= 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${size} B`;
+}
+
+function summarizeArchiveFailures(results: SkillArchiveInstallResult[]): string {
+  return results
+    .slice(0, 3)
+    .map((result) => result.fileName)
+    .join(", ");
+}
+
 const UnifiedSkillsPanel = React.forwardRef<
   UnifiedSkillsPanelHandle,
   UnifiedSkillsPanelProps
@@ -68,6 +107,11 @@ const UnifiedSkillsPanel = React.forwardRef<
   } | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [archiveFiles, setArchiveFiles] = useState<File[]>([]);
+  const [isArchiveDragActive, setIsArchiveDragActive] = useState(false);
+  const archiveInputRef = useRef<HTMLInputElement | null>(null);
+  const webRuntime = isWebRuntime();
 
   const { data: skills, isLoading } = useInstalledSkills();
   const {
@@ -83,6 +127,7 @@ const UnifiedSkillsPanel = React.forwardRef<
     useScanUnmanagedSkills();
   const importMutation = useImportSkillsFromApps();
   const installFromZipMutation = useInstallSkillsFromZip();
+  const installArchiveMutation = useInstallSkillArchives();
 
   const enabledCounts = useMemo(() => {
     const counts = { claude: 0, codex: 0, gemini: 0, opencode: 0, openclaw: 0 };
@@ -160,6 +205,11 @@ const UnifiedSkillsPanel = React.forwardRef<
   };
 
   const handleInstallFromZip = async () => {
+    if (webRuntime) {
+      setArchiveDialogOpen(true);
+      return;
+    }
+
     try {
       const filePath = await skillsApi.openZipFileDialog();
       if (!filePath) return;
@@ -186,6 +236,137 @@ const UnifiedSkillsPanel = React.forwardRef<
           { closeButton: true },
         );
       }
+    } catch (error) {
+      toast.error(t("skills.installFailed"), { description: String(error) });
+    }
+  };
+
+  const appendArchiveFiles = (files: File[]) => {
+    const validArchives = files.filter(isZipArchiveFile);
+    const invalidCount = files.length - validArchives.length;
+
+    if (invalidCount > 0) {
+      toast.error(t("skills.installFromZip.invalidFilesTitle"), {
+        description: t("skills.installFromZip.invalidFilesDescription", {
+          count: invalidCount,
+        }),
+        closeButton: true,
+      });
+    }
+
+    if (validArchives.length === 0) {
+      return;
+    }
+
+    setArchiveFiles((current) => mergeArchiveFiles(current, validArchives));
+  };
+
+  const handleArchiveInputChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    appendArchiveFiles(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  };
+
+  const handleInstallArchives = async () => {
+    if (archiveFiles.length === 0) {
+      toast.info(t("skills.installFromZip.emptySelection"), {
+        closeButton: true,
+      });
+      return;
+    }
+
+    try {
+      const results = await installArchiveMutation.mutateAsync({
+        files: archiveFiles,
+        currentApp,
+      });
+      const installedCount = results.reduce(
+        (count, result) => count + result.installed.length,
+        0,
+      );
+      const failedResults = results.filter((result) => result.error);
+      const skippedCount = results.filter(
+        (result) => !result.error && result.installed.length === 0,
+      ).length;
+
+      if (installedCount === 0 && failedResults.length === 0) {
+        toast.info(t("skills.installFromZip.noNewSkills"), {
+          description:
+            skippedCount > 0
+              ? t("skills.installFromZip.noNewSkillsDescription", {
+                  count: skippedCount,
+                })
+              : undefined,
+          closeButton: true,
+        });
+        return;
+      }
+
+      if (failedResults.length === 0) {
+        if (installedCount === 1) {
+          const installed = results.find((result) => result.installed.length > 0)
+            ?.installed[0];
+          toast.success(
+            t("skills.installFromZip.successSingle", {
+              name: installed?.name ?? "",
+            }),
+            {
+              description:
+                skippedCount > 0
+                  ? t("skills.installFromZip.skippedDescription", {
+                      count: skippedCount,
+                    })
+                  : undefined,
+              closeButton: true,
+            },
+          );
+        } else {
+          toast.success(
+            t("skills.installFromZip.successMultiple", {
+              count: installedCount,
+            }),
+            {
+              description:
+                skippedCount > 0
+                  ? t("skills.installFromZip.skippedDescription", {
+                      count: skippedCount,
+                    })
+                  : undefined,
+              closeButton: true,
+            },
+          );
+        }
+        setArchiveDialogOpen(false);
+        setArchiveFiles([]);
+        return;
+      }
+
+      console.error("[skills] archive install failures", failedResults);
+
+      if (installedCount > 0) {
+        toast.success(t("skills.installFromZip.partialSuccess", {
+          count: installedCount,
+        }), {
+          description: t("skills.installFromZip.partialSuccessDescription", {
+            count: failedResults.length,
+            files: summarizeArchiveFailures(failedResults),
+          }),
+          closeButton: true,
+        });
+        setArchiveDialogOpen(false);
+        setArchiveFiles([]);
+        return;
+      }
+
+      toast.error(t("skills.installFromZip.failed", {
+        count: failedResults.length,
+      }), {
+        description: t("skills.installFromZip.failedDescription", {
+          files: summarizeArchiveFailures(failedResults),
+        }),
+        closeButton: true,
+      });
     } catch (error) {
       toast.error(t("skills.installFailed"), { description: String(error) });
     }
@@ -331,6 +512,41 @@ const UnifiedSkillsPanel = React.forwardRef<
         onClose={() => setRestoreDialogOpen(false)}
         open={restoreDialogOpen}
       />
+
+      {webRuntime && (
+        <>
+          <input
+            ref={archiveInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            multiple
+            className="hidden"
+            onChange={handleArchiveInputChange}
+          />
+          <InstallSkillsFromZipDialog
+            open={archiveDialogOpen}
+            files={archiveFiles}
+            isDragActive={isArchiveDragActive}
+            isInstalling={installArchiveMutation.isPending}
+            onBrowse={() => archiveInputRef.current?.click()}
+            onClose={() => {
+              if (installArchiveMutation.isPending) return;
+              setArchiveDialogOpen(false);
+              setArchiveFiles([]);
+              setIsArchiveDragActive(false);
+            }}
+            onClear={() => setArchiveFiles([])}
+            onDropFiles={appendArchiveFiles}
+            onInstall={handleInstallArchives}
+            onRemoveFile={(fileKey) =>
+              setArchiveFiles((current) =>
+                current.filter((file) => buildArchiveFileKey(file) !== fileKey),
+              )
+            }
+            onSetDragActive={setIsArchiveDragActive}
+          />
+        </>
+      )}
     </div>
   );
 });
@@ -443,6 +659,20 @@ interface RestoreSkillsDialogProps {
   open: boolean;
 }
 
+interface InstallSkillsFromZipDialogProps {
+  open: boolean;
+  files: File[];
+  isDragActive: boolean;
+  isInstalling: boolean;
+  onBrowse: () => void;
+  onClear: () => void;
+  onClose: () => void;
+  onDropFiles: (files: File[]) => void;
+  onInstall: () => void;
+  onRemoveFile: (fileKey: string) => void;
+  onSetDragActive: (active: boolean) => void;
+}
+
 const RestoreSkillsDialog: React.FC<RestoreSkillsDialogProps> = ({
   backups,
   isDeleting,
@@ -543,6 +773,160 @@ const RestoreSkillsDialog: React.FC<RestoreSkillsDialogProps> = ({
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
             {t("common.close")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const InstallSkillsFromZipDialog: React.FC<InstallSkillsFromZipDialogProps> = ({
+  open,
+  files,
+  isDragActive,
+  isInstalling,
+  onBrowse,
+  onClear,
+  onClose,
+  onDropFiles,
+  onInstall,
+  onRemoveFile,
+  onSetDragActive,
+}) => {
+  const { t } = useTranslation();
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    onSetDragActive(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const nextTarget = event.relatedTarget;
+    if (
+      nextTarget instanceof Node &&
+      event.currentTarget.contains(nextTarget)
+    ) {
+      return;
+    }
+    onSetDragActive(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    onSetDragActive(false);
+    onDropFiles(Array.from(event.dataTransfer.files ?? []));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" zIndex="alert">
+        <DialogHeader>
+          <DialogTitle>{t("skills.installFromZip.dialogTitle")}</DialogTitle>
+          <DialogDescription>
+            {t("skills.installFromZip.dialogDescription")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          <div
+            className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+              isDragActive
+                ? "border-foreground bg-muted/60"
+                : "border-border-default bg-muted/30"
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-background shadow-sm">
+              <Upload size={20} className="text-muted-foreground" />
+            </div>
+            <div className="text-sm font-medium text-foreground">
+              {isDragActive
+                ? t("skills.installFromZip.dropActive")
+                : t("skills.installFromZip.dropTitle")}
+            </div>
+            <div className="mt-2 text-sm text-muted-foreground">
+              {t("skills.installFromZip.dropHint")}
+            </div>
+            <div className="mt-4 flex justify-center gap-3">
+              <Button type="button" variant="outline" onClick={onBrowse}>
+                {t("skills.installFromZip.selectFiles")}
+              </Button>
+              {files.length > 0 && (
+                <Button type="button" variant="ghost" onClick={onClear}>
+                  {t("skills.installFromZip.clearSelection")}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {files.length === 0 ? (
+            <div className="rounded-xl border border-border-default bg-background/70 p-6 text-center text-sm text-muted-foreground">
+              {t("skills.installFromZip.empty")}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-foreground">
+                  {t("skills.installFromZip.selectedFiles", {
+                    count: files.length,
+                  })}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {files.map((file) => {
+                  const fileKey = buildArchiveFileKey(file);
+                  return (
+                    <div
+                      key={fileKey}
+                      className="flex items-center gap-3 rounded-xl border border-border-default bg-background/80 px-4 py-3"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                        <FileArchive size={16} className="text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {file.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatArchiveFileSize(file.size)}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => onRemoveFile(fileKey)}
+                        disabled={isInstalling}
+                        title={t("skills.installFromZip.removeFile")}
+                      >
+                        <X size={14} />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isInstalling}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            onClick={onInstall}
+            disabled={files.length === 0 || isInstalling}
+          >
+            {isInstalling
+              ? t("skills.installFromZip.installing")
+              : t("skills.installFromZip.installSelected", {
+                  count: files.length,
+                })}
           </Button>
         </DialogFooter>
       </DialogContent>
