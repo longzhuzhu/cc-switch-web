@@ -132,6 +132,43 @@ Local Rust Service
 
 ## 7. 阶段计划
 
+## 7.0 当前执行进度（2026-03-31）
+
+截至目前，已经完成的关键改造如下：
+
+- 已建立前端运行时适配层，前端不再只依赖 Tauri 才能启动
+- 已新增 Rust 本地 Web 服务入口，并支持托管 `dist/` 静态资源
+- 已打通 `Settings`、`Providers`、`Proxy`、基础 `Failover` 的 HTTP API
+- 已提供：
+  - `pnpm dev:web`
+  - `pnpm build:web`
+  - `pnpm start:web`
+- 已增加 Docker 运行文件：
+  - `Dockerfile`
+  - `docker-compose.yml`
+  - `.dockerignore`
+- 已在 README 三语文件中补充本地运行和 Docker 运行说明
+- 已在 Web 模式下收起一部分仍依赖桌面能力的入口，避免页面直接触发未迁移命令
+
+当前已具备的 Web 主流程能力：
+
+- 浏览器访问本地 Rust 服务
+- Provider 基础增删改查与切换
+- Settings 基础读写
+- Proxy 启停、接管、配置读写
+- Failover 基础队列与开关配置
+
+当前仍未完成、需要继续迁移的重点：
+
+- MCP
+- Prompts
+- Skills
+- Usage 统计
+- Sessions / Workspace
+- OpenClaw 专属页面
+- 整流器、全局出站代理等桌面设置区块
+- Windows / Linux 直接运行的更完整包装方式（如脚本、服务化说明）
+
 ## 7.1 阶段一：运行时解耦
 
 ### 目标
@@ -411,9 +448,9 @@ Local Rust Service
 
 基于当前状态，下一步最合理的执行内容是：
 
-1. 建立 Web 运行时适配层
-2. 建立 Rust HTTP 服务最小骨架
-3. 先打通健康检查接口和基础设置读取
-4. 再逐步迁移 Provider 和 Proxy
+1. 继续迁移 MCP / Prompts / Skills 相关 API
+2. 梳理并收敛 Web 模式下仍暴露的桌面专属入口
+3. 补齐 Docker 使用细节和宿主机目录挂载策略
+4. 视需要补充 Linux `systemd` / Windows 直接运行说明
 
 不要先进行大规模删除，先完成“可替代运行路径”，再清理旧代码。
