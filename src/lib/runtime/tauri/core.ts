@@ -80,6 +80,7 @@ import {
   importWebMcpFromApps,
   importWebConfigUpload,
   importWebDefaultProviderConfig,
+  streamCheckAllWebProviders,
   streamCheckWebProvider,
   importWebPromptFromFile,
   importWebSkillsFromApps,
@@ -213,6 +214,11 @@ export async function invoke<T>(
       return (await streamCheckWebProvider(
         args?.appType as AppId,
         args?.providerId as string,
+      )) as T;
+    case "stream_check_all_providers":
+      return (await streamCheckAllWebProviders(
+        args?.appType as AppId,
+        Boolean(args?.proxyTargetsOnly),
       )) as T;
     case "queryProviderUsage":
       return (await getWebProviderUsage(

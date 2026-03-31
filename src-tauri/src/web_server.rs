@@ -108,6 +108,12 @@ struct EndpointTestRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct StreamCheckAllProvidersRequest {
+    proxy_targets_only: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CustomEndpointUrlRequest {
     url: String,
 }
@@ -532,6 +538,23 @@ async fn stream_check_provider(
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to stream check provider: {e}")))?;
+    Ok(Json(result))
+}
+
+async fn stream_check_all_providers(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+    Json(payload): Json<StreamCheckAllProvidersRequest>,
+) -> Result<Json<Vec<(String, crate::services::stream_check::StreamCheckResult)>>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let result = crate::commands::stream_check_all_providers_internal(
+        state.app_state.as_ref(),
+        &state.copilot_auth_state,
+        app_type,
+        payload.proxy_targets_only,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to stream check all providers: {e}")))?;
     Ok(Json(result))
 }
 
@@ -2577,6 +2600,10 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/providers/:app/stream-check/:id",
             post(stream_check_provider),
+        )
+        .route(
+            "/api/providers/:app/stream-check-all",
+            post(stream_check_all_providers),
         )
         .route(
             "/api/providers/:app/live-settings",

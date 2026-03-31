@@ -167,6 +167,7 @@ Local Rust Service
 - 已恢复 Provider 编辑辅助能力的 Web 路径（live 配置读取、端点测速、自定义 endpoint 增删改）
 - 已恢复 `Universal Provider` 的 Web 主路径（列表、单项读取、保存、删除、同步到各应用）
 - 已恢复 Provider 排序持久化的 Web 路径（拖拽排序与复制插入位调整可写回本地服务）
+- 已恢复批量流式健康检查的 Web 路径（可通过本地服务批量检查当前应用 Provider 状态）
 - 已提供：
   - `pnpm dev` / `pnpm dev:web`
   - `pnpm build` / `pnpm build:d`

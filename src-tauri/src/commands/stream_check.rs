@@ -64,11 +64,9 @@ pub async fn stream_check_provider(
     stream_check_provider_internal(&state, &copilot_state.0, app_type, &provider_id).await
 }
 
-/// 批量流式健康检查
-#[tauri::command]
-pub async fn stream_check_all_providers(
-    state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
+pub async fn stream_check_all_providers_internal(
+    state: &AppState,
+    copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
     app_type: AppType,
     proxy_targets_only: bool,
 ) -> Result<Vec<(String, StreamCheckResult)>, AppError> {
@@ -98,12 +96,12 @@ pub async fn stream_check_all_providers(
             }
         }
 
-        let auth_override = resolve_copilot_auth_override(&provider, &copilot_state.0).await?;
+        let auth_override = resolve_copilot_auth_override(&provider, copilot_state).await?;
         let claude_api_format_override = resolve_claude_api_format_override(
             &app_type,
             &provider,
             &config,
-            &copilot_state.0,
+            copilot_state,
             auth_override.as_ref(),
         )
         .await
@@ -142,6 +140,18 @@ pub async fn stream_check_all_providers(
     }
 
     Ok(results)
+}
+
+/// 批量流式健康检查
+#[tauri::command]
+pub async fn stream_check_all_providers(
+    state: State<'_, AppState>,
+    copilot_state: State<'_, CopilotAuthState>,
+    app_type: AppType,
+    proxy_targets_only: bool,
+) -> Result<Vec<(String, StreamCheckResult)>, AppError> {
+    stream_check_all_providers_internal(&state, &copilot_state.0, app_type, proxy_targets_only)
+        .await
 }
 
 /// 获取流式检查配置

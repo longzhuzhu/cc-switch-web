@@ -347,6 +347,17 @@ export async function streamCheckWebProvider(
   );
 }
 
+export async function streamCheckAllWebProviders(
+  appId: AppId,
+  proxyTargetsOnly: boolean,
+): Promise<Array<[string, import("@/lib/api/model-test").StreamCheckResult]>> {
+  return requestWithBody<
+    Array<[string, import("@/lib/api/model-test").StreamCheckResult]>
+  >(`/api/providers/${appId}/stream-check-all`, "POST", {
+    proxyTargetsOnly,
+  });
+}
+
 export async function getWebLiveProviderSettings(
   appId: AppId,
 ): Promise<Record<string, unknown>> {
