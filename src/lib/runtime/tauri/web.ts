@@ -1,5 +1,11 @@
 import type { Settings } from "@/types";
-import type { CustomEndpoint, Provider, UsageResult } from "@/types";
+import type {
+  CustomEndpoint,
+  Provider,
+  UniversalProvider,
+  UniversalProvidersMap,
+  UsageResult,
+} from "@/types";
 import type { McpServer, McpServersMap } from "@/types";
 import type { RemoteSnapshotInfo, WebDavSyncSettings } from "@/types";
 import type {
@@ -433,6 +439,38 @@ export async function updateWebEndpointLastUsed(
     `/api/providers/${appId}/${encodeURIComponent(providerId)}/custom-endpoints/last-used`,
     "POST",
     { url },
+  );
+}
+
+export async function getWebUniversalProviders(): Promise<UniversalProvidersMap> {
+  return requestJson<UniversalProvidersMap>("/api/universal-providers");
+}
+
+export async function getWebUniversalProvider(
+  id: string,
+): Promise<UniversalProvider | null> {
+  return requestJson<UniversalProvider | null>(
+    `/api/universal-providers/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function upsertWebUniversalProvider(
+  provider: UniversalProvider,
+): Promise<boolean> {
+  return requestWithBody<boolean>("/api/universal-providers", "POST", provider);
+}
+
+export async function deleteWebUniversalProvider(id: string): Promise<boolean> {
+  return requestWithBody<boolean>(
+    `/api/universal-providers/${encodeURIComponent(id)}`,
+    "DELETE",
+  );
+}
+
+export async function syncWebUniversalProvider(id: string): Promise<boolean> {
+  return requestWithBody<boolean>(
+    `/api/universal-providers/${encodeURIComponent(id)}/sync`,
+    "POST",
   );
 }
 

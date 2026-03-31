@@ -20,6 +20,8 @@ import {
   getWebLogConfig,
   getWebConfigDir,
   getWebToolVersions,
+  getWebUniversalProvider,
+  getWebUniversalProviders,
   getWebOpenClawAgentsDefaults,
   getWebOpenClawDefaultModel,
   getWebOpenClawEnv,
@@ -68,6 +70,7 @@ import {
   setWebRectifierConfig,
   setWebStreamCheckConfig,
   startWebManagedAuthLogin,
+  syncWebUniversalProvider,
   toggleWebMcpApp,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
@@ -138,6 +141,8 @@ import {
   updateWebProxyConfigForApp,
   updateWebEndpointLastUsed,
   enableWebPrompt,
+  upsertWebUniversalProvider,
+  deleteWebUniversalProvider,
 } from "./web";
 
 type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
@@ -307,9 +312,15 @@ export async function invoke<T>(
         args?.id as string,
       )) as T;
     case "get_universal_providers":
-      return {} as T;
+      return (await getWebUniversalProviders()) as T;
     case "get_universal_provider":
-      return null as T;
+      return (await getWebUniversalProvider(args?.id as string)) as T;
+    case "upsert_universal_provider":
+      return (await upsertWebUniversalProvider(args?.provider as any)) as T;
+    case "delete_universal_provider":
+      return (await deleteWebUniversalProvider(args?.id as string)) as T;
+    case "sync_universal_provider":
+      return (await syncWebUniversalProvider(args?.id as string)) as T;
     case "get_opencode_live_provider_ids":
       return (await getWebLiveProviderIds("opencode")) as T;
     case "get_openclaw_live_provider_ids":

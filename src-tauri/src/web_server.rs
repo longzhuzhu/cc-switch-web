@@ -638,6 +638,50 @@ async fn update_endpoint_last_used(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn get_universal_providers(
+    State(state): State<WebApiState>,
+) -> Result<Json<HashMap<String, crate::provider::UniversalProvider>>, ApiError> {
+    let providers = ProviderService::list_universal(state.app_state.as_ref())
+        .map_err(|e| ApiError::internal(format!("failed to load universal providers: {e}")))?;
+    Ok(Json(providers))
+}
+
+async fn get_universal_provider(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+) -> Result<Json<Option<crate::provider::UniversalProvider>>, ApiError> {
+    let provider = ProviderService::get_universal(state.app_state.as_ref(), &id)
+        .map_err(|e| ApiError::internal(format!("failed to load universal provider: {e}")))?;
+    Ok(Json(provider))
+}
+
+async fn upsert_universal_provider(
+    State(state): State<WebApiState>,
+    Json(provider): Json<crate::provider::UniversalProvider>,
+) -> Result<Json<bool>, ApiError> {
+    let result = ProviderService::upsert_universal(state.app_state.as_ref(), provider)
+        .map_err(|e| ApiError::internal(format!("failed to save universal provider: {e}")))?;
+    Ok(Json(result))
+}
+
+async fn delete_universal_provider(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+) -> Result<Json<bool>, ApiError> {
+    let result = ProviderService::delete_universal(state.app_state.as_ref(), &id)
+        .map_err(|e| ApiError::internal(format!("failed to delete universal provider: {e}")))?;
+    Ok(Json(result))
+}
+
+async fn sync_universal_provider(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+) -> Result<Json<bool>, ApiError> {
+    let result = ProviderService::sync_universal_to_apps(state.app_state.as_ref(), &id)
+        .map_err(|e| ApiError::internal(format!("failed to sync universal provider: {e}")))?;
+    Ok(Json(result))
+}
+
 async fn get_installed_skills(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<crate::app_config::InstalledSkill>>, ApiError> {
@@ -2544,6 +2588,18 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/providers/:app/live-config/:id",
             axum::routing::delete(remove_provider_from_live_config),
+        )
+        .route(
+            "/api/universal-providers",
+            get(get_universal_providers).post(upsert_universal_provider),
+        )
+        .route(
+            "/api/universal-providers/:id",
+            get(get_universal_provider).delete(delete_universal_provider),
+        )
+        .route(
+            "/api/universal-providers/:id/sync",
+            post(sync_universal_provider),
         )
         .route("/api/skills/installed", get(get_installed_skills))
         .route("/api/skills/backups", get(get_skill_backups))
