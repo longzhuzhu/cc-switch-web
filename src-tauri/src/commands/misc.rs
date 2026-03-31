@@ -3,9 +3,12 @@
 use crate::app_config::AppType;
 use crate::init_status::{InitErrorPayload, SkillsMigrationPayload};
 use crate::services::ProviderService;
+#[cfg(any(test, not(target_os = "windows")))]
 use once_cell::sync::Lazy;
+#[cfg(any(test, not(target_os = "windows")))]
 use regex::Regex;
 use std::collections::HashMap;
+#[cfg(any(test, not(target_os = "windows")))]
 use std::path::Path;
 use std::str::FromStr;
 use tauri::AppHandle;
@@ -92,6 +95,7 @@ pub struct ToolVersion {
     wsl_distro: Option<String>,
 }
 
+#[cfg(not(target_os = "windows"))]
 const VALID_TOOLS: [&str; 4] = ["claude", "codex", "gemini", "opencode"];
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -104,15 +108,6 @@ pub struct WslShellPreferenceInput {
 }
 
 // Keep platform-specific env detection in one place to avoid repeating cfg blocks.
-#[cfg(target_os = "windows")]
-fn tool_env_type_and_wsl_distro(tool: &str) -> (String, Option<String>) {
-    if let Some(distro) = wsl_distro_for_tool(tool) {
-        ("wsl".to_string(), Some(distro))
-    } else {
-        ("windows".to_string(), None)
-    }
-}
-
 #[cfg(target_os = "macos")]
 fn tool_env_type_and_wsl_distro(_tool: &str) -> (String, Option<String>) {
     ("macos".to_string(), None)
@@ -170,6 +165,7 @@ pub async fn get_tool_versions(
 }
 
 /// 获取单个工具的版本信息（内部实现）
+#[cfg(not(target_os = "windows"))]
 async fn get_single_tool_version_impl(
     tool: &str,
     wsl_shell: Option<&str>,
@@ -218,6 +214,7 @@ async fn get_single_tool_version_impl(
 }
 
 /// Helper function to fetch latest version from npm registry
+#[cfg(not(target_os = "windows"))]
 async fn fetch_npm_latest_version(client: &reqwest::Client, package: &str) -> Option<String> {
     let url = format!("https://registry.npmjs.org/{package}");
     match client.get(&url).send().await {
@@ -236,6 +233,7 @@ async fn fetch_npm_latest_version(client: &reqwest::Client, package: &str) -> Op
 }
 
 /// Helper function to fetch latest version from GitHub releases
+#[cfg(not(target_os = "windows"))]
 async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Option<String> {
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
     match client
@@ -259,10 +257,12 @@ async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Op
 }
 
 /// 预编译的版本号正则表达式
+#[cfg(any(test, not(target_os = "windows")))]
 static VERSION_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\d+\.\d+\.\d+(-[\w.]+)?").expect("Invalid version regex"));
 
 /// 从版本输出中提取纯版本号
+#[cfg(any(test, not(target_os = "windows")))]
 fn extract_version(raw: &str) -> String {
     VERSION_RE
         .find(raw)
@@ -271,6 +271,7 @@ fn extract_version(raw: &str) -> String {
 }
 
 /// 尝试直接执行命令获取版本
+#[cfg(not(target_os = "windows"))]
 fn try_get_version(tool: &str) -> (Option<String>, Option<String>) {
     use std::process::Command;
 
@@ -319,7 +320,7 @@ fn try_get_version(tool: &str) -> (Option<String>, Option<String>) {
 
 /// 校验 WSL 发行版名称是否合法
 /// WSL 发行版名称只允许字母、数字、连字符和下划线
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", test))]
 fn is_valid_wsl_distro_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 64
@@ -329,7 +330,7 @@ fn is_valid_wsl_distro_name(name: &str) -> bool {
 }
 
 /// Validate that the given shell name is one of the allowed shells.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", test))]
 fn is_valid_shell(shell: &str) -> bool {
     matches!(
         shell.rsplit('/').next().unwrap_or(shell),
@@ -338,115 +339,18 @@ fn is_valid_shell(shell: &str) -> bool {
 }
 
 /// Validate that the given shell flag is one of the allowed flags.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", test))]
 fn is_valid_shell_flag(flag: &str) -> bool {
     matches!(flag, "-c" | "-lc" | "-lic")
 }
 
 /// Return the default invocation flag for the given shell.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", test))]
 fn default_flag_for_shell(shell: &str) -> &'static str {
     match shell.rsplit('/').next().unwrap_or(shell) {
         "dash" | "sh" => "-c",
         "fish" => "-lc",
         _ => "-lic",
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn try_get_version_wsl(
-    tool: &str,
-    distro: &str,
-    force_shell: Option<&str>,
-    force_shell_flag: Option<&str>,
-) -> (Option<String>, Option<String>) {
-    use std::process::Command;
-
-    // 防御性断言：tool 只能是预定义的值
-    debug_assert!(
-        ["claude", "codex", "gemini", "opencode"].contains(&tool),
-        "unexpected tool name: {tool}"
-    );
-
-    // 校验 distro 名称，防止命令注入
-    if !is_valid_wsl_distro_name(distro) {
-        return (None, Some(format!("[WSL:{distro}] invalid distro name")));
-    }
-
-    // 构建 Shell 脚本检测逻辑
-    let (shell, flag, cmd) = if let Some(shell) = force_shell {
-        // Defensive validation: never allow an arbitrary executable name here.
-        if !is_valid_shell(shell) {
-            return (None, Some(format!("[WSL:{distro}] invalid shell: {shell}")));
-        }
-        let shell = shell.rsplit('/').next().unwrap_or(shell);
-        let flag = if let Some(flag) = force_shell_flag {
-            if !is_valid_shell_flag(flag) {
-                return (
-                    None,
-                    Some(format!("[WSL:{distro}] invalid shell flag: {flag}")),
-                );
-            }
-            flag
-        } else {
-            default_flag_for_shell(shell)
-        };
-
-        (shell.to_string(), flag, format!("{tool} --version"))
-    } else {
-        let cmd = if let Some(flag) = force_shell_flag {
-            if !is_valid_shell_flag(flag) {
-                return (
-                    None,
-                    Some(format!("[WSL:{distro}] invalid shell flag: {flag}")),
-                );
-            }
-            format!("\"${{SHELL:-sh}}\" {flag} '{tool} --version'")
-        } else {
-            // 兜底：自动尝试 -lic, -lc, -c
-            format!(
-                "\"${{SHELL:-sh}}\" -lic '{tool} --version' 2>/dev/null || \"${{SHELL:-sh}}\" -lc '{tool} --version' 2>/dev/null || \"${{SHELL:-sh}}\" -c '{tool} --version'"
-            )
-        };
-
-        ("sh".to_string(), "-c", cmd)
-    };
-
-    let output = Command::new("wsl.exe")
-        .args(["-d", distro, "--", &shell, flag, &cmd])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            if out.status.success() {
-                let raw = if stdout.is_empty() { &stderr } else { &stdout };
-                if raw.is_empty() {
-                    (
-                        None,
-                        Some(format!("[WSL:{distro}] not installed or not executable")),
-                    )
-                } else {
-                    (Some(extract_version(raw)), None)
-                }
-            } else {
-                let err = if stderr.is_empty() { stdout } else { stderr };
-                (
-                    None,
-                    Some(format!(
-                        "[WSL:{distro}] {}",
-                        if err.is_empty() {
-                            "not installed or not executable".to_string()
-                        } else {
-                            err
-                        }
-                    )),
-                )
-            }
-        }
-        Err(e) => (None, Some(format!("[WSL:{distro}] exec failed: {e}"))),
     }
 }
 
@@ -466,6 +370,7 @@ fn try_get_version_wsl(
     )
 }
 
+#[cfg(any(test, not(target_os = "windows")))]
 fn push_unique_path(paths: &mut Vec<std::path::PathBuf>, path: std::path::PathBuf) {
     if path.as_os_str().is_empty() {
         return;
@@ -476,12 +381,14 @@ fn push_unique_path(paths: &mut Vec<std::path::PathBuf>, path: std::path::PathBu
     }
 }
 
+#[cfg(any(test, not(target_os = "windows")))]
 fn push_env_single_dir(paths: &mut Vec<std::path::PathBuf>, value: Option<std::ffi::OsString>) {
     if let Some(raw) = value {
         push_unique_path(paths, std::path::PathBuf::from(raw));
     }
 }
 
+#[cfg(any(test, not(target_os = "windows")))]
 fn extend_from_path_list(
     paths: &mut Vec<std::path::PathBuf>,
     value: Option<std::ffi::OsString>,
@@ -502,6 +409,7 @@ fn extend_from_path_list(
 ///   $OPENCODE_INSTALL_DIR > $XDG_BIN_DIR > $HOME/bin > $HOME/.opencode/bin
 /// 额外扫描 Bun 默认全局安装路径（~/.bun/bin）
 /// 和 Go 安装路径（~/go/bin、$GOPATH/*/bin）。
+#[cfg(any(test, not(target_os = "windows")))]
 fn opencode_extra_search_paths(
     home: &Path,
     opencode_install_dir: Option<std::ffi::OsString>,
@@ -525,6 +433,7 @@ fn opencode_extra_search_paths(
     paths
 }
 
+#[cfg(any(test, not(target_os = "windows")))]
 fn tool_executable_candidates(tool: &str, dir: &Path) -> Vec<std::path::PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -542,6 +451,7 @@ fn tool_executable_candidates(tool: &str, dir: &Path) -> Vec<std::path::PathBuf>
 }
 
 /// 扫描常见路径查找 CLI
+#[cfg(not(target_os = "windows"))]
 fn scan_cli_version(tool: &str) -> (Option<String>, Option<String>) {
     use std::process::Command;
 
@@ -670,44 +580,6 @@ fn scan_cli_version(tool: &str) -> (Option<String>, Option<String>) {
     }
 
     (None, Some("not installed or not executable".to_string()))
-}
-
-#[cfg(target_os = "windows")]
-fn wsl_distro_for_tool(tool: &str) -> Option<String> {
-    let override_dir = match tool {
-        "claude" => crate::settings::get_claude_override_dir(),
-        "codex" => crate::settings::get_codex_override_dir(),
-        "gemini" => crate::settings::get_gemini_override_dir(),
-        "opencode" => crate::settings::get_opencode_override_dir(),
-        _ => None,
-    }?;
-
-    wsl_distro_from_path(&override_dir)
-}
-
-/// 从 UNC 路径中提取 WSL 发行版名称
-/// 支持 `\\wsl$\Ubuntu\...` 和 `\\wsl.localhost\Ubuntu\...` 两种格式
-#[cfg(target_os = "windows")]
-fn wsl_distro_from_path(path: &Path) -> Option<String> {
-    use std::path::{Component, Prefix};
-    let Some(Component::Prefix(prefix)) = path.components().next() else {
-        return None;
-    };
-    match prefix.kind() {
-        Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => {
-            let server_name = server.to_string_lossy();
-            if server_name.eq_ignore_ascii_case("wsl$")
-                || server_name.eq_ignore_ascii_case("wsl.localhost")
-            {
-                let distro = share.to_string_lossy().to_string();
-                if !distro.is_empty() {
-                    return Some(distro);
-                }
-            }
-            None
-        }
-        _ => None,
-    }
 }
 
 /// 打开指定提供商的终端
