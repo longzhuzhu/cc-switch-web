@@ -1,6 +1,6 @@
 # Web 化剩余缺口审计
 
-更新时间：2026-04-01（OMO Web 路径补齐后）
+更新时间：2026-04-01（清理 Deeplink Rust/Tauri 残留后）
 
 ## 结论
 
@@ -48,7 +48,6 @@
 | `open_app_config_folder` / `open_config_folder` | Web 未映射 | 不再迁移 | 与本地 GUI 文件管理器强耦合 |
 | `apply_claude_plugin_config` | Web 未映射 | 建议下线或桌面专用 | 属于旧桌面集成逻辑 |
 | `apply_claude_onboarding_skip` / `clear_claude_onboarding_skip` | Web 未映射 | 建议下线或桌面专用 | 属于 Claude 桌面集成兼容逻辑 |
-| Deeplink 相关命令 | Web 未映射 | 建议删除或冻结 | Web 本地服务模式下优先级极低 |
 | 单实例/窗口/托盘相关后续残留 | 未纳入 Web | 建议继续清理 | 与目标架构不一致 |
 
 ## 三、已降级处理，不应再算作“Web 功能缺失”
@@ -72,6 +71,7 @@
 - Web 模式下不再持有前端自动更新上下文
 - OMO / OMO Slim 已补齐本地文件读取、当前配置读取与停用的 Web 路径
 - Deeplink 前端导入对话框与 Web 入口已从当前分支移除
+- Deeplink Rust 模块、Tauri 命令、协议插件与 macOS URL scheme 已从当前分支移除
 
 ## 四、当前真正的收尾重点
 
@@ -86,5 +86,5 @@
 
 1. 清理桌面专属入口
 2. 清理旧兼容 API
-3. 评估并处理 Deeplink 与 Claude 旧集成残留
+3. 评估并处理 Claude 旧集成残留
 4. 更新 README 与开发计划文档，明确 Web 版边界
