@@ -144,6 +144,17 @@ export function SettingsPage({
 
   const handleRestartNow = useCallback(async () => {
     setShowRestartPrompt(false);
+    if (isWebMode) {
+      toast.info(
+        t("settings.webServiceRestartHint", {
+          defaultValue: "请手动重启本地 Rust 服务以使配置变更生效",
+        }),
+        { closeButton: true },
+      );
+      closeAfterSave();
+      return;
+    }
+
     if (import.meta.env.DEV) {
       toast.success(t("settings.devModeRestartHint"), { closeButton: true });
       closeAfterSave();
@@ -158,7 +169,7 @@ export function SettingsPage({
     } finally {
       closeAfterSave();
     }
-  }, [closeAfterSave, t]);
+  }, [closeAfterSave, isWebMode, t]);
 
   // 通用设置即时保存（无需手动点击）
   // 使用 autoSaveSettings 避免误触发系统 API（开机自启、Claude 插件等）
@@ -528,7 +539,12 @@ export function SettingsPage({
           </DialogHeader>
           <div className="px-6">
             <p className="text-sm text-muted-foreground">
-              {t("settings.restartRequiredMessage")}
+              {isWebMode
+                ? t("settings.webServiceRestartMessage", {
+                    defaultValue:
+                      "部分改动需要重新启动本地服务后才能完全生效。你可以稍后手动重启本地 Rust 服务。",
+                  })
+                : t("settings.restartRequiredMessage")}
             </p>
           </div>
           <DialogFooter>
@@ -543,7 +559,11 @@ export function SettingsPage({
               onClick={handleRestartNow}
               className="bg-primary hover:bg-primary/90"
             >
-              {t("settings.restartNow")}
+              {isWebMode
+                ? t("settings.webServiceRestartAcknowledge", {
+                    defaultValue: "我稍后手动重启",
+                  })
+                : t("settings.restartNow")}
             </Button>
           </DialogFooter>
         </DialogContent>
