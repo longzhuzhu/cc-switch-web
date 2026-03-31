@@ -53,6 +53,25 @@ CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web �
 
    然后打开 [http://localhost:8788](http://localhost:8788)。
 
+4. 构建一次后直接运行 release 二进制：
+
+   ```bash
+   pnpm build:web
+   pnpm build:web:service
+   ```
+
+   Linux:
+
+   ```bash
+   bash scripts/run-web.sh
+   ```
+
+   Windows:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\run-web.ps1
+   ```
+
 ### Docker 运行
 
 1. 构建并启动：

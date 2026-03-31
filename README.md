@@ -53,6 +53,25 @@ If you are looking for the original CC Switch project, desktop application, or u
 
    Then open [http://localhost:8788](http://localhost:8788).
 
+4. Build once and run the release binary directly:
+
+   ```bash
+   pnpm build:web
+   pnpm build:web:service
+   ```
+
+   Linux:
+
+   ```bash
+   bash scripts/run-web.sh
+   ```
+
+   Windows:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\run-web.ps1
+   ```
+
 ### Docker Run
 
 1. Build and start:
