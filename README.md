@@ -149,6 +149,20 @@ If you are looking for the original CC Switch project, desktop application, or u
 
 8. Persistent data is stored in the `cc-switch-web-data` volume.
 
+9. If you want the containerized service to manage host-side CLI config directories directly, first copy the example file:
+
+   ```bash
+   cp docker-compose.host.example.yml docker-compose.host.yml
+   ```
+
+   Then adjust the paths for your machine and run:
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+   ```
+
+   The example file is primarily for Linux servers and uses `$HOME` paths for `.claude`, `.codex`, `.gemini`, `.config/opencode`, and `.config/openclaw`.
+
 ### Tauri Compatibility
 
 If you still need the desktop shell temporarily for debugging, use:
