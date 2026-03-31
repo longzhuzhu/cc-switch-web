@@ -2,6 +2,8 @@ use tauri::State;
 
 use crate::commands::copilot::CopilotAuthState;
 use crate::proxy::providers::copilot_auth::{GitHubAccount, GitHubDeviceCodeResponse};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 const AUTH_PROVIDER_GITHUB_COPILOT: &str = "github_copilot";
 
@@ -70,13 +72,12 @@ fn map_device_code_response(
     }
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub async fn auth_start_login(
-    auth_provider: String,
-    state: State<'_, CopilotAuthState>,
+pub async fn auth_start_login_internal(
+    auth_provider: &str,
+    state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<ManagedAuthDeviceCodeResponse, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
-    let auth_manager = state.0.read().await;
+    let auth_provider = ensure_auth_provider(auth_provider)?;
+    let auth_manager = state.read().await;
     let response = auth_manager
         .start_device_flow()
         .await
@@ -84,15 +85,14 @@ pub async fn auth_start_login(
     Ok(map_device_code_response(auth_provider, response))
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub async fn auth_poll_for_account(
-    auth_provider: String,
-    device_code: String,
-    state: State<'_, CopilotAuthState>,
+pub async fn auth_poll_for_account_internal(
+    auth_provider: &str,
+    device_code: &str,
+    state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<Option<ManagedAuthAccount>, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
-    let auth_manager = state.0.write().await;
-    match auth_manager.poll_for_token(&device_code).await {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
+    let auth_manager = state.write().await;
+    match auth_manager.poll_for_token(device_code).await {
         Ok(account) => {
             let default_account_id = auth_manager.get_status().await.default_account_id;
             Ok(account
@@ -105,13 +105,12 @@ pub async fn auth_poll_for_account(
     }
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub async fn auth_list_accounts(
-    auth_provider: String,
-    state: State<'_, CopilotAuthState>,
+pub async fn auth_list_accounts_internal(
+    auth_provider: &str,
+    state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<Vec<ManagedAuthAccount>, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
-    let auth_manager = state.0.read().await;
+    let auth_provider = ensure_auth_provider(auth_provider)?;
+    let auth_manager = state.read().await;
     let status = auth_manager.get_status().await;
     let default_account_id = status.default_account_id.clone();
     Ok(status
@@ -121,13 +120,12 @@ pub async fn auth_list_accounts(
         .collect())
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub async fn auth_get_status(
-    auth_provider: String,
-    state: State<'_, CopilotAuthState>,
+pub async fn auth_get_status_internal(
+    auth_provider: &str,
+    state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<ManagedAuthStatus, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
-    let auth_manager = state.0.read().await;
+    let auth_provider = ensure_auth_provider(auth_provider)?;
+    let auth_manager = state.read().await;
     let status = auth_manager.get_status().await;
     let default_account_id = status.default_account_id.clone();
     Ok(ManagedAuthStatus {
@@ -143,18 +141,81 @@ pub async fn auth_get_status(
     })
 }
 
+pub async fn auth_remove_account_internal(
+    auth_provider: &str,
+    account_id: &str,
+    state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
+) -> Result<(), String> {
+    ensure_auth_provider(auth_provider)?;
+    let auth_manager = state.write().await;
+    auth_manager
+        .remove_account(account_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub async fn auth_set_default_account_internal(
+    auth_provider: &str,
+    account_id: &str,
+    state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
+) -> Result<(), String> {
+    ensure_auth_provider(auth_provider)?;
+    let auth_manager = state.write().await;
+    auth_manager
+        .set_default_account(account_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub async fn auth_logout_internal(
+    auth_provider: &str,
+    state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
+) -> Result<(), String> {
+    ensure_auth_provider(auth_provider)?;
+    let auth_manager = state.write().await;
+    auth_manager.clear_auth().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn auth_start_login(
+    auth_provider: String,
+    state: State<'_, CopilotAuthState>,
+) -> Result<ManagedAuthDeviceCodeResponse, String> {
+    auth_start_login_internal(&auth_provider, &state.0).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn auth_poll_for_account(
+    auth_provider: String,
+    device_code: String,
+    state: State<'_, CopilotAuthState>,
+) -> Result<Option<ManagedAuthAccount>, String> {
+    auth_poll_for_account_internal(&auth_provider, &device_code, &state.0).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn auth_list_accounts(
+    auth_provider: String,
+    state: State<'_, CopilotAuthState>,
+) -> Result<Vec<ManagedAuthAccount>, String> {
+    auth_list_accounts_internal(&auth_provider, &state.0).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn auth_get_status(
+    auth_provider: String,
+    state: State<'_, CopilotAuthState>,
+) -> Result<ManagedAuthStatus, String> {
+    auth_get_status_internal(&auth_provider, &state.0).await
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn auth_remove_account(
     auth_provider: String,
     account_id: String,
     state: State<'_, CopilotAuthState>,
 ) -> Result<(), String> {
-    ensure_auth_provider(&auth_provider)?;
-    let auth_manager = state.0.write().await;
-    auth_manager
-        .remove_account(&account_id)
-        .await
-        .map_err(|e| e.to_string())
+    auth_remove_account_internal(&auth_provider, &account_id, &state.0).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -163,12 +224,7 @@ pub async fn auth_set_default_account(
     account_id: String,
     state: State<'_, CopilotAuthState>,
 ) -> Result<(), String> {
-    ensure_auth_provider(&auth_provider)?;
-    let auth_manager = state.0.write().await;
-    auth_manager
-        .set_default_account(&account_id)
-        .await
-        .map_err(|e| e.to_string())
+    auth_set_default_account_internal(&auth_provider, &account_id, &state.0).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -176,7 +232,5 @@ pub async fn auth_logout(
     auth_provider: String,
     state: State<'_, CopilotAuthState>,
 ) -> Result<(), String> {
-    ensure_auth_provider(&auth_provider)?;
-    let auth_manager = state.0.write().await;
-    auth_manager.clear_auth().await.map_err(|e| e.to_string())
+    auth_logout_internal(&auth_provider, &state.0).await
 }

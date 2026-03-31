@@ -183,6 +183,26 @@ struct ToolVersionsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct AuthStartLoginRequest {
+    auth_provider: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthPollForAccountRequest {
+    auth_provider: String,
+    device_code: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthAccountRequest {
+    auth_provider: String,
+    account_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct UpdateModelPricingPayload {
     display_name: String,
     input_cost: String,
@@ -1531,6 +1551,91 @@ async fn get_tool_versions(
     Ok(Json(versions))
 }
 
+async fn auth_start_login(
+    State(state): State<WebApiState>,
+    Json(payload): Json<AuthStartLoginRequest>,
+) -> Result<Json<crate::commands::ManagedAuthDeviceCodeResponse>, ApiError> {
+    let response =
+        crate::commands::auth_start_login_internal(&payload.auth_provider, &state.copilot_auth_state)
+            .await
+            .map_err(|e| ApiError::internal(format!("failed to start auth login: {e}")))?;
+    Ok(Json(response))
+}
+
+async fn auth_poll_for_account(
+    State(state): State<WebApiState>,
+    Json(payload): Json<AuthPollForAccountRequest>,
+) -> Result<Json<Option<crate::commands::ManagedAuthAccount>>, ApiError> {
+    let account = crate::commands::auth_poll_for_account_internal(
+        &payload.auth_provider,
+        &payload.device_code,
+        &state.copilot_auth_state,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to poll auth account: {e}")))?;
+    Ok(Json(account))
+}
+
+async fn auth_list_accounts(
+    State(state): State<WebApiState>,
+    Path(auth_provider): Path<String>,
+) -> Result<Json<Vec<crate::commands::ManagedAuthAccount>>, ApiError> {
+    let accounts =
+        crate::commands::auth_list_accounts_internal(&auth_provider, &state.copilot_auth_state)
+            .await
+            .map_err(|e| ApiError::internal(format!("failed to list auth accounts: {e}")))?;
+    Ok(Json(accounts))
+}
+
+async fn auth_get_status(
+    State(state): State<WebApiState>,
+    Path(auth_provider): Path<String>,
+) -> Result<Json<crate::commands::ManagedAuthStatus>, ApiError> {
+    let status =
+        crate::commands::auth_get_status_internal(&auth_provider, &state.copilot_auth_state)
+            .await
+            .map_err(|e| ApiError::internal(format!("failed to load auth status: {e}")))?;
+    Ok(Json(status))
+}
+
+async fn auth_remove_account(
+    State(state): State<WebApiState>,
+    Json(payload): Json<AuthAccountRequest>,
+) -> Result<StatusCode, ApiError> {
+    crate::commands::auth_remove_account_internal(
+        &payload.auth_provider,
+        &payload.account_id,
+        &state.copilot_auth_state,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to remove auth account: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn auth_set_default_account(
+    State(state): State<WebApiState>,
+    Json(payload): Json<AuthAccountRequest>,
+) -> Result<StatusCode, ApiError> {
+    crate::commands::auth_set_default_account_internal(
+        &payload.auth_provider,
+        &payload.account_id,
+        &state.copilot_auth_state,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to set default auth account: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn auth_logout(
+    State(state): State<WebApiState>,
+    Json(payload): Json<AuthStartLoginRequest>,
+) -> Result<StatusCode, ApiError> {
+    crate::commands::auth_logout_internal(&payload.auth_provider, &state.copilot_auth_state)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to logout auth provider: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn create_db_backup(
     State(state): State<WebApiState>,
 ) -> Result<Json<String>, ApiError> {
@@ -2182,6 +2287,13 @@ pub async fn run_web_server() -> Result<(), String> {
         )
         .route("/api/settings/tool-versions", post(get_tool_versions))
         .route("/api/settings/config-dir/:app", get(get_config_dir))
+        .route("/api/auth/start-login", post(auth_start_login))
+        .route("/api/auth/poll-for-account", post(auth_poll_for_account))
+        .route("/api/auth/:auth_provider/accounts", get(auth_list_accounts))
+        .route("/api/auth/:auth_provider/status", get(auth_get_status))
+        .route("/api/auth/remove-account", post(auth_remove_account))
+        .route("/api/auth/set-default-account", post(auth_set_default_account))
+        .route("/api/auth/logout", post(auth_logout))
         .route("/api/backups/db", get(list_db_backups).post(create_db_backup))
         .route("/api/backups/db/rename", put(rename_db_backup))
         .route(

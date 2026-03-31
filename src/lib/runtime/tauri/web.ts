@@ -252,6 +252,60 @@ export async function getWebToolVersions(
   });
 }
 
+export async function startWebManagedAuthLogin(
+  authProvider: string,
+): Promise<import("@/lib/api/auth").ManagedAuthDeviceCodeResponse> {
+  return requestWithBody("/api/auth/start-login", "POST", { authProvider });
+}
+
+export async function pollWebManagedAuthAccount(
+  authProvider: string,
+  deviceCode: string,
+): Promise<import("@/lib/api/auth").ManagedAuthAccount | null> {
+  return requestWithBody("/api/auth/poll-for-account", "POST", {
+    authProvider,
+    deviceCode,
+  });
+}
+
+export async function listWebManagedAuthAccounts(
+  authProvider: string,
+): Promise<import("@/lib/api/auth").ManagedAuthAccount[]> {
+  return requestJson(
+    `/api/auth/${encodeURIComponent(authProvider)}/accounts`,
+  );
+}
+
+export async function getWebManagedAuthStatus(
+  authProvider: string,
+): Promise<import("@/lib/api/auth").ManagedAuthStatus> {
+  return requestJson(`/api/auth/${encodeURIComponent(authProvider)}/status`);
+}
+
+export async function removeWebManagedAuthAccount(
+  authProvider: string,
+  accountId: string,
+): Promise<void> {
+  await requestWithBody("/api/auth/remove-account", "POST", {
+    authProvider,
+    accountId,
+  });
+}
+
+export async function setWebManagedAuthDefaultAccount(
+  authProvider: string,
+  accountId: string,
+): Promise<void> {
+  await requestWithBody("/api/auth/set-default-account", "POST", {
+    authProvider,
+    accountId,
+  });
+}
+
+export async function logoutWebManagedAuth(authProvider: string): Promise<void> {
+  await requestWithBody("/api/auth/logout", "POST", { authProvider });
+}
+
 export async function getWebLiveProviderIds(appId: AppId): Promise<string[]> {
   try {
     return await requestJson<string[]>(

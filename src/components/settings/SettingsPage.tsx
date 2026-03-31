@@ -104,12 +104,10 @@ export function SettingsPage({
 
   useEffect(() => {
     if (open) {
-      const initialTab =
-        isWebMode && ["auth"].includes(defaultTab) ? "general" : defaultTab;
-      setActiveTab(initialTab);
+      setActiveTab(defaultTab);
       resetStatus();
     }
-  }, [defaultTab, isWebMode, open, resetStatus]);
+  }, [defaultTab, open, resetStatus]);
 
   useEffect(() => {
     if (requiresRestart) {
@@ -197,17 +195,15 @@ export function SettingsPage({
           className="flex flex-col h-full"
         >
           <TabsList
-            className={`grid w-full mb-6 glass rounded-lg ${isWebMode ? "grid-cols-5" : "grid-cols-6"}`}
+            className="grid w-full mb-6 glass rounded-lg grid-cols-6"
           >
             <TabsTrigger value="general">
               {t("settings.tabGeneral")}
             </TabsTrigger>
             <TabsTrigger value="proxy">{t("settings.tabProxy")}</TabsTrigger>
-            {!isWebMode && (
-              <TabsTrigger value="auth">
-                {t("settings.tabAuth", { defaultValue: "认证" })}
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="auth">
+              {t("settings.tabAuth", { defaultValue: "认证" })}
+            </TabsTrigger>
             <TabsTrigger value="advanced">
               {t("settings.tabAdvanced")}
             </TabsTrigger>
@@ -269,35 +265,33 @@ export function SettingsPage({
                 ) : null}
               </TabsContent>
 
-              {!isWebMode && (
-                <TabsContent value="auth" className="space-y-6 mt-0 pb-4">
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-6"
-                  >
-                    <div className="flex items-center gap-3 px-1">
-                      <KeyRound className="h-5 w-5 text-primary" />
-                      <div>
-                        <h2 className="text-base font-semibold">
-                          {t("settings.authCenter.heading", {
-                            defaultValue: "认证中心",
-                          })}
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          {t("settings.authCenter.headingDescription", {
-                            defaultValue:
-                              "统一管理可跨应用复用的 OAuth 账号和默认认证来源。",
-                          })}
-                        </p>
-                      </div>
+              <TabsContent value="auth" className="space-y-6 mt-0 pb-4">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                >
+                  <div className="flex items-center gap-3 px-1">
+                    <KeyRound className="h-5 w-5 text-primary" />
+                    <div>
+                      <h2 className="text-base font-semibold">
+                        {t("settings.authCenter.heading", {
+                          defaultValue: "认证中心",
+                        })}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {t("settings.authCenter.headingDescription", {
+                          defaultValue:
+                            "统一管理可跨应用复用的 OAuth 账号和默认认证来源。",
+                        })}
+                      </p>
                     </div>
+                  </div>
 
-                    <AuthCenterPanel />
-                  </motion.div>
-                </TabsContent>
-              )}
+                  <AuthCenterPanel />
+                </motion.div>
+              </TabsContent>
 
               <TabsContent value="advanced" className="space-y-6 mt-0 pb-4">
                 {settings ? (

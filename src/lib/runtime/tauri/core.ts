@@ -42,21 +42,28 @@ import {
   getWebStreamCheckConfig,
   getWebSkillRepos,
   getWebSkillBackups,
+  getWebManagedAuthStatus,
   getWebUnmanagedSkills,
   getWebOptimizerConfig,
+  listWebManagedAuthAccounts,
   listWebDbBackups,
+  logoutWebManagedAuth,
+  pollWebManagedAuthAccount,
   renameWebDbBackup,
   removeWebProviderFromFailoverQueue,
+  removeWebManagedAuthAccount,
   restoreWebDbBackup,
   saveWebSettings,
   getWebRectifierConfig,
   setWebAutoFailoverEnabled,
   setWebDefaultCostMultiplier,
   setWebLogConfig,
+  setWebManagedAuthDefaultAccount,
   setWebOptimizerConfig,
   setWebPricingModelSource,
   setWebRectifierConfig,
   setWebStreamCheckConfig,
+  startWebManagedAuthLogin,
   toggleWebMcpApp,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
@@ -294,6 +301,29 @@ export async function invoke<T>(
             >
           | undefined,
       )) as T;
+    case "auth_start_login":
+      return (await startWebManagedAuthLogin(args?.authProvider as string)) as T;
+    case "auth_poll_for_account":
+      return (await pollWebManagedAuthAccount(
+        args?.authProvider as string,
+        args?.deviceCode as string,
+      )) as T;
+    case "auth_list_accounts":
+      return (await listWebManagedAuthAccounts(args?.authProvider as string)) as T;
+    case "auth_get_status":
+      return (await getWebManagedAuthStatus(args?.authProvider as string)) as T;
+    case "auth_remove_account":
+      return (await removeWebManagedAuthAccount(
+        args?.authProvider as string,
+        args?.accountId as string,
+      )) as T;
+    case "auth_set_default_account":
+      return (await setWebManagedAuthDefaultAccount(
+        args?.authProvider as string,
+        args?.accountId as string,
+      )) as T;
+    case "auth_logout":
+      return (await logoutWebManagedAuth(args?.authProvider as string)) as T;
     case "get_mcp_servers":
       return (await getWebMcpServers()) as T;
     case "upsert_mcp_server":
