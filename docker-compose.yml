@@ -1,0 +1,27 @@
+services:
+  cc-switch-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cc-switch-web
+    environment:
+      HOME: /data
+      CC_SWITCH_WEB_HOST: 0.0.0.0
+      CC_SWITCH_WEB_PORT: 8788
+      CC_SWITCH_WEB_DIST_DIR: /app/dist
+    ports:
+      - "${CC_SWITCH_WEB_PORT:-8788}:8788"
+    volumes:
+      - cc-switch-web-data:/data
+      # Optional: mount host-side CLI config directories when you want
+      # the containerized service to manage the host environment directly.
+      # - ${HOME}/.claude:/data/.claude
+      # - ${HOME}/.codex:/data/.codex
+      # - ${HOME}/.gemini:/data/.gemini
+      # - ${HOME}/.config/opencode:/data/.config/opencode
+      # - ${HOME}/.config/openclaw:/data/.config/openclaw
+    restart: unless-stopped
+
+volumes:
+  cc-switch-web-data:
+
