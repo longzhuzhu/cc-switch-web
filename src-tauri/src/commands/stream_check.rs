@@ -8,29 +8,30 @@ use crate::services::stream_check::{
 };
 use crate::store::AppState;
 use std::collections::HashSet;
+use std::sync::Arc;
 use tauri::State;
+use tokio::sync::RwLock;
 
 /// 流式健康检查（单个供应商）
-#[tauri::command]
-pub async fn stream_check_provider(
-    state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
+pub async fn stream_check_provider_internal(
+    state: &AppState,
+    copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
     app_type: AppType,
-    provider_id: String,
+    provider_id: &str,
 ) -> Result<StreamCheckResult, AppError> {
     let config = state.db.get_stream_check_config()?;
 
     let providers = state.db.get_all_providers(app_type.as_str())?;
     let provider = providers
-        .get(&provider_id)
+        .get(provider_id)
         .ok_or_else(|| AppError::Message(format!("供应商 {provider_id} 不存在")))?;
 
-    let auth_override = resolve_copilot_auth_override(provider, &copilot_state).await?;
+    let auth_override = resolve_copilot_auth_override(provider, copilot_state).await?;
     let claude_api_format_override = resolve_claude_api_format_override(
         &app_type,
         provider,
         &config,
-        &copilot_state,
+        copilot_state,
         auth_override.as_ref(),
     )
     .await?;
@@ -47,9 +48,20 @@ pub async fn stream_check_provider(
     let _ =
         state
             .db
-            .save_stream_check_log(&provider_id, &provider.name, app_type.as_str(), &result);
+            .save_stream_check_log(provider_id, &provider.name, app_type.as_str(), &result);
 
     Ok(result)
+}
+
+/// 流式健康检查（单个供应商）
+#[tauri::command]
+pub async fn stream_check_provider(
+    state: State<'_, AppState>,
+    copilot_state: State<'_, CopilotAuthState>,
+    app_type: AppType,
+    provider_id: String,
+) -> Result<StreamCheckResult, AppError> {
+    stream_check_provider_internal(&state, &copilot_state.0, app_type, &provider_id).await
 }
 
 /// 批量流式健康检查
@@ -86,12 +98,12 @@ pub async fn stream_check_all_providers(
             }
         }
 
-        let auth_override = resolve_copilot_auth_override(&provider, &copilot_state).await?;
+        let auth_override = resolve_copilot_auth_override(&provider, &copilot_state.0).await?;
         let claude_api_format_override = resolve_claude_api_format_override(
             &app_type,
             &provider,
             &config,
-            &copilot_state,
+            &copilot_state.0,
             auth_override.as_ref(),
         )
         .await
@@ -149,7 +161,7 @@ pub fn save_stream_check_config(
 
 async fn resolve_copilot_auth_override(
     provider: &crate::provider::Provider,
-    copilot_state: &State<'_, CopilotAuthState>,
+    copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<Option<crate::proxy::providers::AuthInfo>, AppError> {
     let is_copilot = provider
         .meta
@@ -167,7 +179,7 @@ async fn resolve_copilot_auth_override(
         return Ok(None);
     }
 
-    let auth_manager = copilot_state.0.read().await;
+    let auth_manager = copilot_state.read().await;
     let account_id = provider
         .meta
         .as_ref()
@@ -194,7 +206,7 @@ async fn resolve_claude_api_format_override(
     app_type: &AppType,
     provider: &crate::provider::Provider,
     config: &StreamCheckConfig,
-    copilot_state: &State<'_, CopilotAuthState>,
+    copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
     auth_override: Option<&crate::proxy::providers::AuthInfo>,
 ) -> Result<Option<String>, AppError> {
     if *app_type != AppType::Claude {
@@ -209,7 +221,7 @@ async fn resolve_claude_api_format_override(
     }
 
     let model_id = StreamCheckService::resolve_effective_test_model(app_type, provider, config);
-    let auth_manager = copilot_state.0.read().await;
+    let auth_manager = copilot_state.read().await;
     let account_id = provider
         .meta
         .as_ref()

@@ -64,6 +64,7 @@ import {
   importWebMcpFromApps,
   importWebConfigUpload,
   importWebDefaultProviderConfig,
+  streamCheckWebProvider,
   importWebPromptFromFile,
   importWebSkillsFromApps,
   installWebSkillUnified,
@@ -184,6 +185,11 @@ export async function invoke<T>(
       return (await getWebStreamCheckConfig()) as T;
     case "save_stream_check_config":
       return (await setWebStreamCheckConfig(args?.config as any)) as T;
+    case "stream_check_provider":
+      return (await streamCheckWebProvider(
+        args?.appType as AppId,
+        args?.providerId as string,
+      )) as T;
     case "create_db_backup":
       return (await createWebDbBackup()) as T;
     case "list_db_backups":

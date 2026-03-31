@@ -351,9 +351,7 @@ export function ProviderList({
                 onOpenWebsite={onOpenWebsite}
                 onOpenTerminal={isWebMode ? undefined : onOpenTerminal}
                 onTest={
-                  !isWebMode &&
-                  appId !== "opencode" &&
-                  appId !== "openclaw"
+                  appId !== "opencode" && appId !== "openclaw"
                     ? handleTest
                     : undefined
                 }

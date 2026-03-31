@@ -19,6 +19,7 @@ use crate::app_config::{AppType, McpServer};
 use crate::database::FailoverQueueItem;
 use crate::provider::Provider;
 use crate::proxy::circuit_breaker::{CircuitBreakerConfig, CircuitBreakerStats};
+use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::types::{
     AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, ProviderHealth,
     ProxyConfig, ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
@@ -32,10 +33,12 @@ use crate::services::{McpService, PromptService, ProviderService, SwitchResult};
 use crate::store::AppState;
 use crate::Database;
 use crate::settings::{self, WebDavSyncSettings};
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 struct WebApiState {
     app_state: Arc<AppState>,
+    copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -461,6 +464,22 @@ async fn import_default_provider_config(
         crate::commands::import_default_config_test_hook(state.app_state.as_ref(), app_type)
             .map_err(|e| ApiError::internal(format!("failed to import default config: {e}")))?;
     Ok(Json(imported))
+}
+
+async fn stream_check_provider(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<Json<crate::services::stream_check::StreamCheckResult>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let result = crate::commands::stream_check_provider_internal(
+        state.app_state.as_ref(),
+        &state.copilot_auth_state,
+        app_type,
+        &id,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to stream check provider: {e}")))?;
+    Ok(Json(result))
 }
 
 async fn get_installed_skills(
@@ -2104,7 +2123,13 @@ fn resolve_frontend_dist_dir() -> Option<PathBuf> {
 pub async fn run_web_server() -> Result<(), String> {
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
     let app_state = Arc::new(AppState::new(db));
-    let state = WebApiState { app_state };
+    let copilot_auth_state = Arc::new(RwLock::new(CopilotAuthManager::new(
+        crate::config::get_app_config_dir(),
+    )));
+    let state = WebApiState {
+        app_state,
+        copilot_auth_state,
+    };
     let bind_addr = resolve_bind_addr()?;
 
     let mut app = Router::new()
@@ -2146,6 +2171,10 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/providers/:app/import-default",
             post(import_default_provider_config),
+        )
+        .route(
+            "/api/providers/:app/stream-check/:id",
+            post(stream_check_provider),
         )
         .route("/api/providers/:app/live-provider-ids", get(get_live_provider_ids))
         .route("/api/providers/:app/import-live", post(import_providers_from_live))

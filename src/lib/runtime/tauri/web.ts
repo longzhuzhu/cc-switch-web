@@ -250,6 +250,16 @@ export async function importWebDefaultProviderConfig(
   return requestWithBody<boolean>(`/api/providers/${appId}/import-default`, "POST");
 }
 
+export async function streamCheckWebProvider(
+  appId: AppId,
+  providerId: string,
+): Promise<import("@/lib/api/model-test").StreamCheckResult> {
+  return requestWithBody<import("@/lib/api/model-test").StreamCheckResult>(
+    `/api/providers/${appId}/stream-check/${encodeURIComponent(providerId)}`,
+    "POST",
+  );
+}
+
 export async function removeWebProviderFromLiveConfig(
   appId: AppId,
   id: string,
