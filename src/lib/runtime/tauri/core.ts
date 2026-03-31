@@ -5,7 +5,15 @@ import {
   getDefaultProxyTakeoverStatus,
 } from "./defaults";
 import { isTauriRuntime } from "./env";
-import { getWebProviders, getWebSettings } from "./web";
+import {
+  addWebProvider,
+  deleteWebProvider,
+  getWebProviders,
+  getWebSettings,
+  saveWebSettings,
+  switchWebProvider,
+  updateWebProvider,
+} from "./web";
 
 type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
 
@@ -32,6 +40,8 @@ export async function invoke<T>(
       return null as T;
     case "get_settings":
       return (await getWebSettings()) as T;
+    case "save_settings":
+      return (await saveWebSettings(args?.settings as any)) as T;
     case "get_providers": {
       const appId = args?.app as AppId | undefined;
       if (!appId) {
@@ -48,6 +58,26 @@ export async function invoke<T>(
       const result = await getWebProviders(appId);
       return result.currentProviderId as T;
     }
+    case "add_provider":
+      return (await addWebProvider(
+        args?.app as AppId,
+        args?.provider as any,
+      )) as T;
+    case "update_provider":
+      return (await updateWebProvider(
+        args?.app as AppId,
+        args?.provider as any,
+      )) as T;
+    case "delete_provider":
+      return (await deleteWebProvider(
+        args?.app as AppId,
+        args?.id as string,
+      )) as T;
+    case "switch_provider":
+      return (await switchWebProvider(
+        args?.app as AppId,
+        args?.id as string,
+      )) as T;
     case "get_universal_providers":
       return {} as T;
     case "get_universal_provider":

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, get_service};
+use axum::routing::{get, get_service, post, put};
 use axum::{Json, Router};
 use serde::Serialize;
 use tower_http::cors::CorsLayer;
@@ -14,7 +14,7 @@ use tower_http::services::ServeDir;
 
 use crate::app_config::AppType;
 use crate::provider::Provider;
-use crate::services::ProviderService;
+use crate::services::{ProviderService, SwitchResult};
 use crate::store::AppState;
 use crate::Database;
 
@@ -49,6 +49,25 @@ struct ProvidersResponse {
 #[serde(rename_all = "camelCase")]
 struct ErrorResponse {
     error: String,
+}
+
+fn merge_settings_for_save(
+    mut incoming: crate::settings::AppSettings,
+    existing: &crate::settings::AppSettings,
+) -> crate::settings::AppSettings {
+    match (&mut incoming.webdav_sync, &existing.webdav_sync) {
+        (None, _) => {
+            incoming.webdav_sync = existing.webdav_sync.clone();
+        }
+        (Some(incoming_sync), Some(existing_sync))
+            if incoming_sync.password.is_empty() && !existing_sync.password.is_empty() =>
+        {
+            incoming_sync.password = existing_sync.password.clone();
+        }
+        _ => {}
+    }
+
+    incoming
 }
 
 struct ApiError {
@@ -97,6 +116,16 @@ async fn get_settings() -> Json<crate::settings::AppSettings> {
     Json(crate::settings::get_settings_for_frontend())
 }
 
+async fn save_settings(
+    Json(settings): Json<crate::settings::AppSettings>,
+) -> Result<Json<bool>, ApiError> {
+    let existing = crate::settings::get_settings();
+    let merged = merge_settings_for_save(settings, &existing);
+    crate::settings::update_settings(merged)
+        .map_err(|e| ApiError::internal(format!("failed to save settings: {e}")))?;
+    Ok(Json(true))
+}
+
 async fn get_providers(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
@@ -136,6 +165,49 @@ async fn get_current_provider(
     Ok(Json(current_provider_id))
 }
 
+async fn add_provider(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+    Json(provider): Json<Provider>,
+) -> Result<Json<bool>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let added = ProviderService::add(state.app_state.as_ref(), app_type, provider)
+        .map_err(|e| ApiError::internal(format!("failed to add provider: {e}")))?;
+    Ok(Json(added))
+}
+
+async fn update_provider(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(mut provider): Json<Provider>,
+) -> Result<Json<bool>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    provider.id = id;
+    let updated = ProviderService::update(state.app_state.as_ref(), app_type, provider)
+        .map_err(|e| ApiError::internal(format!("failed to update provider: {e}")))?;
+    Ok(Json(updated))
+}
+
+async fn delete_provider(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<Json<bool>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    ProviderService::delete(state.app_state.as_ref(), app_type, &id)
+        .map_err(|e| ApiError::internal(format!("failed to delete provider: {e}")))?;
+    Ok(Json(true))
+}
+
+async fn switch_provider(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<Json<SwitchResult>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let result = ProviderService::switch(state.app_state.as_ref(), app_type, &id)
+        .map_err(|e| ApiError::internal(format!("failed to switch provider: {e}")))?;
+    Ok(Json(result))
+}
+
 fn resolve_bind_addr() -> Result<SocketAddr, String> {
     let host = std::env::var("CC_SWITCH_WEB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = std::env::var("CC_SWITCH_WEB_PORT")
@@ -173,9 +245,14 @@ pub async fn run_web_server() -> Result<(), String> {
     let mut app = Router::new()
         .route("/", get(root))
         .route("/api/health", get(health))
-        .route("/api/settings", get(get_settings))
-        .route("/api/providers/:app", get(get_providers))
+        .route("/api/settings", get(get_settings).put(save_settings))
+        .route("/api/providers/:app", get(get_providers).post(add_provider))
         .route("/api/providers/:app/current", get(get_current_provider))
+        .route(
+            "/api/providers/:app/:id",
+            put(update_provider).delete(delete_provider),
+        )
+        .route("/api/providers/:app/:id/switch", post(switch_provider))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

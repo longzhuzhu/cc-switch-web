@@ -2,6 +2,7 @@ import type { Settings } from "@/types";
 import type { Provider } from "@/types";
 import type { AppId } from "@/lib/api";
 import { getDefaultSettings } from "./defaults";
+import type { SwitchResult } from "@/lib/api/providers";
 
 interface ProvidersResponse {
   providers: Record<string, Provider>;
@@ -31,6 +32,31 @@ async function requestJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestWithBody<T>(
+  path: string,
+  method: "POST" | "PUT" | "DELETE",
+  body?: unknown,
+): Promise<T> {
+  const response = await fetch(`${getWebApiBase()}${path}`, {
+    method,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} for ${method} ${path}`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
 export async function getWebSettings(): Promise<Settings> {
   try {
     return await requestJson<Settings>("/api/settings");
@@ -53,4 +79,43 @@ export async function getWebProviders(appId: AppId): Promise<ProvidersResponse> 
       currentProviderId: "",
     };
   }
+}
+
+export async function saveWebSettings(settings: Settings): Promise<boolean> {
+  return requestWithBody<boolean>("/api/settings", "PUT", settings);
+}
+
+export async function addWebProvider(
+  appId: AppId,
+  provider: Provider,
+): Promise<boolean> {
+  return requestWithBody<boolean>(`/api/providers/${appId}`, "POST", provider);
+}
+
+export async function updateWebProvider(
+  appId: AppId,
+  provider: Provider,
+): Promise<boolean> {
+  return requestWithBody<boolean>(
+    `/api/providers/${appId}/${provider.id}`,
+    "PUT",
+    provider,
+  );
+}
+
+export async function deleteWebProvider(
+  appId: AppId,
+  id: string,
+): Promise<boolean> {
+  return requestWithBody<boolean>(`/api/providers/${appId}/${id}`, "DELETE");
+}
+
+export async function switchWebProvider(
+  appId: AppId,
+  id: string,
+): Promise<SwitchResult> {
+  return requestWithBody<SwitchResult>(
+    `/api/providers/${appId}/${id}/switch`,
+    "POST",
+  );
 }
