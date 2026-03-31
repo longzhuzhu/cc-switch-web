@@ -217,6 +217,36 @@ export async function updateWebProxyConfigForApp(
   );
 }
 
+export async function getWebDefaultCostMultiplier(appId: AppId): Promise<string> {
+  return requestJson<string>(`/api/proxy/apps/${appId}/default-cost-multiplier`);
+}
+
+export async function setWebDefaultCostMultiplier(
+  appId: AppId,
+  value: string,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/proxy/apps/${appId}/default-cost-multiplier`,
+    "PUT",
+    { value },
+  );
+}
+
+export async function getWebPricingModelSource(appId: AppId): Promise<string> {
+  return requestJson<string>(`/api/proxy/apps/${appId}/pricing-model-source`);
+}
+
+export async function setWebPricingModelSource(
+  appId: AppId,
+  value: string,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/proxy/apps/${appId}/pricing-model-source`,
+    "PUT",
+    { value },
+  );
+}
+
 export async function saveWebSettings(settings: Settings): Promise<boolean> {
   return requestWithBody<boolean>("/api/settings", "PUT", settings);
 }

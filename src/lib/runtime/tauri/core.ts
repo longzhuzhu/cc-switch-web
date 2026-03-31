@@ -5,9 +5,11 @@ import { isTauriRuntime } from "./env";
 import {
   addWebProvider,
   deleteWebProvider,
+  getWebDefaultCostMultiplier,
   getWebGlobalProxyConfig,
   getWebIsLiveTakeoverActive,
   getWebIsProxyRunning,
+  getWebPricingModelSource,
   getWebProxyConfig,
   getWebProxyConfigForApp,
   getWebProxyStatus,
@@ -15,6 +17,8 @@ import {
   getWebProviders,
   getWebSettings,
   saveWebSettings,
+  setWebDefaultCostMultiplier,
+  setWebPricingModelSource,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
   stopWebProxyWithRestore,
@@ -126,6 +130,20 @@ export async function invoke<T>(
     }
     case "update_proxy_config_for_app":
       return (await updateWebProxyConfigForApp(args?.config as any)) as T;
+    case "get_default_cost_multiplier":
+      return (await getWebDefaultCostMultiplier(args?.appType as AppId)) as T;
+    case "set_default_cost_multiplier":
+      return (await setWebDefaultCostMultiplier(
+        args?.appType as AppId,
+        args?.value as string,
+      )) as T;
+    case "get_pricing_model_source":
+      return (await getWebPricingModelSource(args?.appType as AppId)) as T;
+    case "set_pricing_model_source":
+      return (await setWebPricingModelSource(
+        args?.appType as AppId,
+        args?.value as string,
+      )) as T;
     case "is_proxy_running":
       return (await getWebIsProxyRunning()) as T;
     case "is_live_takeover_active":

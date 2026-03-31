@@ -61,6 +61,12 @@ struct EnabledRequest {
     enabled: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ValueRequest {
+    value: String,
+}
+
 fn merge_settings_for_save(
     mut incoming: crate::settings::AppSettings,
     existing: &crate::settings::AppSettings,
@@ -385,6 +391,64 @@ async fn switch_proxy_provider(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn get_default_cost_multiplier(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+) -> Result<Json<String>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let value = state
+        .app_state
+        .db
+        .get_default_cost_multiplier(app_type.as_str())
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to load default cost multiplier: {e}")))?;
+    Ok(Json(value))
+}
+
+async fn set_default_cost_multiplier(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+    Json(payload): Json<ValueRequest>,
+) -> Result<StatusCode, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    state
+        .app_state
+        .db
+        .set_default_cost_multiplier(app_type.as_str(), &payload.value)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to update default cost multiplier: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_pricing_model_source(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+) -> Result<Json<String>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let value = state
+        .app_state
+        .db
+        .get_pricing_model_source(app_type.as_str())
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to load pricing model source: {e}")))?;
+    Ok(Json(value))
+}
+
+async fn set_pricing_model_source(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+    Json(payload): Json<ValueRequest>,
+) -> Result<StatusCode, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    state
+        .app_state
+        .db
+        .set_pricing_model_source(app_type.as_str(), &payload.value)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to update pricing model source: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 fn resolve_bind_addr() -> Result<SocketAddr, String> {
     let host = std::env::var("CC_SWITCH_WEB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = std::env::var("CC_SWITCH_WEB_PORT")
@@ -458,6 +522,14 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/proxy/apps/:app/providers/:id/switch",
             post(switch_proxy_provider),
+        )
+        .route(
+            "/api/proxy/apps/:app/default-cost-multiplier",
+            get(get_default_cost_multiplier).put(set_default_cost_multiplier),
+        )
+        .route(
+            "/api/proxy/apps/:app/pricing-model-source",
+            get(get_pricing_model_source).put(set_pricing_model_source),
         )
         .layer(CorsLayer::permissive())
         .with_state(state);
