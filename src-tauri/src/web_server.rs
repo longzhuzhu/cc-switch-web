@@ -1,14 +1,16 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, get_service};
 use axum::{Json, Router};
 use serde::Serialize;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 
 use crate::app_config::AppType;
 use crate::provider::Provider;
@@ -148,13 +150,27 @@ fn resolve_bind_addr() -> Result<SocketAddr, String> {
     Ok(SocketAddr::new(ip, port))
 }
 
+fn resolve_frontend_dist_dir() -> Option<PathBuf> {
+    let configured = std::env::var("CC_SWITCH_WEB_DIST_DIR")
+        .ok()
+        .map(PathBuf::from);
+
+    let dist_dir = configured.unwrap_or_else(|| PathBuf::from("dist"));
+
+    if dist_dir.exists() {
+        Some(dist_dir)
+    } else {
+        None
+    }
+}
+
 pub async fn run_web_server() -> Result<(), String> {
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
     let app_state = Arc::new(AppState::new(db));
     let state = WebApiState { app_state };
     let bind_addr = resolve_bind_addr()?;
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/", get(root))
         .route("/api/health", get(health))
         .route("/api/settings", get(get_settings))
@@ -162,6 +178,18 @@ pub async fn run_web_server() -> Result<(), String> {
         .route("/api/providers/:app/current", get(get_current_provider))
         .layer(CorsLayer::permissive())
         .with_state(state);
+
+    if let Some(dist_dir) = resolve_frontend_dist_dir() {
+        println!(
+            "cc-switch web service will serve static assets from {}",
+            dist_dir.display()
+        );
+        app = app.fallback_service(get_service(
+            ServeDir::new(dist_dir).append_index_html_on_directories(true),
+        ));
+    } else {
+        println!("cc-switch web service running without frontend static assets");
+    }
 
     println!("cc-switch web service listening on http://{bind_addr}");
 
