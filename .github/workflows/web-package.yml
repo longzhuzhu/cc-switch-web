@@ -122,7 +122,7 @@ jobs:
           rm -rf "$pkg_dir"
           mkdir -p "$pkg_dir"
           cp src-tauri/target/release/cc-switch-web "$pkg_dir/cc-switch-web"
-          cp scripts/run-web.sh "$pkg_dir/run-web.sh"
+          cp scripts/run-web-release.sh "$pkg_dir/run-web.sh"
           cp -R dist "$pkg_dir/dist"
           chmod +x "$pkg_dir/cc-switch-web" "$pkg_dir/run-web.sh"
           tar -czf "${{ matrix.archive_name }}" "$pkg_dir"

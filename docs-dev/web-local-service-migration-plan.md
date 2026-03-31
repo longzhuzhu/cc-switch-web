@@ -158,6 +158,7 @@ Local Rust Service
 - 已提供：
   - `pnpm dev` / `pnpm dev:web`
   - `pnpm build` / `pnpm build:d`
+  - `pnpm build:pkg:l` / `pnpm build:pkg:l:dir`
   - `pnpm start:web`
   - `pnpm start:w`
   - `pnpm start:l`
@@ -175,6 +176,7 @@ Local Rust Service
 - 已移除旧桌面端发布 workflow，当前仓库仅保留 Web 方向的 CI
 - 已补充分发与启动体验文档：
   - `docs-dev/web-distribution-startup-plan.md`
+- 已补充 Docker 内导出 Linux 发布包的本地脚本和命令入口
 - 已在 README 三语文件中补充本地运行和 Docker 运行说明
 - 已在 Web 模式下收起一部分仍依赖桌面能力的入口，避免页面直接触发未迁移命令
 

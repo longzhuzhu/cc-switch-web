@@ -66,6 +66,12 @@ CC Switch Web 已启动
 
 - `cc-switch-web-linux-x64.tar.gz`
 
+本地构建建议：
+
+- 优先支持通过 Docker 导出 Linux 发布包
+- 默认命令为 `pnpm build:pkg:l`
+- 产物导出到 `release/docker-linux/`
+
 压缩包内容：
 
 - `cc-switch-web`
@@ -136,6 +142,10 @@ CC Switch Web 已启动
 - 构建前端 `dist/`
 - 构建平台二进制
 - 产出平台分发包并上传为 GitHub Actions artifact
+
+本地额外目标：
+
+- 支持开发者在任意宿主机上通过 Docker 直接导出 Linux 分发包
 
 预期产物：
 

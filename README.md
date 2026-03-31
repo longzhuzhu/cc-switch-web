@@ -38,6 +38,7 @@ If you are looking for the original CC Switch project, desktop application, or u
 | Background Docker start | `pnpm up:d`    |
 | Follow Docker logs      | `pnpm logs:d`  |
 | Stop Docker stack       | `pnpm down:d`  |
+| Package Linux via Docker | `pnpm build:pkg:l` |
 | Direct run on macOS     | `pnpm start:m` |
 | Direct run on Linux     | `pnpm start:l` |
 | Direct run on Windows   | `pnpm start:w` |
@@ -171,6 +172,44 @@ If you are looking for the original CC Switch project, desktop application, or u
    ```
 
    The example file is primarily for Linux servers and uses `$HOME` paths for `.claude`, `.codex`, `.gemini`, `.config/opencode`, and `.config/openclaw`.
+
+### Export Linux Package Inside Docker
+
+If you want a Linux release package without polluting the host build environment, run:
+
+```bash
+pnpm build:pkg:l
+```
+
+This uses `docker buildx build` and exports:
+
+```text
+release/docker-linux/cc-switch-web-linux-x64.tar.gz
+```
+
+If you want the unpacked directory instead, run:
+
+```bash
+pnpm build:pkg:l:dir
+```
+
+The exported directory is:
+
+```text
+release/docker-linux/cc-switch-web-linux-x64/
+```
+
+The package contains:
+
+- `cc-switch-web`
+- `dist/`
+- `run-web.sh`
+
+After extracting on Linux, run:
+
+```bash
+bash run-web.sh
+```
 
 ### Linux systemd Example
 

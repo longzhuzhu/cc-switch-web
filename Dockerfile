@@ -32,6 +32,26 @@ COPY --from=frontend-builder /app/dist ./dist
 RUN cargo build --release --manifest-path src-tauri/Cargo.toml --bin cc-switch-web
 
 
+FROM debian:bookworm-slim AS package-linux-dir
+
+WORKDIR /out/cc-switch-web-linux-x64
+
+COPY --from=service-builder /app/target/release/cc-switch-web ./cc-switch-web
+COPY --from=frontend-builder /app/dist ./dist
+COPY scripts/run-web-release.sh ./run-web.sh
+
+RUN chmod +x ./cc-switch-web ./run-web.sh
+
+
+FROM debian:bookworm-slim AS package-linux-tar
+
+WORKDIR /work
+
+COPY --from=package-linux-dir /out/cc-switch-web-linux-x64 ./cc-switch-web-linux-x64
+
+RUN tar -czf /out/cc-switch-web-linux-x64.tar.gz cc-switch-web-linux-x64
+
+
 FROM debian:bookworm-slim
 
 WORKDIR /app
@@ -58,4 +78,3 @@ VOLUME ["/data"]
 EXPOSE 8788
 
 CMD ["cc-switch-web"]
-
