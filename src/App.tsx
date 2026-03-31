@@ -132,11 +132,7 @@ const VALID_VIEWS: View[] = [
   "openclawAgents",
 ];
 
-const WEB_BLOCKED_VIEWS: View[] = [
-  "openclawEnv",
-  "openclawTools",
-  "openclawAgents",
-];
+const WEB_BLOCKED_VIEWS: View[] = [];
 
 const isViewBlockedInWebMode = (view: View): boolean =>
   WEB_BLOCKED_VIEWS.includes(view);
@@ -269,12 +265,11 @@ function App() {
     useOpenClawHealth(isOpenClawView);
   const hasSkillsSupport = true;
   const hasSessionSupport =
-    !isWebMode &&
-    (activeApp === "claude" ||
+    activeApp === "claude" ||
       activeApp === "codex" ||
       activeApp === "opencode" ||
       activeApp === "openclaw" ||
-      activeApp === "gemini");
+      activeApp === "gemini";
 
   const {
     addProvider,
@@ -1225,43 +1220,37 @@ function App() {
                               >
                                 <History className="w-4 h-4" />
                               </Button>
-                              {!isWebMode && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleViewChange("openclawEnv")
-                                    }
-                                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                                    title={t("openclaw.env.title")}
-                                  >
-                                    <KeyRound className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleViewChange("openclawTools")
-                                    }
-                                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                                    title={t("openclaw.tools.title")}
-                                  >
-                                    <Shield className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleViewChange("openclawAgents")
-                                    }
-                                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                                    title={t("openclaw.agents.title")}
-                                  >
-                                    <Cpu className="w-4 h-4" />
-                                  </Button>
-                                </>
-                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewChange("openclawEnv")}
+                                className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                title={t("openclaw.env.title")}
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleViewChange("openclawTools")
+                                }
+                                className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                title={t("openclaw.tools.title")}
+                              >
+                                <Shield className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleViewChange("openclawAgents")
+                                }
+                                className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                title={t("openclaw.agents.title")}
+                              >
+                                <Cpu className="w-4 h-4" />
+                              </Button>
                             </>
                           ) : (
                             <>
@@ -1289,23 +1278,21 @@ function App() {
                               >
                                 <Book className="w-4 h-4" />
                               </Button>
-                              {!isWebMode && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleViewChange("sessions")}
-                                  className={cn(
-                                    "text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
-                                    "transition-all duration-200 ease-in-out overflow-hidden",
-                                    hasSessionSupport
-                                      ? "opacity-100 w-8 scale-100 px-2"
-                                      : "opacity-0 w-0 scale-75 pointer-events-none px-0 -ml-1",
-                                  )}
-                                  title={t("sessionManager.title")}
-                                >
-                                  <History className="flex-shrink-0 w-4 h-4" />
-                                </Button>
-                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewChange("sessions")}
+                                className={cn(
+                                  "text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
+                                  "transition-all duration-200 ease-in-out overflow-hidden",
+                                  hasSessionSupport
+                                    ? "opacity-100 w-8 scale-100 px-2"
+                                    : "opacity-0 w-0 scale-75 pointer-events-none px-0 -ml-1",
+                                )}
+                                title={t("sessionManager.title")}
+                              >
+                                <History className="flex-shrink-0 w-4 h-4" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"

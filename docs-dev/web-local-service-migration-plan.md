@@ -149,6 +149,8 @@ Local Rust Service
 - 已打通 `Workspace` 的 Web API 主路径（工作区文件读写、Daily Memory 列表/搜索/编辑/删除）
 - 已打通 `Sessions` 的 Web API 主路径（会话列表、消息详情、单个/批量删除）
 - 已打通 `Usage` 的 Web API 主路径（统计看板、请求日志、模型定价、Provider 限额）
+- 已打通 `OpenClaw` 专属页面的 Web API 主路径（Env、Tools、Agents Defaults、健康检查、live provider 读取）
+- 已补齐 `OpenCode / OpenClaw` 的 live provider IDs、从 live 导入、从 live 配置移除等 Web 路径
 - 已提供：
   - `pnpm dev` / `pnpm dev:web`
   - `pnpm build` / `pnpm build:d`
@@ -189,7 +191,6 @@ Local Rust Service
 当前仍未完成、需要继续迁移的重点：
 
 - Skills
-- OpenClaw 专属页面
 - 整流器、全局出站代理等桌面设置区块
 - Windows / Linux 直接运行的更完整包装方式（如脚本、服务化说明）
 
@@ -477,7 +478,7 @@ Local Rust Service
 基于当前状态，下一步最合理的执行内容是：
 
 1. 继续迁移 MCP / Prompts / Skills 相关 API
-2. 梳理并收敛 Web 模式下仍暴露的桌面专属入口
+2. 继续收尾 Skills 剩余链路和其他仍未迁移的桌面耦合设置
 3. 补齐 Docker 使用细节和宿主机目录挂载策略
 4. 视需要补充 Linux `systemd` / Windows 直接运行说明
 

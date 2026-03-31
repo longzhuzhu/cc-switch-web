@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -274,6 +275,61 @@ async fn get_current_prompt_file_content(
     Ok(Json(content))
 }
 
+async fn get_live_provider_ids(
+    Path(app): Path<String>,
+) -> Result<Json<Vec<String>>, ApiError> {
+    let provider_ids = match AppType::from_str(&app) {
+        Ok(AppType::OpenCode) => crate::opencode_config::get_providers()
+            .map(|providers| providers.keys().cloned().collect()),
+        Ok(AppType::OpenClaw) => crate::openclaw_config::get_providers()
+            .map(|providers| providers.keys().cloned().collect()),
+        Ok(app_type) => {
+            return Err(ApiError::bad_request(format!(
+                "{} does not support live provider ids",
+                app_type.as_str()
+            )));
+        }
+        Err(err) => return Err(ApiError::bad_request(err.to_string())),
+    }
+    .map_err(|e| ApiError::internal(format!("failed to load live provider ids: {e}")))?;
+
+    Ok(Json(provider_ids))
+}
+
+async fn import_providers_from_live(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+) -> Result<Json<usize>, ApiError> {
+    let imported = match AppType::from_str(&app) {
+        Ok(AppType::OpenCode) => {
+            crate::services::provider::import_opencode_providers_from_live(state.app_state.as_ref())
+        }
+        Ok(AppType::OpenClaw) => {
+            crate::services::provider::import_openclaw_providers_from_live(state.app_state.as_ref())
+        }
+        Ok(app_type) => {
+            return Err(ApiError::bad_request(format!(
+                "{} does not support importing providers from live config",
+                app_type.as_str()
+            )));
+        }
+        Err(err) => return Err(ApiError::bad_request(err.to_string())),
+    }
+    .map_err(|e| ApiError::internal(format!("failed to import live providers: {e}")))?;
+
+    Ok(Json(imported))
+}
+
+async fn remove_provider_from_live_config(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<Json<bool>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    crate::services::ProviderService::remove_from_live_config(state.app_state.as_ref(), app_type, &id)
+        .map_err(|e| ApiError::internal(format!("failed to remove provider from live config: {e}")))?;
+    Ok(Json(true))
+}
+
 async fn get_installed_skills(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<crate::app_config::InstalledSkill>>, ApiError> {
@@ -497,6 +553,98 @@ async fn get_workspace_directory_path(
     std::fs::create_dir_all(&path)
         .map_err(|e| ApiError::internal(format!("failed to prepare workspace directory: {e}")))?;
     Ok(Json(path.to_string_lossy().to_string()))
+}
+
+async fn get_openclaw_default_model(
+) -> Result<Json<Option<crate::openclaw_config::OpenClawDefaultModel>>, ApiError> {
+    let model = crate::openclaw_config::get_default_model()
+        .map_err(|e| ApiError::internal(format!("failed to load openclaw default model: {e}")))?;
+    Ok(Json(model))
+}
+
+async fn set_openclaw_default_model(
+    Json(model): Json<crate::openclaw_config::OpenClawDefaultModel>,
+) -> Result<Json<crate::openclaw_config::OpenClawWriteOutcome>, ApiError> {
+    let outcome = crate::openclaw_config::set_default_model(&model)
+        .map_err(|e| ApiError::internal(format!("failed to save openclaw default model: {e}")))?;
+    Ok(Json(outcome))
+}
+
+async fn get_openclaw_model_catalog(
+) -> Result<Json<Option<HashMap<String, crate::openclaw_config::OpenClawModelCatalogEntry>>>, ApiError>
+{
+    let catalog = crate::openclaw_config::get_model_catalog()
+        .map_err(|e| ApiError::internal(format!("failed to load openclaw model catalog: {e}")))?;
+    Ok(Json(catalog))
+}
+
+async fn set_openclaw_model_catalog(
+    Json(catalog): Json<HashMap<String, crate::openclaw_config::OpenClawModelCatalogEntry>>,
+) -> Result<Json<crate::openclaw_config::OpenClawWriteOutcome>, ApiError> {
+    let outcome = crate::openclaw_config::set_model_catalog(&catalog)
+        .map_err(|e| ApiError::internal(format!("failed to save openclaw model catalog: {e}")))?;
+    Ok(Json(outcome))
+}
+
+async fn get_openclaw_agents_defaults(
+) -> Result<Json<Option<crate::openclaw_config::OpenClawAgentsDefaults>>, ApiError> {
+    let defaults = crate::openclaw_config::get_agents_defaults()
+        .map_err(|e| ApiError::internal(format!("failed to load openclaw agents defaults: {e}")))?;
+    Ok(Json(defaults))
+}
+
+async fn set_openclaw_agents_defaults(
+    Json(defaults): Json<crate::openclaw_config::OpenClawAgentsDefaults>,
+) -> Result<Json<crate::openclaw_config::OpenClawWriteOutcome>, ApiError> {
+    let outcome = crate::openclaw_config::set_agents_defaults(&defaults).map_err(|e| {
+        ApiError::internal(format!("failed to save openclaw agents defaults: {e}"))
+    })?;
+    Ok(Json(outcome))
+}
+
+async fn get_openclaw_env(
+) -> Result<Json<crate::openclaw_config::OpenClawEnvConfig>, ApiError> {
+    let env = crate::openclaw_config::get_env_config()
+        .map_err(|e| ApiError::internal(format!("failed to load openclaw env config: {e}")))?;
+    Ok(Json(env))
+}
+
+async fn set_openclaw_env(
+    Json(env): Json<crate::openclaw_config::OpenClawEnvConfig>,
+) -> Result<Json<crate::openclaw_config::OpenClawWriteOutcome>, ApiError> {
+    let outcome = crate::openclaw_config::set_env_config(&env)
+        .map_err(|e| ApiError::internal(format!("failed to save openclaw env config: {e}")))?;
+    Ok(Json(outcome))
+}
+
+async fn get_openclaw_tools(
+) -> Result<Json<crate::openclaw_config::OpenClawToolsConfig>, ApiError> {
+    let tools = crate::openclaw_config::get_tools_config()
+        .map_err(|e| ApiError::internal(format!("failed to load openclaw tools config: {e}")))?;
+    Ok(Json(tools))
+}
+
+async fn set_openclaw_tools(
+    Json(tools): Json<crate::openclaw_config::OpenClawToolsConfig>,
+) -> Result<Json<crate::openclaw_config::OpenClawWriteOutcome>, ApiError> {
+    let outcome = crate::openclaw_config::set_tools_config(&tools)
+        .map_err(|e| ApiError::internal(format!("failed to save openclaw tools config: {e}")))?;
+    Ok(Json(outcome))
+}
+
+async fn scan_openclaw_config_health(
+) -> Result<Json<Vec<crate::openclaw_config::OpenClawHealthWarning>>, ApiError> {
+    let warnings = crate::openclaw_config::scan_openclaw_config_health()
+        .map_err(|e| ApiError::internal(format!("failed to scan openclaw config health: {e}")))?;
+    Ok(Json(warnings))
+}
+
+async fn get_openclaw_live_provider(
+    Path(provider_id): Path<String>,
+) -> Result<Json<Option<serde_json::Value>>, ApiError> {
+    let provider = crate::openclaw_config::get_provider(&provider_id)
+        .map_err(|e| ApiError::internal(format!("failed to load openclaw live provider: {e}")))?;
+    Ok(Json(provider))
 }
 
 async fn list_sessions() -> Result<Json<Vec<crate::session_manager::SessionMeta>>, ApiError> {
@@ -1476,6 +1624,12 @@ pub async fn run_web_server() -> Result<(), String> {
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/providers/:app", get(get_providers).post(add_provider))
         .route("/api/providers/:app/current", get(get_current_provider))
+        .route("/api/providers/:app/live-provider-ids", get(get_live_provider_ids))
+        .route("/api/providers/:app/import-live", post(import_providers_from_live))
+        .route(
+            "/api/providers/:app/live-config/:id",
+            axum::routing::delete(remove_provider_from_live_config),
+        )
         .route("/api/skills/installed", get(get_installed_skills))
         .route("/api/skills/backups", get(get_skill_backups))
         .route("/api/skills/unmanaged", get(scan_unmanaged_skills))
@@ -1518,6 +1672,25 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/workspace/directories/:subdir/path",
             get(get_workspace_directory_path),
+        )
+        .route(
+            "/api/openclaw/default-model",
+            get(get_openclaw_default_model).put(set_openclaw_default_model),
+        )
+        .route(
+            "/api/openclaw/model-catalog",
+            get(get_openclaw_model_catalog).put(set_openclaw_model_catalog),
+        )
+        .route(
+            "/api/openclaw/agents-defaults",
+            get(get_openclaw_agents_defaults).put(set_openclaw_agents_defaults),
+        )
+        .route("/api/openclaw/env", get(get_openclaw_env).put(set_openclaw_env))
+        .route("/api/openclaw/tools", get(get_openclaw_tools).put(set_openclaw_tools))
+        .route("/api/openclaw/health", get(scan_openclaw_config_health))
+        .route(
+            "/api/openclaw/live-provider/:provider_id",
+            get(get_openclaw_live_provider),
         )
         .route("/api/sessions", get(list_sessions).delete(delete_session))
         .route("/api/sessions/messages", get(get_session_messages))

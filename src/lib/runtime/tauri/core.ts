@@ -4,6 +4,7 @@ import {
   addWebProviderToFailoverQueue,
   addWebProvider,
   deleteWebProvider,
+  getWebLiveProviderIds,
   getWebAutoFailoverEnabled,
   getWebAvailableProvidersForFailover,
   getWebCircuitBreakerConfig,
@@ -13,6 +14,13 @@ import {
   getWebGlobalProxyConfig,
   getWebIsLiveTakeoverActive,
   getWebIsProxyRunning,
+  getWebOpenClawAgentsDefaults,
+  getWebOpenClawDefaultModel,
+  getWebOpenClawEnv,
+  getWebOpenClawHealth,
+  getWebOpenClawLiveProvider,
+  getWebOpenClawModelCatalog,
+  getWebOpenClawTools,
   getWebPricingModelSource,
   getWebMcpServers,
   getWebProviderHealth,
@@ -68,10 +76,17 @@ import {
   getWebUsageTrends,
   getWebWorkspaceDirectoryPath,
   getWebWorkspaceFile,
+  importWebProvidersFromLive,
   installWebSkillArchives,
   listWebDailyMemoryFiles,
   removeWebSkillRepo,
+  removeWebProviderFromLiveConfig,
   saveWebDailyMemoryFile,
+  setWebOpenClawAgentsDefaults,
+  setWebOpenClawDefaultModel,
+  setWebOpenClawEnv,
+  setWebOpenClawModelCatalog,
+  setWebOpenClawTools,
   saveWebWorkspaceFile,
   searchWebDailyMemoryFiles,
   deleteWebSession,
@@ -153,7 +168,42 @@ export async function invoke<T>(
     case "get_universal_provider":
       return null as T;
     case "get_opencode_live_provider_ids":
+      return (await getWebLiveProviderIds("opencode")) as T;
     case "get_openclaw_live_provider_ids":
+      return (await getWebLiveProviderIds("openclaw")) as T;
+    case "import_opencode_providers_from_live":
+      return (await importWebProvidersFromLive("opencode")) as T;
+    case "import_openclaw_providers_from_live":
+      return (await importWebProvidersFromLive("openclaw")) as T;
+    case "remove_provider_from_live_config":
+      return (await removeWebProviderFromLiveConfig(
+        args?.app as AppId,
+        args?.id as string,
+      )) as T;
+    case "get_openclaw_default_model":
+      return (await getWebOpenClawDefaultModel()) as T;
+    case "set_openclaw_default_model":
+      return (await setWebOpenClawDefaultModel(args?.model as any)) as T;
+    case "get_openclaw_model_catalog":
+      return (await getWebOpenClawModelCatalog()) as T;
+    case "set_openclaw_model_catalog":
+      return (await setWebOpenClawModelCatalog(args?.catalog as any)) as T;
+    case "get_openclaw_agents_defaults":
+      return (await getWebOpenClawAgentsDefaults()) as T;
+    case "set_openclaw_agents_defaults":
+      return (await setWebOpenClawAgentsDefaults(args?.defaults as any)) as T;
+    case "get_openclaw_env":
+      return (await getWebOpenClawEnv()) as T;
+    case "set_openclaw_env":
+      return (await setWebOpenClawEnv(args?.env as any)) as T;
+    case "get_openclaw_tools":
+      return (await getWebOpenClawTools()) as T;
+    case "set_openclaw_tools":
+      return (await setWebOpenClawTools(args?.tools as any)) as T;
+    case "scan_openclaw_config_health":
+      return (await getWebOpenClawHealth()) as T;
+    case "get_openclaw_live_provider":
+      return (await getWebOpenClawLiveProvider(args?.providerId as string)) as T;
     case "get_tool_versions":
       return [] as T;
     case "get_mcp_servers":

@@ -1,6 +1,15 @@
 import type { Settings } from "@/types";
 import type { Provider } from "@/types";
 import type { McpServer, McpServersMap } from "@/types";
+import type {
+  OpenClawAgentsDefaults,
+  OpenClawDefaultModel,
+  OpenClawEnvConfig,
+  OpenClawHealthWarning,
+  OpenClawModelCatalogEntry,
+  OpenClawToolsConfig,
+  OpenClawWriteOutcome,
+} from "@/types";
 import type { SessionMessage, SessionMeta } from "@/types";
 import type { AppId } from "@/lib/api";
 import type { Prompt } from "@/lib/api";
@@ -180,6 +189,34 @@ export async function getWebProviders(
       currentProviderId: "",
     };
   }
+}
+
+export async function getWebLiveProviderIds(appId: AppId): Promise<string[]> {
+  try {
+    return await requestJson<string[]>(
+      `/api/providers/${appId}/live-provider-ids`,
+    );
+  } catch (error) {
+    console.warn(
+      `[runtime:web] failed to load live provider ids for ${appId} from local service`,
+      error,
+    );
+    return [];
+  }
+}
+
+export async function importWebProvidersFromLive(appId: AppId): Promise<number> {
+  return requestWithBody<number>(`/api/providers/${appId}/import-live`, "POST");
+}
+
+export async function removeWebProviderFromLiveConfig(
+  appId: AppId,
+  id: string,
+): Promise<boolean> {
+  return requestWithBody<boolean>(
+    `/api/providers/${appId}/live-config/${encodeURIComponent(id)}`,
+    "DELETE",
+  );
 }
 
 export async function getWebProxyStatus(): Promise<ProxyStatus> {
@@ -828,6 +865,153 @@ export async function getWebWorkspaceDirectoryPath(
   return requestJson<string>(
     `/api/workspace/directories/${encodeURIComponent(subdir)}/path`,
   );
+}
+
+export async function getWebOpenClawDefaultModel(): Promise<OpenClawDefaultModel | null> {
+  try {
+    return await requestJson<OpenClawDefaultModel | null>(
+      "/api/openclaw/default-model",
+    );
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load openclaw default model from local service",
+      error,
+    );
+    return null;
+  }
+}
+
+export async function setWebOpenClawDefaultModel(
+  model: OpenClawDefaultModel,
+): Promise<OpenClawWriteOutcome> {
+  return requestWithBody<OpenClawWriteOutcome>(
+    "/api/openclaw/default-model",
+    "PUT",
+    model,
+  );
+}
+
+export async function getWebOpenClawModelCatalog(): Promise<Record<
+  string,
+  OpenClawModelCatalogEntry
+> | null> {
+  try {
+    return await requestJson<Record<string, OpenClawModelCatalogEntry> | null>(
+      "/api/openclaw/model-catalog",
+    );
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load openclaw model catalog from local service",
+      error,
+    );
+    return null;
+  }
+}
+
+export async function setWebOpenClawModelCatalog(
+  catalog: Record<string, OpenClawModelCatalogEntry>,
+): Promise<OpenClawWriteOutcome> {
+  return requestWithBody<OpenClawWriteOutcome>(
+    "/api/openclaw/model-catalog",
+    "PUT",
+    catalog,
+  );
+}
+
+export async function getWebOpenClawAgentsDefaults(): Promise<OpenClawAgentsDefaults | null> {
+  try {
+    return await requestJson<OpenClawAgentsDefaults | null>(
+      "/api/openclaw/agents-defaults",
+    );
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load openclaw agents defaults from local service",
+      error,
+    );
+    return null;
+  }
+}
+
+export async function setWebOpenClawAgentsDefaults(
+  defaults: OpenClawAgentsDefaults,
+): Promise<OpenClawWriteOutcome> {
+  return requestWithBody<OpenClawWriteOutcome>(
+    "/api/openclaw/agents-defaults",
+    "PUT",
+    defaults,
+  );
+}
+
+export async function getWebOpenClawEnv(): Promise<OpenClawEnvConfig> {
+  try {
+    return await requestJson<OpenClawEnvConfig>("/api/openclaw/env");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load openclaw env config from local service",
+      error,
+    );
+    return {};
+  }
+}
+
+export async function setWebOpenClawEnv(
+  env: OpenClawEnvConfig,
+): Promise<OpenClawWriteOutcome> {
+  return requestWithBody<OpenClawWriteOutcome>(
+    "/api/openclaw/env",
+    "PUT",
+    env,
+  );
+}
+
+export async function getWebOpenClawTools(): Promise<OpenClawToolsConfig> {
+  try {
+    return await requestJson<OpenClawToolsConfig>("/api/openclaw/tools");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load openclaw tools config from local service",
+      error,
+    );
+    return {};
+  }
+}
+
+export async function setWebOpenClawTools(
+  tools: OpenClawToolsConfig,
+): Promise<OpenClawWriteOutcome> {
+  return requestWithBody<OpenClawWriteOutcome>(
+    "/api/openclaw/tools",
+    "PUT",
+    tools,
+  );
+}
+
+export async function getWebOpenClawHealth(): Promise<OpenClawHealthWarning[]> {
+  try {
+    return await requestJson<OpenClawHealthWarning[]>("/api/openclaw/health");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load openclaw health warnings from local service",
+      error,
+    );
+    return [];
+  }
+}
+
+export async function getWebOpenClawLiveProvider(
+  providerId: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    return await requestJson<Record<string, unknown> | null>(
+      `/api/openclaw/live-provider/${encodeURIComponent(providerId)}`,
+    );
+  } catch (error) {
+    console.warn(
+      `[runtime:web] failed to load openclaw live provider ${providerId} from local service`,
+      error,
+    );
+    return null;
+  }
 }
 
 export async function getWebSessions(): Promise<SessionMeta[]> {
