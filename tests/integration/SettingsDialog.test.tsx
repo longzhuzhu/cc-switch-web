@@ -76,14 +76,6 @@ vi.mock("@/components/settings/ThemeSettings", () => ({
   ThemeSettings: () => <div data-testid="theme-settings">theme</div>,
 }));
 
-vi.mock("@/components/settings/WindowSettings", () => ({
-  WindowSettings: ({ onChange }: any) => (
-    <button onClick={() => onChange({ minimizeToTrayOnClose: false })}>
-      window-settings
-    </button>
-  ),
-}));
-
 vi.mock("@/components/settings/DirectorySettings", async () => {
   const actual = await vi.importActual<
     typeof import("@/components/settings/DirectorySettings")
@@ -117,7 +109,7 @@ vi.mock("@/components/settings/ImportExportSection", () => ({
 }));
 
 vi.mock("@/components/settings/AboutSection", () => ({
-  AboutSection: ({ isPortable }: any) => <div>about:{String(isPortable)}</div>,
+  AboutSection: () => <div>about</div>,
 }));
 
 const renderDialog = (

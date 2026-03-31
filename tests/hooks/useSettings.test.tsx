@@ -104,7 +104,6 @@ const createDirectorySettingsMock = (
 });
 
 const createMetadataMock = (overrides: Record<string, unknown> = {}) => ({
-  isPortable: false,
   requiresRestart: false,
   isLoading: false,
   acknowledgeRestart: vi.fn(),
