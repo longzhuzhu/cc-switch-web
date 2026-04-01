@@ -732,10 +732,7 @@ async fn import_skills_from_apps(
 async fn get_skill_repos(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<SkillRepo>>, ApiError> {
-    let repos = state
-        .app_state
-        .db
-        .get_skill_repos()
+    let repos = crate::commands::get_skill_repos_internal(state.app_state.as_ref())
         .map_err(|e| ApiError::internal(format!("failed to load skill repos: {e}")))?;
     Ok(Json(repos))
 }
@@ -744,36 +741,24 @@ async fn add_skill_repo(
     State(state): State<WebApiState>,
     Json(repo): Json<SkillRepo>,
 ) -> Result<Json<bool>, ApiError> {
-    state
-        .app_state
-        .db
-        .save_skill_repo(&repo)
+    let added = crate::commands::add_skill_repo_internal(state.app_state.as_ref(), repo)
         .map_err(|e| ApiError::internal(format!("failed to save skill repo: {e}")))?;
-    Ok(Json(true))
+    Ok(Json(added))
 }
 
 async fn remove_skill_repo(
     State(state): State<WebApiState>,
     Path((owner, name)): Path<(String, String)>,
 ) -> Result<Json<bool>, ApiError> {
-    state
-        .app_state
-        .db
-        .delete_skill_repo(&owner, &name)
+    let removed = crate::commands::remove_skill_repo_internal(state.app_state.as_ref(), owner, name)
         .map_err(|e| ApiError::internal(format!("failed to remove skill repo: {e}")))?;
-    Ok(Json(true))
+    Ok(Json(removed))
 }
 
 async fn discover_available_skills(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<DiscoverableSkill>>, ApiError> {
-    let repos = state
-        .app_state
-        .db
-        .get_skill_repos()
-        .map_err(|e| ApiError::internal(format!("failed to load skill repos: {e}")))?;
-    let skills = crate::services::skill::SkillService::new()
-        .discover_available(repos)
+    let skills = crate::commands::discover_available_skills_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to discover skills: {e}")))?;
     Ok(Json(skills))
@@ -783,10 +768,11 @@ async fn install_skill_unified(
     State(state): State<WebApiState>,
     Json(payload): Json<InstallSkillRequest>,
 ) -> Result<Json<crate::app_config::InstalledSkill>, ApiError> {
-    let app_type = AppType::from_str(&payload.current_app)
-        .map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let installed = crate::services::skill::SkillService::new()
-        .install(&state.app_state.db, &payload.skill, &app_type)
+    let installed = crate::commands::install_skill_unified_internal(
+        state.app_state.as_ref(),
+        payload.skill,
+        payload.current_app,
+    )
         .await
         .map_err(|e| ApiError::internal(format!("failed to install skill: {e}")))?;
     Ok(Json(installed))

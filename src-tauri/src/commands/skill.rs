@@ -68,16 +68,10 @@ pub(crate) fn delete_skill_backup_internal(backup_id: String) -> Result<bool, St
 pub async fn install_skill_unified(
     skill: DiscoverableSkill,
     current_app: String,
-    service: State<'_, SkillServiceState>,
+    _service: State<'_, SkillServiceState>,
     app_state: State<'_, AppState>,
 ) -> Result<InstalledSkill, String> {
-    let app_type = parse_app_type(&current_app)?;
-
-    service
-        .0
-        .install(&app_state.db, &skill, &app_type)
-        .await
-        .map_err(|e| e.to_string())
+    install_skill_unified_internal(app_state.inner(), skill, current_app).await
 }
 
 /// 卸载 Skill（新版统一卸载）
@@ -167,17 +161,35 @@ pub(crate) fn import_skills_from_apps_internal(
     SkillService::import_from_apps(&app_state.db, imports).map_err(|e| e.to_string())
 }
 
+pub(crate) async fn install_skill_unified_internal(
+    app_state: &AppState,
+    skill: DiscoverableSkill,
+    current_app: String,
+) -> Result<InstalledSkill, String> {
+    let app_type = parse_app_type(&current_app)?;
+    SkillService::new()
+        .install(&app_state.db, &skill, &app_type)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ========== 发现功能命令 ==========
 
 /// 发现可安装的 Skills（从仓库获取）
 #[tauri::command]
 pub async fn discover_available_skills(
-    service: State<'_, SkillServiceState>,
+    _service: State<'_, SkillServiceState>,
     app_state: State<'_, AppState>,
 ) -> Result<Vec<DiscoverableSkill>, String> {
+    discover_available_skills_internal(app_state.inner())
+        .await
+}
+
+pub(crate) async fn discover_available_skills_internal(
+    app_state: &AppState,
+) -> Result<Vec<DiscoverableSkill>, String> {
     let repos = app_state.db.get_skill_repos().map_err(|e| e.to_string())?;
-    service
-        .0
+    SkillService::new()
         .discover_available(repos)
         .await
         .map_err(|e| e.to_string())
@@ -188,12 +200,20 @@ pub async fn discover_available_skills(
 /// 获取技能仓库列表
 #[tauri::command]
 pub fn get_skill_repos(app_state: State<'_, AppState>) -> Result<Vec<SkillRepo>, String> {
+    get_skill_repos_internal(app_state.inner())
+}
+
+pub(crate) fn get_skill_repos_internal(app_state: &AppState) -> Result<Vec<SkillRepo>, String> {
     app_state.db.get_skill_repos().map_err(|e| e.to_string())
 }
 
 /// 添加技能仓库
 #[tauri::command]
 pub fn add_skill_repo(repo: SkillRepo, app_state: State<'_, AppState>) -> Result<bool, String> {
+    add_skill_repo_internal(app_state.inner(), repo)
+}
+
+pub(crate) fn add_skill_repo_internal(app_state: &AppState, repo: SkillRepo) -> Result<bool, String> {
     app_state
         .db
         .save_skill_repo(&repo)
@@ -207,6 +227,14 @@ pub fn remove_skill_repo(
     owner: String,
     name: String,
     app_state: State<'_, AppState>,
+) -> Result<bool, String> {
+    remove_skill_repo_internal(app_state.inner(), owner, name)
+}
+
+pub(crate) fn remove_skill_repo_internal(
+    app_state: &AppState,
+    owner: String,
+    name: String,
 ) -> Result<bool, String> {
     app_state
         .db
