@@ -14,6 +14,13 @@ pub(crate) fn run_post_import_sync(db: Arc<Database>) -> Result<(), AppError> {
     Ok(())
 }
 
+pub(crate) fn post_import_sync_warning_for_state(state: &AppState) -> Option<String> {
+    match ProviderService::sync_current_to_live(state) {
+        Ok(()) => settings::reload_settings().err().map(post_sync_warning),
+        Err(error) => Some(post_sync_warning(error)),
+    }
+}
+
 fn post_sync_warning<E: std::fmt::Display>(err: E) -> String {
     AppError::localized(
         "sync.post_operation_sync_failed",

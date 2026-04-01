@@ -31,7 +31,7 @@ use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillUninstallResult,
 };
 use crate::services::webdav_sync as webdav_sync_service;
-use crate::services::{ProviderService, SwitchResult};
+use crate::services::SwitchResult;
 use crate::settings::{self, WebDavSyncSettings};
 use crate::store::AppState;
 use crate::Database;
@@ -302,15 +302,6 @@ fn sanitize_export_sql_filename(filename: Option<String>) -> String {
     }
 
     sanitized
-}
-
-fn build_post_import_sync_warning(error: impl std::fmt::Display) -> String {
-    crate::error::AppError::localized(
-        "sync.post_operation_sync_failed",
-        format!("后置同步状态失败: {error}"),
-        format!("Post-operation synchronization failed: {error}"),
-    )
-    .to_string()
 }
 
 fn resolve_webdav_password_for_request(
@@ -1200,8 +1191,7 @@ async fn install_skill_archives(
     let current_app = current_app
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| ApiError::bad_request("missing currentApp in upload payload"))?;
-    let app_type =
-        AppType::from_str(&current_app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    AppType::from_str(&current_app).map_err(|e| ApiError::bad_request(e.to_string()))?;
 
     if uploads.is_empty() {
         return Err(ApiError::bad_request("missing archives in upload payload"));
@@ -1235,10 +1225,10 @@ async fn install_skill_archives(
             ))
         })?;
 
-        let install_result = crate::services::skill::SkillService::install_from_zip(
-            &state.app_state.db,
+        let install_result = crate::commands::install_skills_from_zip_internal(
+            state.app_state.as_ref(),
             &archive_path,
-            &app_type,
+            current_app.clone(),
         );
 
         let _ = std::fs::remove_file(&archive_path);
@@ -1390,12 +1380,7 @@ async fn import_config_upload(
         )
         .map_err(|e| ApiError::internal(format!("failed to import config: {e}")))?;
 
-    let warning = match ProviderService::sync_current_to_live(state.app_state.as_ref()) {
-        Ok(()) => crate::settings::reload_settings()
-            .err()
-            .map(build_post_import_sync_warning),
-        Err(error) => Some(build_post_import_sync_warning(error)),
-    };
+    let warning = crate::commands::post_import_sync_warning_for_state(state.app_state.as_ref());
     if let Some(message) = warning.as_ref() {
         log::warn!("[Import] post-import sync warning: {message}");
     }

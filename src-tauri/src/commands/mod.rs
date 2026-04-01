@@ -40,6 +40,7 @@ pub use session_manager::*;
 pub use settings::*;
 pub use skill::*;
 pub use stream_check::*;
+pub(crate) use sync_support::*;
 
 pub use usage::*;
 pub use webdav_sync::*;

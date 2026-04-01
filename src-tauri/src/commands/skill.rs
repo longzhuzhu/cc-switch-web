@@ -10,6 +10,7 @@ use crate::services::skill::{
     SkillUninstallResult,
 };
 use crate::store::AppState;
+use std::path::Path;
 use std::sync::Arc;
 use tauri::State;
 
@@ -171,6 +172,15 @@ pub(crate) async fn install_skill_unified_internal(
         .install(&app_state.db, &skill, &app_type)
         .await
         .map_err(|e| e.to_string())
+}
+
+pub(crate) fn install_skills_from_zip_internal(
+    app_state: &AppState,
+    zip_path: &Path,
+    current_app: String,
+) -> Result<Vec<InstalledSkill>, String> {
+    let app_type = parse_app_type(&current_app)?;
+    SkillService::install_from_zip(&app_state.db, zip_path, &app_type).map_err(|e| e.to_string())
 }
 
 // ========== 发现功能命令 ==========
