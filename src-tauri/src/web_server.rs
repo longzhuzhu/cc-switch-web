@@ -681,13 +681,13 @@ async fn sync_universal_provider(
 async fn get_installed_skills(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<crate::app_config::InstalledSkill>>, ApiError> {
-    let skills = crate::services::skill::SkillService::get_all_installed(&state.app_state.db)
+    let skills = crate::commands::get_installed_skills_internal(state.app_state.as_ref())
         .map_err(|e| ApiError::internal(format!("failed to load installed skills: {e}")))?;
     Ok(Json(skills))
 }
 
 async fn get_skill_backups() -> Result<Json<Vec<SkillBackupEntry>>, ApiError> {
-    let backups = crate::services::skill::SkillService::list_backups()
+    let backups = crate::commands::get_skill_backups_internal()
         .map_err(|e| ApiError::internal(format!("failed to load skill backups: {e}")))?;
     Ok(Json(backups))
 }
@@ -696,7 +696,7 @@ async fn uninstall_skill_unified(
     State(state): State<WebApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<SkillUninstallResult>, ApiError> {
-    let result = crate::services::skill::SkillService::uninstall(&state.app_state.db, &id)
+    let result = crate::commands::uninstall_skill_unified_internal(state.app_state.as_ref(), id)
         .map_err(|e| ApiError::internal(format!("failed to uninstall skill: {e}")))?;
     Ok(Json(result))
 }
@@ -706,21 +706,16 @@ async fn toggle_skill_app(
     Path((id, app)): Path<(String, String)>,
     Json(payload): Json<ToggleSkillAppRequest>,
 ) -> Result<Json<bool>, ApiError> {
-    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    crate::services::skill::SkillService::toggle_app(
-        &state.app_state.db,
-        &id,
-        &app_type,
-        payload.enabled,
-    )
-    .map_err(|e| ApiError::internal(format!("failed to toggle skill app: {e}")))?;
-    Ok(Json(true))
+    let result =
+        crate::commands::toggle_skill_app_internal(state.app_state.as_ref(), id, app, payload.enabled)
+            .map_err(|e| ApiError::internal(format!("failed to toggle skill app: {e}")))?;
+    Ok(Json(result))
 }
 
 async fn scan_unmanaged_skills(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<crate::app_config::UnmanagedSkill>>, ApiError> {
-    let skills = crate::services::skill::SkillService::scan_unmanaged(&state.app_state.db)
+    let skills = crate::commands::scan_unmanaged_skills_internal(state.app_state.as_ref())
         .map_err(|e| ApiError::internal(format!("failed to scan unmanaged skills: {e}")))?;
     Ok(Json(skills))
 }
@@ -729,9 +724,8 @@ async fn import_skills_from_apps(
     State(state): State<WebApiState>,
     Json(imports): Json<Vec<ImportSkillSelection>>,
 ) -> Result<Json<Vec<crate::app_config::InstalledSkill>>, ApiError> {
-    let skills =
-        crate::services::skill::SkillService::import_from_apps(&state.app_state.db, imports)
-            .map_err(|e| ApiError::internal(format!("failed to import skills from apps: {e}")))?;
+    let skills = crate::commands::import_skills_from_apps_internal(state.app_state.as_ref(), imports)
+        .map_err(|e| ApiError::internal(format!("failed to import skills from apps: {e}")))?;
     Ok(Json(skills))
 }
 
@@ -799,9 +793,9 @@ async fn install_skill_unified(
 }
 
 async fn delete_skill_backup(Path(backup_id): Path<String>) -> Result<Json<bool>, ApiError> {
-    crate::services::skill::SkillService::delete_backup(&backup_id)
+    let deleted = crate::commands::delete_skill_backup_internal(backup_id)
         .map_err(|e| ApiError::internal(format!("failed to delete skill backup: {e}")))?;
-    Ok(Json(true))
+    Ok(Json(deleted))
 }
 
 async fn restore_skill_backup(
@@ -809,12 +803,10 @@ async fn restore_skill_backup(
     Path(backup_id): Path<String>,
     Json(payload): Json<CurrentAppRequest>,
 ) -> Result<Json<crate::app_config::InstalledSkill>, ApiError> {
-    let app_type = AppType::from_str(&payload.current_app)
-        .map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let restored = crate::services::skill::SkillService::restore_from_backup(
-        &state.app_state.db,
-        &backup_id,
-        &app_type,
+    let restored = crate::commands::restore_skill_backup_internal(
+        state.app_state.as_ref(),
+        backup_id,
+        payload.current_app,
     )
     .map_err(|e| ApiError::internal(format!("failed to restore skill backup: {e}")))?;
     Ok(Json(restored))

@@ -33,16 +33,28 @@ fn parse_app_type(app: &str) -> Result<AppType, String> {
 /// 获取所有已安装的 Skills
 #[tauri::command]
 pub fn get_installed_skills(app_state: State<'_, AppState>) -> Result<Vec<InstalledSkill>, String> {
+    get_installed_skills_internal(app_state.inner())
+}
+
+pub(crate) fn get_installed_skills_internal(app_state: &AppState) -> Result<Vec<InstalledSkill>, String> {
     SkillService::get_all_installed(&app_state.db).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_skill_backups() -> Result<Vec<SkillBackupEntry>, String> {
+    get_skill_backups_internal()
+}
+
+pub(crate) fn get_skill_backups_internal() -> Result<Vec<SkillBackupEntry>, String> {
     SkillService::list_backups().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn delete_skill_backup(backup_id: String) -> Result<bool, String> {
+    delete_skill_backup_internal(backup_id)
+}
+
+pub(crate) fn delete_skill_backup_internal(backup_id: String) -> Result<bool, String> {
     SkillService::delete_backup(&backup_id).map_err(|e| e.to_string())?;
     Ok(true)
 }
@@ -74,6 +86,13 @@ pub fn uninstall_skill_unified(
     id: String,
     app_state: State<'_, AppState>,
 ) -> Result<SkillUninstallResult, String> {
+    uninstall_skill_unified_internal(app_state.inner(), id)
+}
+
+pub(crate) fn uninstall_skill_unified_internal(
+    app_state: &AppState,
+    id: String,
+) -> Result<SkillUninstallResult, String> {
     SkillService::uninstall(&app_state.db, &id).map_err(|e| e.to_string())
 }
 
@@ -82,6 +101,14 @@ pub fn restore_skill_backup(
     backup_id: String,
     current_app: String,
     app_state: State<'_, AppState>,
+) -> Result<InstalledSkill, String> {
+    restore_skill_backup_internal(app_state.inner(), backup_id, current_app)
+}
+
+pub(crate) fn restore_skill_backup_internal(
+    app_state: &AppState,
+    backup_id: String,
+    current_app: String,
 ) -> Result<InstalledSkill, String> {
     let app_type = parse_app_type(&current_app)?;
     SkillService::restore_from_backup(&app_state.db, &backup_id, &app_type)
@@ -96,6 +123,15 @@ pub fn toggle_skill_app(
     enabled: bool,
     app_state: State<'_, AppState>,
 ) -> Result<bool, String> {
+    toggle_skill_app_internal(app_state.inner(), id, app, enabled)
+}
+
+pub(crate) fn toggle_skill_app_internal(
+    app_state: &AppState,
+    id: String,
+    app: String,
+    enabled: bool,
+) -> Result<bool, String> {
     let app_type = parse_app_type(&app)?;
     SkillService::toggle_app(&app_state.db, &id, &app_type, enabled).map_err(|e| e.to_string())?;
     Ok(true)
@@ -106,6 +142,12 @@ pub fn toggle_skill_app(
 pub fn scan_unmanaged_skills(
     app_state: State<'_, AppState>,
 ) -> Result<Vec<UnmanagedSkill>, String> {
+    scan_unmanaged_skills_internal(app_state.inner())
+}
+
+pub(crate) fn scan_unmanaged_skills_internal(
+    app_state: &AppState,
+) -> Result<Vec<UnmanagedSkill>, String> {
     SkillService::scan_unmanaged(&app_state.db).map_err(|e| e.to_string())
 }
 
@@ -114,6 +156,13 @@ pub fn scan_unmanaged_skills(
 pub fn import_skills_from_apps(
     imports: Vec<ImportSkillSelection>,
     app_state: State<'_, AppState>,
+) -> Result<Vec<InstalledSkill>, String> {
+    import_skills_from_apps_internal(app_state.inner(), imports)
+}
+
+pub(crate) fn import_skills_from_apps_internal(
+    app_state: &AppState,
+    imports: Vec<ImportSkillSelection>,
 ) -> Result<Vec<InstalledSkill>, String> {
     SkillService::import_from_apps(&app_state.db, imports).map_err(|e| e.to_string())
 }
