@@ -632,6 +632,33 @@ export const providerPresets: ProviderPreset[] = [
     iconColor: "#6566F1",
   },
   {
+    name: "E-FlowCode",
+    websiteUrl: "https://e-flowcode.cc",
+    apiKeyUrl: "https://e-flowcode.cc",
+    settingsConfig: {
+      effortLevel: "high",
+      env: {
+        ANTHROPIC_AUTH_TOKEN: "sk-",
+        ANTHROPIC_BASE_URL: "https://e-flowcode.cc",
+      },
+      statusLine: {
+        command: "C:/Users/zuolan/.claude/eflowcodeline/eflowcodeline.exe",
+        padding: 0,
+        type: "command",
+      },
+      enabledPlugins: {
+        "superpowers@superpowers-marketplace": true,
+      },
+      includeCoAuthoredBy: false,
+      ENABLE_TOOL_SEARCH: true,
+      skipWebFetchPreflight: true,
+    },
+    category: "third_party",
+    endpointCandidates: ["https://e-flowcode.cc"],
+    icon: "eflowcode",
+    iconColor: "#000000",
+  },
+  {
     name: "Novita AI",
     websiteUrl: "https://novita.ai",
     apiKeyUrl: "https://novita.ai",

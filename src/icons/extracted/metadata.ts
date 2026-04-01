@@ -114,6 +114,13 @@ export const iconMetadata: Record<string, IconMetadata> = {
     keywords: ["deep", "seek"],
     defaultColor: "#1E88E5",
   },
+  eflowcode: {
+    name: "eflowcode",
+    displayName: "E-FlowCode",
+    category: "ai-provider",
+    keywords: ["e-flowcode", "eflowcode", "flowcode"],
+    defaultColor: "#000000",
+  },
   doubao: {
     name: "doubao",
     displayName: "doubao",

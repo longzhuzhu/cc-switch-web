@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { getIcon, hasIcon, getIconMetadata } from "@/icons/extracted";
+import { getLocalIconUrl, hasLocalIcon } from "@/icons/local";
 import { cn } from "@/lib/utils";
 
 interface ProviderIconProps {
@@ -23,6 +24,13 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
   const iconSvg = useMemo(() => {
     if (icon && hasIcon(icon)) {
       return getIcon(icon);
+    }
+    return "";
+  }, [icon]);
+
+  const localIconUrl = useMemo(() => {
+    if (icon && hasLocalIcon(icon)) {
+      return getLocalIconUrl(icon);
     }
     return "";
   }, [icon]);
@@ -55,6 +63,21 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
     }
     return undefined;
   }, [color, icon]);
+
+  if (localIconUrl) {
+    return (
+      <img
+        src={localIconUrl}
+        alt={name}
+        className={cn(
+          "inline-flex items-center justify-center flex-shrink-0 rounded-lg object-cover",
+          className,
+        )}
+        style={sizeStyle}
+        loading="lazy"
+      />
+    );
+  }
 
   // 如果有图标，显示图标
   if (iconSvg) {

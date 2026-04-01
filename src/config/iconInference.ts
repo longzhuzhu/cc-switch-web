@@ -7,6 +7,8 @@ const iconMappings = {
   claude: { icon: "claude", iconColor: "#D4915D" },
   anthropic: { icon: "anthropic", iconColor: "#D4915D" },
   deepseek: { icon: "deepseek", iconColor: "#1E88E5" },
+  eflowcode: { icon: "eflowcode", iconColor: "#000000" },
+  "e-flowcode": { icon: "eflowcode", iconColor: "#000000" },
   zhipu: { icon: "zhipu", iconColor: "#0F62FE" },
   glm: { icon: "zhipu", iconColor: "#0F62FE" },
   qwen: { icon: "qwen", iconColor: "#FF6A00" },

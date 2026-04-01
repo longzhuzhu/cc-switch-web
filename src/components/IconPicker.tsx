@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProviderIcon } from "./ProviderIcon";
 import { iconList } from "@/icons/extracted";
+import { localIconList } from "@/icons/local";
 import { searchIcons, getIconMetadata } from "@/icons/extracted/metadata";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +23,8 @@ export const IconPicker: React.FC<IconPickerProps> = ({
 
   // 过滤图标列表
   const filteredIcons = useMemo(() => {
-    if (!searchQuery) return iconList;
+    const combinedIconList = Array.from(new Set([...iconList, ...localIconList]));
+    if (!searchQuery) return combinedIconList;
     return searchIcons(searchQuery);
   }, [searchQuery]);
 
