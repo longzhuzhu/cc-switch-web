@@ -41,7 +41,7 @@
     "auto": "自动",
     "enabled": "已开启",
     "notSet": "未设置",
-    "webFeaturePending": "该页面尚未迁移到 Web 版本，暂不可用"
+    "webFeaturePending": "该页面不在当前 Web 版支持范围内"
   },
   "apiKeyInput": {
     "placeholder": "请输入API Key",
@@ -1887,7 +1887,7 @@
       "autoSwitchDescription": "开启后将立即切换到队列 P1，并在请求失败时自动切换到队列中的下一个供应商"
     },
     "webMode": {
-      "partialSupport": "当前 Web 模式已提供本地代理、Provider、基础代理配置、故障转移、整流器与全局出站代理能力。其余仍依赖桌面壳的区块会在后续迁移中逐步恢复。"
+      "partialSupport": "当前 Web 模式已覆盖本地代理、Provider、代理配置、故障转移、整流器与全局出站代理等主流程能力。桌面壳专属能力不再作为 Web 版目标范围。"
     },
     "failoverQueue": {
       "title": "故障转移队列",

@@ -41,7 +41,7 @@
     "auto": "Auto",
     "enabled": "Enabled",
     "notSet": "Not Set",
-    "webFeaturePending": "This page is not available in the Web runtime yet"
+    "webFeaturePending": "This page is outside the current Web edition scope"
   },
   "apiKeyInput": {
     "placeholder": "Enter API Key",
@@ -1887,7 +1887,7 @@
       "autoSwitchDescription": "When enabled, switches to queue P1 immediately and automatically tries the next provider in the queue on failures"
     },
     "webMode": {
-      "partialSupport": "The Web runtime now supports local proxy, providers, core proxy configuration, failover, rectifier, and global outbound proxy. Remaining desktop-shell-dependent sections will be restored incrementally."
+      "partialSupport": "The Web runtime now covers the main local-service workflow, including local proxy, providers, proxy configuration, failover, rectifier, and global outbound proxy. Desktop-shell-only capabilities are no longer in scope for the Web edition."
     },
     "failoverQueue": {
       "title": "Failover Queue",

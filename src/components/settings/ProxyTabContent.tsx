@@ -304,7 +304,7 @@ export function ProxyTabContent({
         <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           {t("proxy.webMode.partialSupport", {
             defaultValue:
-              "当前 Web 模式已提供本地代理、Provider、基础代理配置、故障转移、整流器与全局出站代理能力。其余仍依赖桌面壳的区块会在后续迁移中逐步恢复。",
+              "当前 Web 模式已覆盖本地代理、Provider、代理配置、故障转移、整流器与全局出站代理等主流程能力。桌面壳专属能力不再作为 Web 版目标范围。",
           })}
         </div>
       )}

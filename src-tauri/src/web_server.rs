@@ -19,6 +19,7 @@ use crate::app_config::{AppType, McpServer};
 use crate::database::FailoverQueueItem;
 use crate::prompt::Prompt;
 use crate::provider::Provider;
+use crate::proxy::http_client;
 use crate::proxy::circuit_breaker::{CircuitBreakerConfig, CircuitBreakerStats};
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::types::{
@@ -86,6 +87,18 @@ struct ValueRequest {
 #[serde(rename_all = "camelCase")]
 struct OptionalPathRequest {
     path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SnippetRequest {
+    snippet: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtractCommonConfigSnippetRequest {
+    settings_config: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1675,6 +1688,149 @@ async fn set_app_config_dir_override(
     Ok(Json(true))
 }
 
+async fn get_common_config_snippet(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+) -> Result<Json<Option<String>>, ApiError> {
+    let snippet = state
+        .app_state
+        .db
+        .get_config_snippet(&app)
+        .map_err(|e| ApiError::internal(format!("failed to load common config snippet: {e}")))?;
+    Ok(Json(snippet))
+}
+
+async fn set_common_config_snippet(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+    Json(payload): Json<SnippetRequest>,
+) -> Result<StatusCode, ApiError> {
+    let is_cleared = payload.snippet.trim().is_empty();
+    let old_snippet = state
+        .app_state
+        .db
+        .get_config_snippet(&app)
+        .map_err(|e| ApiError::internal(format!("failed to load current common config snippet: {e}")))?;
+
+    crate::validate_common_config_snippet(&app, &payload.snippet).map_err(ApiError::bad_request)?;
+
+    let value = if is_cleared {
+        None
+    } else {
+        Some(payload.snippet.clone())
+    };
+
+    if matches!(app.as_str(), "claude" | "codex" | "gemini") {
+        if let Some(legacy_snippet) = old_snippet
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+            ProviderService::migrate_legacy_common_config_usage(
+                state.app_state.as_ref(),
+                app_type,
+                legacy_snippet,
+            )
+            .map_err(|e| {
+                ApiError::internal(format!("failed to migrate legacy common config usage: {e}"))
+            })?;
+        }
+    }
+
+    state
+        .app_state
+        .db
+        .set_config_snippet(&app, value)
+        .map_err(|e| ApiError::internal(format!("failed to save common config snippet: {e}")))?;
+    state
+        .app_state
+        .db
+        .set_config_snippet_cleared(&app, is_cleared)
+        .map_err(|e| ApiError::internal(format!("failed to save common config cleared state: {e}")))?;
+
+    if matches!(app.as_str(), "claude" | "codex" | "gemini") {
+        let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+        ProviderService::sync_current_provider_for_app(state.app_state.as_ref(), app_type)
+            .map_err(|e| {
+                ApiError::internal(format!("failed to sync current provider after snippet update: {e}"))
+            })?;
+    }
+
+    if app == "omo"
+        && state
+            .app_state
+            .db
+            .get_current_omo_provider("opencode", "omo")
+            .map_err(|e| ApiError::internal(format!("failed to load current OMO provider: {e}")))?
+            .is_some()
+    {
+        OmoService::write_config_to_file(state.app_state.as_ref(), &STANDARD)
+            .map_err(|e| ApiError::internal(format!("failed to write OMO config after snippet update: {e}")))?;
+    }
+
+    if app == "omo-slim"
+        && state
+            .app_state
+            .db
+            .get_current_omo_provider("opencode", "omo-slim")
+            .map_err(|e| ApiError::internal(format!("failed to load current OMO Slim provider: {e}")))?
+            .is_some()
+    {
+        OmoService::write_config_to_file(state.app_state.as_ref(), &SLIM)
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "failed to write OMO Slim config after snippet update: {e}"
+                ))
+            })?;
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn extract_common_config_snippet(
+    State(state): State<WebApiState>,
+    Path(app): Path<String>,
+    Json(payload): Json<ExtractCommonConfigSnippetRequest>,
+) -> Result<Json<String>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+    if let Some(settings_config) = payload
+        .settings_config
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let settings: serde_json::Value = serde_json::from_str(settings_config)
+            .map_err(|e| ApiError::bad_request(crate::invalid_json_format_error(e)))?;
+        let snippet =
+            ProviderService::extract_common_config_snippet_from_settings(app_type, &settings)
+                .map_err(|e| {
+                    ApiError::internal(format!(
+                        "failed to extract common config snippet from settings: {e}"
+                    ))
+                })?;
+        return Ok(Json(snippet));
+    }
+
+    let snippet = ProviderService::extract_common_config_snippet(state.app_state.as_ref(), app_type)
+        .map_err(|e| {
+            ApiError::internal(format!(
+                "failed to extract common config snippet from current provider: {e}"
+            ))
+        })?;
+    Ok(Json(snippet))
+}
+
+async fn sync_current_providers_live(
+    State(state): State<WebApiState>,
+) -> Result<Json<Value>, ApiError> {
+    ProviderService::sync_current_to_live(state.app_state.as_ref())
+        .map_err(|e| ApiError::internal(format!("failed to sync current providers to live: {e}")))?;
+    Ok(Json(json!({
+        "success": true,
+        "message": "Live configuration synchronized",
+    })))
+}
+
 async fn get_rectifier_config(
     State(state): State<WebApiState>,
 ) -> Result<Json<RectifierConfig>, ApiError> {
@@ -2228,6 +2384,52 @@ async fn update_global_proxy_config(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn get_global_proxy_url(
+    State(state): State<WebApiState>,
+) -> Result<Json<Option<String>>, ApiError> {
+    let url = state
+        .app_state
+        .db
+        .get_global_proxy_url()
+        .map_err(|e| ApiError::internal(format!("failed to load global proxy url: {e}")))?;
+    Ok(Json(url))
+}
+
+async fn set_global_proxy_url(
+    State(state): State<WebApiState>,
+    Json(payload): Json<ValueRequest>,
+) -> Result<StatusCode, ApiError> {
+    let url_opt = if payload.value.trim().is_empty() {
+        None
+    } else {
+        Some(payload.value.as_str())
+    };
+
+    http_client::validate_proxy(url_opt).map_err(ApiError::bad_request)?;
+    state
+        .app_state
+        .db
+        .set_global_proxy_url(url_opt)
+        .map_err(|e| ApiError::internal(format!("failed to save global proxy url: {e}")))?;
+    http_client::apply_proxy(url_opt).map_err(ApiError::bad_request)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn test_proxy_url(
+    Json(payload): Json<ValueRequest>,
+) -> Result<Json<crate::ProxyTestResult>, ApiError> {
+    let result = crate::test_proxy_url(payload.value).await.map_err(ApiError::bad_request)?;
+    Ok(Json(result))
+}
+
+async fn get_upstream_proxy_status() -> Json<crate::UpstreamProxyStatus> {
+    Json(crate::get_upstream_proxy_status())
+}
+
+async fn scan_local_proxies() -> Json<Vec<crate::DetectedProxy>> {
+    Json(crate::scan_local_proxies().await)
+}
+
 async fn update_proxy_config_for_app(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
@@ -2682,6 +2884,18 @@ pub async fn run_web_server() -> Result<(), String> {
             "/api/settings/app-config-dir-override",
             get(get_app_config_dir_override).put(set_app_config_dir_override),
         )
+        .route(
+            "/api/settings/common-config/:app",
+            get(get_common_config_snippet).put(set_common_config_snippet),
+        )
+        .route(
+            "/api/settings/common-config/:app/extract",
+            post(extract_common_config_snippet),
+        )
+        .route(
+            "/api/settings/sync-current-providers-live",
+            post(sync_current_providers_live),
+        )
         .route("/api/webdav/test", post(webdav_test_connection))
         .route("/api/webdav/upload", post(webdav_sync_upload))
         .route("/api/webdav/download", post(webdav_sync_download))
@@ -2930,6 +3144,13 @@ pub async fn run_web_server() -> Result<(), String> {
             "/api/proxy/global-config",
             get(get_global_proxy_config).put(update_global_proxy_config),
         )
+        .route(
+            "/api/proxy/global-url",
+            get(get_global_proxy_url).put(set_global_proxy_url),
+        )
+        .route("/api/proxy/test", post(test_proxy_url))
+        .route("/api/proxy/upstream-status", get(get_upstream_proxy_status))
+        .route("/api/proxy/scan-local", get(scan_local_proxies))
         .route(
             "/api/proxy/apps/:app/config",
             get(get_proxy_config_for_app).put(update_proxy_config_for_app),

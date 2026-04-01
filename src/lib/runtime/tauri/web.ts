@@ -238,6 +238,46 @@ export async function getWebConfigDir(appId: AppId): Promise<string> {
   return requestJson<string>(`/api/settings/config-dir/${appId}`);
 }
 
+export async function getWebCommonConfigSnippet(
+  appType: string,
+): Promise<string | null> {
+  return requestJson<string | null>(
+    `/api/settings/common-config/${encodeURIComponent(appType)}`,
+  );
+}
+
+export async function setWebCommonConfigSnippet(
+  appType: string,
+  snippet: string,
+): Promise<void> {
+  await requestWithBody<void>(
+    `/api/settings/common-config/${encodeURIComponent(appType)}`,
+    "PUT",
+    { snippet },
+  );
+}
+
+export async function extractWebCommonConfigSnippet(
+  appType: string,
+  settingsConfig?: string,
+): Promise<string> {
+  return requestWithBody<string>(
+    `/api/settings/common-config/${encodeURIComponent(appType)}/extract`,
+    "POST",
+    { settingsConfig },
+  );
+}
+
+export async function syncWebCurrentProvidersLive(): Promise<{
+  success?: boolean;
+  message?: string;
+}> {
+  return requestWithBody<{ success?: boolean; message?: string }>(
+    "/api/settings/sync-current-providers-live",
+    "POST",
+  );
+}
+
 export async function getWebAppConfigDirOverride(): Promise<string | null> {
   return requestJson<string | null>("/api/settings/app-config-dir-override");
 }
@@ -590,6 +630,40 @@ export async function getWebGlobalProxyConfig(): Promise<GlobalProxyConfig> {
     );
     return getDefaultGlobalProxyConfig();
   }
+}
+
+export async function getWebGlobalProxyUrl(): Promise<string | null> {
+  return requestJson<string | null>("/api/proxy/global-url");
+}
+
+export async function setWebGlobalProxyUrl(url: string): Promise<void> {
+  return requestWithBody<void>("/api/proxy/global-url", "PUT", { value: url });
+}
+
+export async function testWebProxyUrl(
+  url: string,
+): Promise<import("@/lib/api/globalProxy").ProxyTestResult> {
+  return requestWithBody<import("@/lib/api/globalProxy").ProxyTestResult>(
+    "/api/proxy/test",
+    "POST",
+    { value: url },
+  );
+}
+
+export async function getWebUpstreamProxyStatus(): Promise<
+  import("@/lib/api/globalProxy").UpstreamProxyStatus
+> {
+  return requestJson<import("@/lib/api/globalProxy").UpstreamProxyStatus>(
+    "/api/proxy/upstream-status",
+  );
+}
+
+export async function scanWebLocalProxies(): Promise<
+  import("@/lib/api/globalProxy").DetectedProxy[]
+> {
+  return requestJson<import("@/lib/api/globalProxy").DetectedProxy[]>(
+    "/api/proxy/scan-local",
+  );
 }
 
 export async function getWebProxyConfigForApp(

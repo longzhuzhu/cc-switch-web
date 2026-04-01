@@ -12,7 +12,7 @@ pub async fn get_claude_config_status() -> Result<ConfigStatus, String> {
 
 use std::str::FromStr;
 
-fn invalid_json_format_error(error: serde_json::Error) -> String {
+pub(crate) fn invalid_json_format_error(error: serde_json::Error) -> String {
     let lang = settings::get_settings()
         .language
         .unwrap_or_else(|| "zh".to_string());
@@ -36,7 +36,7 @@ fn invalid_toml_format_error(error: toml_edit::TomlError) -> String {
     }
 }
 
-fn validate_common_config_snippet(app_type: &str, snippet: &str) -> Result<(), String> {
+pub(crate) fn validate_common_config_snippet(app_type: &str, snippet: &str) -> Result<(), String> {
     if snippet.trim().is_empty() {
         return Ok(());
     }

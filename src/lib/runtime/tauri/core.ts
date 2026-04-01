@@ -3,10 +3,12 @@ import { isTauriRuntime } from "./env";
 import {
   addWebProviderToFailoverQueue,
   addWebProvider,
+  extractWebCommonConfigSnippet,
   createWebDbBackup,
   downloadWebConfigExport,
   deleteWebProvider,
   deleteWebDbBackup,
+  getWebCommonConfigSnippet,
   getWebLiveProviderIds,
   getWebAutoFailoverEnabled,
   getWebAppConfigDirOverride,
@@ -16,6 +18,7 @@ import {
   getWebDefaultCostMultiplier,
   getWebFailoverQueue,
   getWebGlobalProxyConfig,
+  getWebGlobalProxyUrl,
   getWebIsLiveTakeoverActive,
   getWebIsProxyRunning,
   getWebLogConfig,
@@ -57,6 +60,7 @@ import {
   getWebManagedAuthStatus,
   getWebUnmanagedSkills,
   getWebOptimizerConfig,
+  getWebUpstreamProxyStatus,
   listWebManagedAuthAccounts,
   listWebDbBackups,
   logoutWebManagedAuth,
@@ -67,18 +71,23 @@ import {
   resetWebCircuitBreaker,
   restoreWebDbBackup,
   saveWebSettings,
+  scanWebLocalProxies,
   getWebRectifierConfig,
   setWebAutoFailoverEnabled,
   setWebAppConfigDirOverride,
+  setWebCommonConfigSnippet,
   setWebDefaultCostMultiplier,
   setWebLogConfig,
   setWebManagedAuthDefaultAccount,
   setWebOptimizerConfig,
   setWebPricingModelSource,
+  setWebGlobalProxyUrl,
   setWebRectifierConfig,
   setWebStreamCheckConfig,
   startWebManagedAuthLogin,
+  syncWebCurrentProvidersLive,
   syncWebUniversalProvider,
+  testWebProxyUrl,
   toggleWebMcpApp,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
@@ -182,6 +191,27 @@ export async function invoke<T>(
       return (await getWebSettings()) as T;
     case "save_settings":
       return (await saveWebSettings(args?.settings as any)) as T;
+    case "get_claude_common_config_snippet":
+      return (await getWebCommonConfigSnippet("claude")) as T;
+    case "set_claude_common_config_snippet":
+      return (await setWebCommonConfigSnippet(
+        "claude",
+        (args?.snippet as string | undefined) ?? "",
+      )) as T;
+    case "get_common_config_snippet":
+      return (await getWebCommonConfigSnippet(args?.appType as string)) as T;
+    case "set_common_config_snippet":
+      return (await setWebCommonConfigSnippet(
+        args?.appType as string,
+        (args?.snippet as string | undefined) ?? "",
+      )) as T;
+    case "extract_common_config_snippet":
+      return (await extractWebCommonConfigSnippet(
+        args?.appType as string,
+        args?.settingsConfig as string | undefined,
+      )) as T;
+    case "sync_current_providers_live":
+      return (await syncWebCurrentProvidersLive()) as T;
     case "webdav_test_connection":
       return (await testWebdavConnection(
         args?.settings as any,
@@ -607,6 +637,20 @@ export async function invoke<T>(
       return (await getWebProxyConfig()) as T;
     case "update_proxy_config":
       return (await updateWebProxyConfig(args?.config as any)) as T;
+    case "get_global_proxy_url":
+      return (await getWebGlobalProxyUrl()) as T;
+    case "set_global_proxy_url":
+      return (await setWebGlobalProxyUrl(
+        (args?.url as string | undefined) ?? "",
+      )) as T;
+    case "test_proxy_url":
+      return (await testWebProxyUrl(
+        (args?.url as string | undefined) ?? "",
+      )) as T;
+    case "get_upstream_proxy_status":
+      return (await getWebUpstreamProxyStatus()) as T;
+    case "scan_local_proxies":
+      return (await scanWebLocalProxies()) as T;
     case "get_global_proxy_config":
       return (await getWebGlobalProxyConfig()) as T;
     case "update_global_proxy_config":
