@@ -2,7 +2,6 @@
 
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_opener::OpenerExt;
 
 use crate::app_config::AppType;
 use crate::codex_config;
@@ -123,28 +122,6 @@ pub async fn get_config_dir(app: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn open_config_folder(handle: AppHandle, app: String) -> Result<bool, String> {
-    let config_dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
-        AppType::Claude => config::get_claude_config_dir(),
-        AppType::Codex => codex_config::get_codex_config_dir(),
-        AppType::Gemini => crate::gemini_config::get_gemini_dir(),
-        AppType::OpenCode => crate::opencode_config::get_opencode_dir(),
-        AppType::OpenClaw => crate::openclaw_config::get_openclaw_dir(),
-    };
-
-    if !config_dir.exists() {
-        std::fs::create_dir_all(&config_dir).map_err(|e| format!("创建目录失败: {e}"))?;
-    }
-
-    handle
-        .opener()
-        .open_path(config_dir.to_string_lossy().to_string(), None::<String>)
-        .map_err(|e| format!("打开文件夹失败: {e}"))?;
-
-    Ok(true)
-}
-
-#[tauri::command]
 pub async fn pick_directory(
     app: AppHandle,
     #[allow(non_snake_case)] defaultPath: Option<String>,
@@ -179,22 +156,6 @@ pub async fn pick_directory(
 pub async fn get_app_config_path() -> Result<String, String> {
     let config_path = config::get_app_config_path();
     Ok(config_path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub async fn open_app_config_folder(handle: AppHandle) -> Result<bool, String> {
-    let config_dir = config::get_app_config_dir();
-
-    if !config_dir.exists() {
-        std::fs::create_dir_all(&config_dir).map_err(|e| format!("创建目录失败: {e}"))?;
-    }
-
-    handle
-        .opener()
-        .open_path(config_dir.to_string_lossy().to_string(), None::<String>)
-        .map_err(|e| format!("打开文件夹失败: {e}"))?;
-
-    Ok(true)
 }
 
 #[tauri::command]

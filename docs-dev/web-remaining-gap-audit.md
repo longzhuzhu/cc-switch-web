@@ -75,6 +75,7 @@
 - 前端已不可达的桌面设置联动已移除，包括自动重启、自启动和 Claude 插件/Onboarding 同步分支
 - 前端托盘菜单刷新 API 已在 Web 运行时收口为 no-op，避免继续误调用桌面壳能力
 - 桌面自动更新与便携模式检测的 Rust 命令、Updater 插件依赖已从当前分支移除
+- 已无前端入口的 `open_config_folder` / `open_app_config_folder` 命令已从当前分支移除
 
 ## 四、当前真正的收尾重点
 
