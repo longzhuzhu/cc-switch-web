@@ -1,5 +1,6 @@
 import { invoke } from "@/lib/runtime/tauri/core";
 import { listen, type UnlistenFn } from "@/lib/runtime/tauri/event";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 import type {
   Provider,
   UniversalProvider,
@@ -59,6 +60,9 @@ export const providersApi = {
   },
 
   async updateTrayMenu(): Promise<boolean> {
+    if (isWebRuntime()) {
+      return false;
+    }
     return await invoke("update_tray_menu");
   },
 

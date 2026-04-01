@@ -73,6 +73,7 @@
 - Deeplink 前端导入对话框与 Web 入口已从当前分支移除
 - Deeplink Rust 模块、Tauri 命令、协议插件与 macOS URL scheme 已从当前分支移除
 - 前端已不可达的桌面设置联动已移除，包括自动重启、自启动和 Claude 插件/Onboarding 同步分支
+- 前端托盘菜单刷新 API 已在 Web 运行时收口为 no-op，避免继续误调用桌面壳能力
 
 ## 四、当前真正的收尾重点
 
