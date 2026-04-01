@@ -61,8 +61,6 @@ export const handlers = [
     },
   ),
 
-  http.post(`${TAURI_ENDPOINT}/update_tray_menu`, () => success(true)),
-
   http.post(`${TAURI_ENDPOINT}/switch_provider`, async ({ request }) => {
     const { id, app } = await withJson<{ id: string; app: AppId }>(request);
     const providers = listProviders(app);
@@ -178,8 +176,6 @@ export const handlers = [
     const { app } = await withJson<{ app: AppId }>(request);
     return success(app === "claude" ? "/default/claude" : "/default/codex");
   }),
-
-  http.post(`${TAURI_ENDPOINT}/is_portable_mode`, () => success(false)),
 
   // Sync current providers live (no-op success)
   http.post(`${TAURI_ENDPOINT}/sync_current_providers_live`, () =>
