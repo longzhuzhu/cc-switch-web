@@ -2,7 +2,7 @@
 
 use crate::app_config::AppType;
 use crate::codex_config;
-use crate::config::{self, get_claude_settings_path, ConfigStatus};
+use crate::config::{self, ConfigStatus};
 use crate::settings;
 
 #[tauri::command]
@@ -101,11 +101,6 @@ pub async fn get_config_status(app: String) -> Result<ConfigStatus, String> {
 }
 
 #[tauri::command]
-pub async fn get_claude_code_config_path() -> Result<String, String> {
-    Ok(get_claude_settings_path().to_string_lossy().to_string())
-}
-
-#[tauri::command]
 pub async fn get_config_dir(app: String) -> Result<String, String> {
     let dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
         AppType::Claude => config::get_claude_config_dir(),
@@ -116,12 +111,6 @@ pub async fn get_config_dir(app: String) -> Result<String, String> {
     };
 
     Ok(dir.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub async fn get_app_config_path() -> Result<String, String> {
-    let config_path = config::get_app_config_path();
-    Ok(config_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]

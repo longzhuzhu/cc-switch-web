@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import type { AppId } from "@/lib/api/types";
-import type { McpServer, Provider, Settings } from "@/types";
+import type { Provider, Settings } from "@/types";
 import {
   addProvider,
   deleteProvider,
@@ -18,10 +18,6 @@ import {
   setSettings,
   getAppConfigDirOverride,
   setAppConfigDirOverrideState,
-  getMcpConfig,
-  setMcpServerEnabled,
-  upsertMcpServer,
-  deleteMcpServer,
 } from "./state";
 
 const TAURI_ENDPOINT = "http://tauri.local";
@@ -152,46 +148,8 @@ export const handlers = [
     );
   }),
 
-  // MCP APIs
-  http.post(`${TAURI_ENDPOINT}/get_mcp_config`, async ({ request }) => {
-    const { app } = await withJson<{ app: AppId }>(request);
-    return success(getMcpConfig(app));
-  }),
-
   http.post(`${TAURI_ENDPOINT}/import_mcp_from_claude`, () => success(1)),
   http.post(`${TAURI_ENDPOINT}/import_mcp_from_codex`, () => success(1)),
-
-  http.post(`${TAURI_ENDPOINT}/set_mcp_enabled`, async ({ request }) => {
-    const { app, id, enabled } = await withJson<{
-      app: AppId;
-      id: string;
-      enabled: boolean;
-    }>(request);
-    setMcpServerEnabled(app, id, enabled);
-    return success(true);
-  }),
-
-  http.post(
-    `${TAURI_ENDPOINT}/upsert_mcp_server_in_config`,
-    async ({ request }) => {
-      const { app, id, spec } = await withJson<{
-        app: AppId;
-        id: string;
-        spec: McpServer;
-      }>(request);
-      upsertMcpServer(app, id, spec);
-      return success(true);
-    },
-  ),
-
-  http.post(
-    `${TAURI_ENDPOINT}/delete_mcp_server_in_config`,
-    async ({ request }) => {
-      const { app, id } = await withJson<{ app: AppId; id: string }>(request);
-      deleteMcpServer(app, id);
-      return success(true);
-    },
-  ),
 
   http.post(`${TAURI_ENDPOINT}/restart_app`, () => success(true)),
 
@@ -222,55 +180,6 @@ export const handlers = [
   }),
 
   http.post(`${TAURI_ENDPOINT}/is_portable_mode`, () => success(false)),
-
-  http.post(
-    `${TAURI_ENDPOINT}/select_config_directory`,
-    async ({ request }) => {
-      const { defaultPath, default_path } = await withJson<{
-        defaultPath?: string;
-        default_path?: string;
-      }>(request);
-      const initial = defaultPath ?? default_path;
-      return success(initial ? `${initial}/picked` : "/mock/selected-dir");
-    },
-  ),
-
-  http.post(`${TAURI_ENDPOINT}/pick_directory`, async ({ request }) => {
-    const { defaultPath, default_path } = await withJson<{
-      defaultPath?: string;
-      default_path?: string;
-    }>(request);
-    const initial = defaultPath ?? default_path;
-    return success(initial ? `${initial}/picked` : "/mock/selected-dir");
-  }),
-
-  http.post(`${TAURI_ENDPOINT}/open_file_dialog`, () =>
-    success("/mock/import-settings.json"),
-  ),
-
-  http.post(
-    `${TAURI_ENDPOINT}/import_config_from_file`,
-    async ({ request }) => {
-      const { filePath } = await withJson<{ filePath: string }>(request);
-      if (!filePath) {
-        return success({ success: false, message: "Missing file" });
-      }
-      setSettings({ language: "en" });
-      return success({ success: true, backupId: "backup-123" });
-    },
-  ),
-
-  http.post(`${TAURI_ENDPOINT}/export_config_to_file`, async ({ request }) => {
-    const { filePath } = await withJson<{ filePath: string }>(request);
-    if (!filePath) {
-      return success({ success: false, message: "Invalid destination" });
-    }
-    return success({ success: true, filePath });
-  }),
-
-  http.post(`${TAURI_ENDPOINT}/save_file_dialog`, () =>
-    success("/mock/export-settings.json"),
-  ),
 
   // Sync current providers live (no-op success)
   http.post(`${TAURI_ENDPOINT}/sync_current_providers_live`, () =>

@@ -5,9 +5,8 @@
 //! - SSOT 存储在 ~/.cc-switch/skills/
 
 use crate::app_config::{AppType, InstalledSkill, UnmanagedSkill};
-use crate::error::format_skill_error;
 use crate::services::skill::{
-    DiscoverableSkill, ImportSkillSelection, Skill, SkillBackupEntry, SkillRepo, SkillService,
+    DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillService,
     SkillUninstallResult,
 };
 use crate::store::AppState;
@@ -135,118 +134,6 @@ pub async fn discover_available_skills(
         .map_err(|e| e.to_string())
 }
 
-// ========== 兼容旧 API 的命令 ==========
-
-/// 获取技能列表（兼容旧 API）
-#[tauri::command]
-pub async fn get_skills(
-    service: State<'_, SkillServiceState>,
-    app_state: State<'_, AppState>,
-) -> Result<Vec<Skill>, String> {
-    let repos = app_state.db.get_skill_repos().map_err(|e| e.to_string())?;
-    service
-        .0
-        .list_skills(repos, &app_state.db)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 获取指定应用的技能列表（兼容旧 API）
-#[tauri::command]
-pub async fn get_skills_for_app(
-    app: String,
-    service: State<'_, SkillServiceState>,
-    app_state: State<'_, AppState>,
-) -> Result<Vec<Skill>, String> {
-    // 新版本不再区分应用，统一返回所有技能
-    let _ = parse_app_type(&app)?; // 验证 app 参数有效
-    get_skills(service, app_state).await
-}
-
-/// 安装技能（兼容旧 API）
-#[tauri::command]
-pub async fn install_skill(
-    directory: String,
-    service: State<'_, SkillServiceState>,
-    app_state: State<'_, AppState>,
-) -> Result<bool, String> {
-    install_skill_for_app("claude".to_string(), directory, service, app_state).await
-}
-
-/// 安装指定应用的技能（兼容旧 API）
-#[tauri::command]
-pub async fn install_skill_for_app(
-    app: String,
-    directory: String,
-    service: State<'_, SkillServiceState>,
-    app_state: State<'_, AppState>,
-) -> Result<bool, String> {
-    let app_type = parse_app_type(&app)?;
-
-    // 先获取技能信息
-    let repos = app_state.db.get_skill_repos().map_err(|e| e.to_string())?;
-    let skills = service
-        .0
-        .discover_available(repos)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let skill = skills
-        .into_iter()
-        .find(|s| {
-            let install_name = std::path::Path::new(&s.directory)
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| s.directory.clone());
-            install_name.eq_ignore_ascii_case(&directory)
-                || s.directory.eq_ignore_ascii_case(&directory)
-        })
-        .ok_or_else(|| {
-            format_skill_error(
-                "SKILL_NOT_FOUND",
-                &[("directory", &directory)],
-                Some("checkRepoUrl"),
-            )
-        })?;
-
-    service
-        .0
-        .install(&app_state.db, &skill, &app_type)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(true)
-}
-
-/// 卸载技能（兼容旧 API）
-#[tauri::command]
-pub fn uninstall_skill(
-    directory: String,
-    app_state: State<'_, AppState>,
-) -> Result<SkillUninstallResult, String> {
-    uninstall_skill_for_app("claude".to_string(), directory, app_state)
-}
-
-/// 卸载指定应用的技能（兼容旧 API）
-#[tauri::command]
-pub fn uninstall_skill_for_app(
-    app: String,
-    directory: String,
-    app_state: State<'_, AppState>,
-) -> Result<SkillUninstallResult, String> {
-    let _ = parse_app_type(&app)?; // 验证参数
-
-    // 通过 directory 找到对应的 skill id
-    let skills = SkillService::get_all_installed(&app_state.db).map_err(|e| e.to_string())?;
-
-    let skill = skills
-        .into_iter()
-        .find(|s| s.directory.eq_ignore_ascii_case(&directory))
-        .ok_or_else(|| format!("未找到已安装的 Skill: {directory}"))?;
-
-    SkillService::uninstall(&app_state.db, &skill.id).map_err(|e| e.to_string())
-}
-
 // ========== 仓库管理命令 ==========
 
 /// 获取技能仓库列表
@@ -277,17 +164,4 @@ pub fn remove_skill_repo(
         .delete_skill_repo(&owner, &name)
         .map_err(|e| e.to_string())?;
     Ok(true)
-}
-
-/// 从 ZIP 文件安装 Skills
-#[tauri::command]
-pub fn install_skills_from_zip(
-    file_path: String,
-    current_app: String,
-    app_state: State<'_, AppState>,
-) -> Result<Vec<InstalledSkill>, String> {
-    let app_type = parse_app_type(&current_app)?;
-    let path = std::path::Path::new(&file_path);
-
-    SkillService::install_from_zip(&app_state.db, path, &app_type).map_err(|e| e.to_string())
 }

@@ -2,14 +2,12 @@ import React, { Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { http, HttpResponse } from "msw";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import {
   resetProviderState,
   getSettings,
   getAppConfigDirOverride,
 } from "../msw/state";
-import { server } from "../msw/server";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -243,44 +241,4 @@ describe("SettingsPage integration", () => {
     await waitFor(() => expect(claudeInput.value).toBe("/home/mock/.claude"));
   });
 
-  it("notifies when export fails", async () => {
-    renderDialog();
-
-    await waitFor(() =>
-      expect(screen.getByText("language:zh")).toBeInTheDocument(),
-    );
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByText("settings.advanced.data.title"));
-
-    server.use(
-      http.post("http://tauri.local/save_file_dialog", () =>
-        HttpResponse.json(null),
-      ),
-    );
-    fireEvent.click(screen.getByText("settings.exportConfig"));
-
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
-    const cancelMessage = toastErrorMock.mock.calls.at(-1)?.[0] as string;
-    expect(cancelMessage).toMatch(
-      /settings\.selectFileFailed|请选择.*保存路径/,
-    );
-
-    toastErrorMock.mockClear();
-
-    server.use(
-      http.post("http://tauri.local/save_file_dialog", () =>
-        HttpResponse.json("/mock/export-settings.json"),
-      ),
-      http.post("http://tauri.local/export_config_to_file", () =>
-        HttpResponse.json({ success: false, message: "disk-full" }),
-      ),
-    );
-
-    fireEvent.click(screen.getByText("settings.exportConfig"));
-
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
-    const exportMessage = toastErrorMock.mock.calls.at(-1)?.[0] as string;
-    expect(exportMessage).toContain("disk-full");
-    expect(toastSuccessMock).not.toHaveBeenCalled();
-  });
 });

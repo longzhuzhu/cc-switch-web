@@ -1,62 +1,14 @@
 #![allow(non_snake_case)]
 
 use serde_json::{json, Value};
-use std::path::PathBuf;
 use tauri::State;
 
-use crate::commands::sync_support::{
-    post_sync_warning_from_result, run_post_import_sync, success_payload_with_warning,
-};
-use crate::database::backup::BackupEntry;
-use crate::database::Database;
+use crate::database::{backup::BackupEntry, Database};
 use crate::error::AppError;
 use crate::services::provider::ProviderService;
 use crate::store::AppState;
 
 // ─── File import/export ──────────────────────────────────────
-
-/// 导出数据库为 SQL 备份
-#[tauri::command]
-pub async fn export_config_to_file(
-    #[allow(non_snake_case)] filePath: String,
-    state: State<'_, AppState>,
-) -> Result<Value, String> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let target_path = PathBuf::from(&filePath);
-        db.export_sql(&target_path)?;
-        Ok::<_, AppError>(json!({
-            "success": true,
-            "message": "SQL exported successfully",
-            "filePath": filePath
-        }))
-    })
-    .await
-    .map_err(|e| format!("导出配置失败: {e}"))?
-    .map_err(|e: AppError| e.to_string())
-}
-
-/// 从 SQL 备份导入数据库
-#[tauri::command]
-pub async fn import_config_from_file(
-    #[allow(non_snake_case)] filePath: String,
-    state: State<'_, AppState>,
-) -> Result<Value, String> {
-    let db = state.db.clone();
-    let db_for_sync = db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let path_buf = PathBuf::from(&filePath);
-        let backup_id = db.import_sql(&path_buf)?;
-        let warning = post_sync_warning_from_result(Ok(run_post_import_sync(db_for_sync)));
-        if let Some(msg) = warning.as_ref() {
-            log::warn!("[Import] post-import sync warning: {msg}");
-        }
-        Ok::<_, AppError>(success_payload_with_warning(backup_id, warning))
-    })
-    .await
-    .map_err(|e| format!("导入配置失败: {e}"))?
-    .map_err(|e: AppError| e.to_string())
-}
 
 #[tauri::command]
 pub async fn sync_current_providers_live(state: State<'_, AppState>) -> Result<Value, String> {

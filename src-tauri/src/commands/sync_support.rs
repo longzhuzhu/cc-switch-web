@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::sync::Arc;
 
 use crate::database::Database;
@@ -40,17 +40,6 @@ pub(crate) fn attach_warning(mut value: Value, warning: Option<String>) -> Value
         }
     }
     value
-}
-
-pub(crate) fn success_payload_with_warning(backup_id: String, warning: Option<String>) -> Value {
-    attach_warning(
-        json!({
-            "success": true,
-            "message": "SQL imported successfully",
-            "backupId": backup_id
-        }),
-        warning,
-    )
 }
 
 #[cfg(test)]
