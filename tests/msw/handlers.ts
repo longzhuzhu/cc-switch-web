@@ -149,8 +149,6 @@ export const handlers = [
   http.post(`${TAURI_ENDPOINT}/import_mcp_from_claude`, () => success(1)),
   http.post(`${TAURI_ENDPOINT}/import_mcp_from_codex`, () => success(1)),
 
-  http.post(`${TAURI_ENDPOINT}/restart_app`, () => success(true)),
-
   http.post(`${TAURI_ENDPOINT}/get_settings`, () => success(getSettings())),
 
   http.post(`${TAURI_ENDPOINT}/save_settings`, async ({ request }) => {
