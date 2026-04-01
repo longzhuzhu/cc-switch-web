@@ -2,7 +2,6 @@ import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { settingsApi, type AppId } from "@/lib/api";
-import { isWebRuntime } from "@/lib/runtime/tauri/env";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
 import { useSettingsQuery, useSaveSettingsMutation } from "@/lib/query";
 import type { Settings } from "@/types";
@@ -61,7 +60,6 @@ const sanitizeDir = (value?: string | null): string | undefined => {
  */
 export function useSettings(): UseSettingsResult {
   const { t } = useTranslation();
-  const isWebMode = isWebRuntime();
   const { data } = useSettingsQuery();
   const saveMutation = useSaveSettingsMutation();
 
@@ -213,9 +211,7 @@ export function useSettings(): UseSettingsResult {
 
         await saveMutation.mutateAsync(payload);
 
-        if (!isWebMode) {
-          await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
-        }
+        await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
 
         try {
           if (typeof window !== "undefined") {
@@ -279,7 +275,6 @@ export function useSettings(): UseSettingsResult {
       appConfigDir,
       data,
       initialAppConfigDir,
-      isWebMode,
       saveMutation,
       settings,
       setRequiresRestart,

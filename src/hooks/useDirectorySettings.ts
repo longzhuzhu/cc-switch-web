@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { homeDir, join } from "@/lib/runtime/tauri/path";
+import { isWebRuntime } from "@/lib/runtime/tauri/env";
 import { settingsApi, type AppId } from "@/lib/api";
 import type { SettingsFormState } from "./useSettingsForm";
 
@@ -95,6 +96,7 @@ export function useDirectorySettings({
   onUpdateSettings,
 }: UseDirectorySettingsProps): UseDirectorySettingsResult {
   const { t } = useTranslation();
+  const isWebMode = isWebRuntime();
 
   const [appConfigDir, setAppConfigDir] = useState<string | undefined>(
     undefined,
@@ -238,6 +240,15 @@ export function useDirectorySettings({
 
   const browseDirectory = useCallback(
     async (app: AppId) => {
+      if (isWebMode) {
+        toast.info(
+          t("settings.selectFileFailed", {
+            defaultValue: "Web 模式下请直接手动填写目录路径",
+          }),
+        );
+        return;
+      }
+
       const key: DirectoryKey =
         app === "claude"
           ? "claude"
@@ -269,10 +280,19 @@ export function useDirectorySettings({
         );
       }
     },
-    [settings, resolvedDirs, t, updateDirectoryState],
+    [isWebMode, settings, resolvedDirs, t, updateDirectoryState],
   );
 
   const browseAppConfigDir = useCallback(async () => {
+    if (isWebMode) {
+      toast.info(
+        t("settings.selectFileFailed", {
+          defaultValue: "Web 模式下请直接手动填写目录路径",
+        }),
+      );
+      return;
+    }
+
     const currentValue = appConfigDir ?? resolvedDirs.appConfig;
     try {
       const picked = await settingsApi.selectConfigDirectory(currentValue);
@@ -290,7 +310,7 @@ export function useDirectorySettings({
         }),
       );
     }
-  }, [appConfigDir, resolvedDirs.appConfig, t, updateDirectoryState]);
+  }, [appConfigDir, isWebMode, resolvedDirs.appConfig, t, updateDirectoryState]);
 
   const resetDirectory = useCallback(
     async (app: AppId) => {

@@ -84,6 +84,12 @@ struct ValueRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct OptionalPathRequest {
+    path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ProviderIdRequest {
     provider_id: String,
 }
@@ -1638,6 +1644,21 @@ async fn save_settings(
     Ok(Json(true))
 }
 
+async fn get_app_config_dir_override() -> Json<Option<String>> {
+    Json(
+        crate::app_store::refresh_app_config_dir_override()
+            .map(|path| path.to_string_lossy().to_string()),
+    )
+}
+
+async fn set_app_config_dir_override(
+    Json(payload): Json<OptionalPathRequest>,
+) -> Result<Json<bool>, ApiError> {
+    crate::app_store::set_app_config_dir_override(payload.path.as_deref())
+        .map_err(|e| ApiError::internal(format!("failed to save app config dir override: {e}")))?;
+    Ok(Json(true))
+}
+
 async fn get_rectifier_config(
     State(state): State<WebApiState>,
 ) -> Result<Json<RectifierConfig>, ApiError> {
@@ -2633,6 +2654,10 @@ pub async fn run_web_server() -> Result<(), String> {
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
+        .route(
+            "/api/settings/app-config-dir-override",
+            get(get_app_config_dir_override).put(set_app_config_dir_override),
+        )
         .route("/api/webdav/test", post(webdav_test_connection))
         .route("/api/webdav/upload", post(webdav_sync_upload))
         .route("/api/webdav/download", post(webdav_sync_download))

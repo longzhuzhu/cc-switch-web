@@ -238,6 +238,18 @@ export async function getWebConfigDir(appId: AppId): Promise<string> {
   return requestJson<string>(`/api/settings/config-dir/${appId}`);
 }
 
+export async function getWebAppConfigDirOverride(): Promise<string | null> {
+  return requestJson<string | null>("/api/settings/app-config-dir-override");
+}
+
+export async function setWebAppConfigDirOverride(
+  path: string | null,
+): Promise<boolean> {
+  return requestWithBody<boolean>("/api/settings/app-config-dir-override", "PUT", {
+    path,
+  });
+}
+
 export async function getWebToolVersions(
   tools?: string[],
   wslShellByTool?: Record<

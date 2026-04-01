@@ -81,6 +81,7 @@
 - Tauri 托盘、单实例、轻量模式、关闭最小化到托盘与相关前端刷新兼容调用已从当前分支移除
 - 默认桌面 `main.rs` 入口、Windows 覆盖配置、`Info.plist`、`wix` 目录和 Common Controls 清单已从当前分支移除
 - 旧桌面 `run()` 启动器、`tauri-build`、`tauri.conf.json`、`tauri-plugin-log/process` 已从当前分支移除
+- `appConfigDir` 覆盖路径已改为本地 Rust 服务写入独立文件，不再依赖 Tauri Store
 
 ## 四、当前真正的收尾重点
 

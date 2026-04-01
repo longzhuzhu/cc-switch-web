@@ -9,6 +9,7 @@ import {
   deleteWebDbBackup,
   getWebLiveProviderIds,
   getWebAutoFailoverEnabled,
+  getWebAppConfigDirOverride,
   getWebAvailableProvidersForFailover,
   getWebCircuitBreakerConfig,
   getWebCircuitBreakerStats,
@@ -68,6 +69,7 @@ import {
   saveWebSettings,
   getWebRectifierConfig,
   setWebAutoFailoverEnabled,
+  setWebAppConfigDirOverride,
   setWebDefaultCostMultiplier,
   setWebLogConfig,
   setWebManagedAuthDefaultAccount,
@@ -685,7 +687,11 @@ export async function invoke<T>(
         Boolean(args?.enabled),
       )) as T;
     case "get_app_config_dir_override":
-      return null as T;
+      return (await getWebAppConfigDirOverride()) as T;
+    case "set_app_config_dir_override":
+      return (await setWebAppConfigDirOverride(
+        (args?.path as string | null | undefined) ?? null,
+      )) as T;
     case "get_config_dir":
       return (await getWebConfigDir(args?.app as AppId)) as T;
     case "open_external": {
