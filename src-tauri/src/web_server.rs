@@ -26,7 +26,7 @@ use crate::proxy::types::{
     AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, ProviderHealth, ProxyConfig,
     ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
 };
-use crate::services::omo::{OmoLocalFileData, OmoService, SLIM, STANDARD};
+use crate::services::omo::OmoLocalFileData;
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillUninstallResult,
 };
@@ -1875,7 +1875,8 @@ async fn get_config_dir(Path(app): Path<String>) -> Result<Json<String>, ApiErro
 }
 
 async fn get_omo_local_file() -> Result<Json<OmoLocalFileData>, ApiError> {
-    let data = OmoService::read_local_file(&STANDARD)
+    let data = crate::commands::read_omo_local_file_internal()
+        .await
         .map_err(|e| ApiError::internal(format!("failed to read OMO local file: {e}")))?;
     Ok(Json(data))
 }
@@ -1883,38 +1884,22 @@ async fn get_omo_local_file() -> Result<Json<OmoLocalFileData>, ApiError> {
 async fn get_current_omo_provider_id(
     State(state): State<WebApiState>,
 ) -> Result<Json<String>, ApiError> {
-    let provider = state
-        .app_state
-        .db
-        .get_current_omo_provider("opencode", "omo")
+    let provider_id = crate::commands::get_current_omo_provider_id_internal(state.app_state.as_ref())
+        .await
         .map_err(|e| ApiError::internal(format!("failed to load current OMO provider: {e}")))?;
-    Ok(Json(provider.map(|p| p.id).unwrap_or_default()))
+    Ok(Json(provider_id))
 }
 
 async fn disable_current_omo(State(state): State<WebApiState>) -> Result<StatusCode, ApiError> {
-    let providers = state
-        .app_state
-        .db
-        .get_all_providers("opencode")
-        .map_err(|e| ApiError::internal(format!("failed to load OMO providers: {e}")))?;
-    for (id, provider) in &providers {
-        if provider.category.as_deref() == Some("omo") {
-            state
-                .app_state
-                .db
-                .clear_omo_provider_current("opencode", id, "omo")
-                .map_err(|e| {
-                    ApiError::internal(format!("failed to clear current OMO provider: {e}"))
-                })?;
-        }
-    }
-    OmoService::delete_config_file(&STANDARD)
-        .map_err(|e| ApiError::internal(format!("failed to delete OMO config file: {e}")))?;
+    crate::commands::disable_current_omo_internal(state.app_state.as_ref())
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to disable OMO provider: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn get_omo_slim_local_file() -> Result<Json<OmoLocalFileData>, ApiError> {
-    let data = OmoService::read_local_file(&SLIM)
+    let data = crate::commands::read_omo_slim_local_file_internal()
+        .await
         .map_err(|e| ApiError::internal(format!("failed to read OMO Slim local file: {e}")))?;
     Ok(Json(data))
 }
@@ -1922,37 +1907,20 @@ async fn get_omo_slim_local_file() -> Result<Json<OmoLocalFileData>, ApiError> {
 async fn get_current_omo_slim_provider_id(
     State(state): State<WebApiState>,
 ) -> Result<Json<String>, ApiError> {
-    let provider = state
-        .app_state
-        .db
-        .get_current_omo_provider("opencode", "omo-slim")
-        .map_err(|e| {
-            ApiError::internal(format!("failed to load current OMO Slim provider: {e}"))
-        })?;
-    Ok(Json(provider.map(|p| p.id).unwrap_or_default()))
+    let provider_id = crate::commands::get_current_omo_slim_provider_id_internal(
+        state.app_state.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to load current OMO Slim provider: {e}")))?;
+    Ok(Json(provider_id))
 }
 
 async fn disable_current_omo_slim(
     State(state): State<WebApiState>,
 ) -> Result<StatusCode, ApiError> {
-    let providers = state
-        .app_state
-        .db
-        .get_all_providers("opencode")
-        .map_err(|e| ApiError::internal(format!("failed to load OMO Slim providers: {e}")))?;
-    for (id, provider) in &providers {
-        if provider.category.as_deref() == Some("omo-slim") {
-            state
-                .app_state
-                .db
-                .clear_omo_provider_current("opencode", id, "omo-slim")
-                .map_err(|e| {
-                    ApiError::internal(format!("failed to clear current OMO Slim provider: {e}"))
-                })?;
-        }
-    }
-    OmoService::delete_config_file(&SLIM)
-        .map_err(|e| ApiError::internal(format!("failed to delete OMO Slim config file: {e}")))?;
+    crate::commands::disable_current_omo_slim_internal(state.app_state.as_ref())
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to disable OMO Slim provider: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
