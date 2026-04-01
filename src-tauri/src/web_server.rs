@@ -2661,6 +2661,9 @@ fn resolve_frontend_dist_dir() -> Option<PathBuf> {
 
 pub async fn run_web_server() -> Result<(), String> {
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
+    if let Err(err) = db.periodic_backup_if_needed() {
+        log::warn!("startup periodic maintenance failed: {err}");
+    }
     let app_state = Arc::new(AppState::new(db));
     crate::services::webdav_auto_sync::start_worker(app_state.db.clone());
     let state = WebApiState {

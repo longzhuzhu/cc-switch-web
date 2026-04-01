@@ -12,7 +12,6 @@ mod init_status;
 mod mcp;
 mod openclaw_config;
 mod opencode_config;
-mod panic_hook;
 mod prompt;
 mod prompt_files;
 mod provider;

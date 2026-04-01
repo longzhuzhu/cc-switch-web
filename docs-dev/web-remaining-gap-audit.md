@@ -87,6 +87,7 @@
 - Failover 热切换与 WebDAV 自动同步的服务层逻辑已去掉 `AppHandle` 依赖，当前 Web-only 主链不再依赖 Tauri 事件才能运行
 - 命令层的故障转移与 Universal Provider 同步事件已从当前分支移除，前端同步改为显式请求/缓存失效而非依赖 Tauri event bus
 - Web 启动入口已重新接回 WebDAV auto sync worker，数据库变更现在能真正触发本地后台自动同步
+- Web 启动入口已接回周期备份/维护检查，旧备份策略配置重新对 Web 运行模式生效
 
 ## 四、当前真正的收尾重点
 

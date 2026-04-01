@@ -614,8 +614,6 @@ pub fn get_skill_sync_method() -> SyncMethod {
         .skill_sync_method
 }
 
-// ===== 备份策略管理函数 =====
-
 /// Get the effective auto-backup interval in hours (default 24)
 pub fn effective_backup_interval_hours() -> u32 {
     settings_store()
@@ -640,7 +638,6 @@ pub fn effective_backup_retain_count() -> usize {
         .map(|n| (n as usize).max(1))
         .unwrap_or(10)
 }
-
 
 // ===== WebDAV 同步设置管理函数 =====
 
