@@ -23,34 +23,28 @@ type OmoProfileData = (Option<Value>, Option<Value>, Option<Value>);
 pub struct OmoVariant {
     pub filename: &'static str,
     pub category: &'static str,
-    pub provider_prefix: &'static str,
     pub plugin_name: &'static str,
     pub plugin_prefix: &'static str,
     pub has_categories: bool,
     pub label: &'static str,
-    pub import_label: &'static str,
 }
 
 pub const STANDARD: OmoVariant = OmoVariant {
     filename: "oh-my-opencode.jsonc",
     category: "omo",
-    provider_prefix: "omo-",
     plugin_name: "oh-my-opencode@latest",
     plugin_prefix: "oh-my-opencode",
     has_categories: true,
     label: "OMO",
-    import_label: "Imported",
 };
 
 pub const SLIM: OmoVariant = OmoVariant {
     filename: "oh-my-opencode-slim.jsonc",
     category: "omo-slim",
-    provider_prefix: "omo-slim-",
     plugin_name: "oh-my-opencode-slim@latest",
     plugin_prefix: "oh-my-opencode-slim",
     has_categories: false,
     label: "OMO Slim",
-    import_label: "Imported Slim",
 };
 
 // ── Service ────────────────────────────────────────────────────
@@ -169,61 +163,6 @@ impl OmoService {
         }
         Value::Object(result)
     }
-
-    pub fn import_from_local(
-        state: &AppState,
-        v: &OmoVariant,
-    ) -> Result<crate::provider::Provider, AppError> {
-        let actual_path = Self::resolve_local_config_path(v)?;
-        let obj = Self::read_jsonc_object(&actual_path)?;
-
-        let mut settings = Map::new();
-        if let Some(agents) = obj.get("agents") {
-            settings.insert("agents".to_string(), agents.clone());
-        }
-        if v.has_categories {
-            if let Some(categories) = obj.get("categories") {
-                settings.insert("categories".to_string(), categories.clone());
-            }
-        }
-
-        let other = Self::extract_other_fields_with_keys(&obj, &["agents", "categories"]);
-        if !other.is_empty() {
-            settings.insert("otherFields".to_string(), Value::Object(other));
-        }
-
-        let provider_id = format!("{}{}", v.provider_prefix, uuid::Uuid::new_v4());
-        let name = format!(
-            "{} {}",
-            v.import_label,
-            chrono::Local::now().format("%Y-%m-%d %H:%M")
-        );
-        let settings_config =
-            serde_json::to_value(&settings).unwrap_or_else(|_| serde_json::json!({}));
-
-        let provider = crate::provider::Provider {
-            id: provider_id,
-            name,
-            settings_config,
-            website_url: None,
-            category: Some(v.category.to_string()),
-            created_at: Some(chrono::Utc::now().timestamp_millis()),
-            sort_index: None,
-            notes: None,
-            meta: None,
-            icon: None,
-            icon_color: None,
-            in_failover_queue: false,
-        };
-
-        state.db.save_provider("opencode", &provider)?;
-        state
-            .db
-            .set_omo_provider_current("opencode", &provider.id, v.category)?;
-        Self::write_config_to_file(state, v)?;
-        Ok(provider)
-    }
-
     pub fn read_local_file(v: &OmoVariant) -> Result<OmoLocalFileData, AppError> {
         let actual_path = Self::resolve_local_config_path(v)?;
         let metadata = std::fs::metadata(&actual_path).ok();

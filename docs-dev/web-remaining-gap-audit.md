@@ -88,6 +88,7 @@
 - 命令层的故障转移与 Universal Provider 同步事件已从当前分支移除，前端同步改为显式请求/缓存失效而非依赖 Tauri event bus
 - Web 启动入口已重新接回 WebDAV auto sync worker，数据库变更现在能真正触发本地后台自动同步
 - Web 启动入口已接回周期备份/维护检查，旧备份策略配置重新对 Web 运行模式生效
+- OMO 仅保留 Web 正在使用的“读取本地配置填充表单”路径，旧的 Rust 侧直接导入生成 provider 逻辑已移除
 
 ## 四、当前真正的收尾重点
 
