@@ -1040,10 +1040,11 @@ async fn get_usage_summary(
     State(state): State<WebApiState>,
     Query(query): Query<UsageRangeQuery>,
 ) -> Result<Json<crate::services::usage_stats::UsageSummary>, ApiError> {
-    let summary = state
-        .app_state
-        .db
-        .get_usage_summary(query.start_date, query.end_date)
+    let summary = crate::get_usage_summary_internal(
+        state.app_state.as_ref(),
+        query.start_date,
+        query.end_date,
+    )
         .map_err(|e| ApiError::internal(format!("failed to load usage summary: {e}")))?;
     Ok(Json(summary))
 }
@@ -1052,10 +1053,11 @@ async fn get_usage_trends(
     State(state): State<WebApiState>,
     Query(query): Query<UsageRangeQuery>,
 ) -> Result<Json<Vec<crate::services::usage_stats::DailyStats>>, ApiError> {
-    let trends = state
-        .app_state
-        .db
-        .get_daily_trends(query.start_date, query.end_date)
+    let trends = crate::get_usage_trends_internal(
+        state.app_state.as_ref(),
+        query.start_date,
+        query.end_date,
+    )
         .map_err(|e| ApiError::internal(format!("failed to load usage trends: {e}")))?;
     Ok(Json(trends))
 }
@@ -1063,10 +1065,7 @@ async fn get_usage_trends(
 async fn get_usage_provider_stats(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<crate::services::usage_stats::ProviderStats>>, ApiError> {
-    let stats = state
-        .app_state
-        .db
-        .get_provider_stats()
+    let stats = crate::get_provider_stats_internal(state.app_state.as_ref())
         .map_err(|e| ApiError::internal(format!("failed to load provider stats: {e}")))?;
     Ok(Json(stats))
 }
@@ -1074,10 +1073,7 @@ async fn get_usage_provider_stats(
 async fn get_usage_model_stats(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<crate::services::usage_stats::ModelStats>>, ApiError> {
-    let stats = state
-        .app_state
-        .db
-        .get_model_stats()
+    let stats = crate::get_model_stats_internal(state.app_state.as_ref())
         .map_err(|e| ApiError::internal(format!("failed to load model stats: {e}")))?;
     Ok(Json(stats))
 }
@@ -1086,14 +1082,12 @@ async fn get_usage_request_logs(
     State(state): State<WebApiState>,
     Json(payload): Json<RequestLogsPayload>,
 ) -> Result<Json<crate::services::usage_stats::PaginatedLogs>, ApiError> {
-    let logs = state
-        .app_state
-        .db
-        .get_request_logs(
-            &payload.filters,
-            payload.page.unwrap_or(0),
-            payload.page_size.unwrap_or(20),
-        )
+    let logs = crate::get_request_logs_internal(
+        state.app_state.as_ref(),
+        payload.filters,
+        payload.page.unwrap_or(0),
+        payload.page_size.unwrap_or(20),
+    )
         .map_err(|e| ApiError::internal(format!("failed to load request logs: {e}")))?;
     Ok(Json(logs))
 }
@@ -1102,10 +1096,7 @@ async fn get_usage_request_detail(
     State(state): State<WebApiState>,
     Path(request_id): Path<String>,
 ) -> Result<Json<Option<crate::services::usage_stats::RequestLogDetail>>, ApiError> {
-    let detail = state
-        .app_state
-        .db
-        .get_request_detail(&request_id)
+    let detail = crate::get_request_detail_internal(state.app_state.as_ref(), request_id)
         .map_err(|e| ApiError::internal(format!("failed to load request detail: {e}")))?;
     Ok(Json(detail))
 }
@@ -1113,48 +1104,21 @@ async fn get_usage_request_detail(
 async fn get_usage_model_pricing(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<UsageModelPricingInfo>>, ApiError> {
-    state
-        .app_state
-        .db
-        .ensure_model_pricing_seeded()
-        .map_err(|e| ApiError::internal(format!("failed to seed model pricing: {e}")))?;
-
-    let db = state.app_state.db.clone();
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| ApiError::internal(format!("failed to lock database connection: {e}")))?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT model_id, display_name, input_cost_per_million, output_cost_per_million,
-                    cache_read_cost_per_million, cache_creation_cost_per_million
-             FROM model_pricing
-             ORDER BY display_name",
-        )
-        .map_err(|e| ApiError::internal(format!("failed to prepare pricing query: {e}")))?;
-
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(UsageModelPricingInfo {
-                model_id: row.get(0)?,
-                display_name: row.get(1)?,
-                input_cost_per_million: row.get(2)?,
-                output_cost_per_million: row.get(3)?,
-                cache_read_cost_per_million: row.get(4)?,
-                cache_creation_cost_per_million: row.get(5)?,
+    let pricing = crate::get_model_pricing_internal(state.app_state.as_ref())
+        .map_err(|e| ApiError::internal(format!("failed to load model pricing: {e}")))?;
+    Ok(Json(
+        pricing
+            .into_iter()
+            .map(|item| UsageModelPricingInfo {
+                model_id: item.model_id,
+                display_name: item.display_name,
+                input_cost_per_million: item.input_cost_per_million,
+                output_cost_per_million: item.output_cost_per_million,
+                cache_read_cost_per_million: item.cache_read_cost_per_million,
+                cache_creation_cost_per_million: item.cache_creation_cost_per_million,
             })
-        })
-        .map_err(|e| ApiError::internal(format!("failed to query pricing rows: {e}")))?;
-
-    let mut pricing = Vec::new();
-    for row in rows {
-        pricing.push(
-            row.map_err(|e| ApiError::internal(format!("failed to decode pricing row: {e}")))?,
-        );
-    }
-
-    Ok(Json(pricing))
+            .collect(),
+    ))
 }
 
 async fn update_usage_model_pricing(
@@ -1162,24 +1126,14 @@ async fn update_usage_model_pricing(
     Path(model_id): Path<String>,
     Json(payload): Json<UpdateModelPricingPayload>,
 ) -> Result<StatusCode, ApiError> {
-    let db = state.app_state.db.clone();
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| ApiError::internal(format!("failed to lock database connection: {e}")))?;
-    conn.execute(
-        "INSERT OR REPLACE INTO model_pricing (
-            model_id, display_name, input_cost_per_million, output_cost_per_million,
-            cache_read_cost_per_million, cache_creation_cost_per_million
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        rusqlite::params![
-            model_id,
-            payload.display_name,
-            payload.input_cost,
-            payload.output_cost,
-            payload.cache_read_cost,
-            payload.cache_creation_cost
-        ],
+    crate::update_model_pricing_internal(
+        state.app_state.as_ref(),
+        model_id,
+        payload.display_name,
+        payload.input_cost,
+        payload.output_cost,
+        payload.cache_read_cost,
+        payload.cache_creation_cost,
     )
     .map_err(|e| ApiError::internal(format!("failed to update model pricing: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -1189,16 +1143,8 @@ async fn delete_usage_model_pricing(
     State(state): State<WebApiState>,
     Path(model_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    let db = state.app_state.db.clone();
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| ApiError::internal(format!("failed to lock database connection: {e}")))?;
-    conn.execute(
-        "DELETE FROM model_pricing WHERE model_id = ?1",
-        rusqlite::params![model_id],
-    )
-    .map_err(|e| ApiError::internal(format!("failed to delete model pricing: {e}")))?;
+    crate::delete_model_pricing_internal(state.app_state.as_ref(), model_id)
+        .map_err(|e| ApiError::internal(format!("failed to delete model pricing: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1206,10 +1152,7 @@ async fn get_usage_provider_limits(
     State(state): State<WebApiState>,
     Path((app_type, provider_id)): Path<(String, String)>,
 ) -> Result<Json<crate::services::usage_stats::ProviderLimitStatus>, ApiError> {
-    let limits = state
-        .app_state
-        .db
-        .check_provider_limits(&provider_id, &app_type)
+    let limits = crate::check_provider_limits_internal(state.app_state.as_ref(), provider_id, app_type)
         .map_err(|e| ApiError::internal(format!("failed to load provider limits: {e}")))?;
     Ok(Json(limits))
 }

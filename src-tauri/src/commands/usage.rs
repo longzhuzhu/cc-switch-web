@@ -5,6 +5,14 @@ use crate::services::usage_stats::*;
 use crate::store::AppState;
 use tauri::State;
 
+pub fn get_usage_summary_internal(
+    state: &AppState,
+    start_date: Option<i64>,
+    end_date: Option<i64>,
+) -> Result<UsageSummary, AppError> {
+    state.db.get_usage_summary(start_date, end_date)
+}
+
 /// 获取使用量汇总
 #[tauri::command]
 pub fn get_usage_summary(
@@ -12,7 +20,15 @@ pub fn get_usage_summary(
     start_date: Option<i64>,
     end_date: Option<i64>,
 ) -> Result<UsageSummary, AppError> {
-    state.db.get_usage_summary(start_date, end_date)
+    get_usage_summary_internal(state.inner(), start_date, end_date)
+}
+
+pub fn get_usage_trends_internal(
+    state: &AppState,
+    start_date: Option<i64>,
+    end_date: Option<i64>,
+) -> Result<Vec<DailyStats>, AppError> {
+    state.db.get_daily_trends(start_date, end_date)
 }
 
 /// 获取每日趋势
@@ -22,19 +38,36 @@ pub fn get_usage_trends(
     start_date: Option<i64>,
     end_date: Option<i64>,
 ) -> Result<Vec<DailyStats>, AppError> {
-    state.db.get_daily_trends(start_date, end_date)
+    get_usage_trends_internal(state.inner(), start_date, end_date)
+}
+
+pub fn get_provider_stats_internal(state: &AppState) -> Result<Vec<ProviderStats>, AppError> {
+    state.db.get_provider_stats()
 }
 
 /// 获取 Provider 统计
 #[tauri::command]
 pub fn get_provider_stats(state: State<'_, AppState>) -> Result<Vec<ProviderStats>, AppError> {
-    state.db.get_provider_stats()
+    get_provider_stats_internal(state.inner())
+}
+
+pub fn get_model_stats_internal(state: &AppState) -> Result<Vec<ModelStats>, AppError> {
+    state.db.get_model_stats()
 }
 
 /// 获取模型统计
 #[tauri::command]
 pub fn get_model_stats(state: State<'_, AppState>) -> Result<Vec<ModelStats>, AppError> {
-    state.db.get_model_stats()
+    get_model_stats_internal(state.inner())
+}
+
+pub fn get_request_logs_internal(
+    state: &AppState,
+    filters: LogFilters,
+    page: u32,
+    page_size: u32,
+) -> Result<PaginatedLogs, AppError> {
+    state.db.get_request_logs(&filters, page, page_size)
 }
 
 /// 获取请求日志列表
@@ -45,7 +78,14 @@ pub fn get_request_logs(
     page: u32,
     page_size: u32,
 ) -> Result<PaginatedLogs, AppError> {
-    state.db.get_request_logs(&filters, page, page_size)
+    get_request_logs_internal(state.inner(), filters, page, page_size)
+}
+
+pub fn get_request_detail_internal(
+    state: &AppState,
+    request_id: String,
+) -> Result<Option<RequestLogDetail>, AppError> {
+    state.db.get_request_detail(&request_id)
 }
 
 /// 获取单个请求详情
@@ -54,19 +94,16 @@ pub fn get_request_detail(
     state: State<'_, AppState>,
     request_id: String,
 ) -> Result<Option<RequestLogDetail>, AppError> {
-    state.db.get_request_detail(&request_id)
+    get_request_detail_internal(state.inner(), request_id)
 }
 
-/// 获取模型定价列表
-#[tauri::command]
-pub fn get_model_pricing(state: State<'_, AppState>) -> Result<Vec<ModelPricingInfo>, AppError> {
+pub fn get_model_pricing_internal(state: &AppState) -> Result<Vec<ModelPricingInfo>, AppError> {
     log::info!("获取模型定价列表");
     state.db.ensure_model_pricing_seeded()?;
 
     let db = state.db.clone();
     let conn = crate::database::lock_conn!(db.conn);
 
-    // 检查表是否存在
     let table_exists: bool = conn
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='model_pricing'",
@@ -107,10 +144,14 @@ pub fn get_model_pricing(state: State<'_, AppState>) -> Result<Vec<ModelPricingI
     Ok(pricing)
 }
 
-/// 更新模型定价
+/// 获取模型定价列表
 #[tauri::command]
-pub fn update_model_pricing(
-    state: State<'_, AppState>,
+pub fn get_model_pricing(state: State<'_, AppState>) -> Result<Vec<ModelPricingInfo>, AppError> {
+    get_model_pricing_internal(state.inner())
+}
+
+pub fn update_model_pricing_internal(
+    state: &AppState,
     model_id: String,
     display_name: String,
     input_cost: String,
@@ -140,6 +181,36 @@ pub fn update_model_pricing(
     Ok(())
 }
 
+/// 更新模型定价
+#[tauri::command]
+pub fn update_model_pricing(
+    state: State<'_, AppState>,
+    model_id: String,
+    display_name: String,
+    input_cost: String,
+    output_cost: String,
+    cache_read_cost: String,
+    cache_creation_cost: String,
+) -> Result<(), AppError> {
+    update_model_pricing_internal(
+        state.inner(),
+        model_id,
+        display_name,
+        input_cost,
+        output_cost,
+        cache_read_cost,
+        cache_creation_cost,
+    )
+}
+
+pub fn check_provider_limits_internal(
+    state: &AppState,
+    provider_id: String,
+    app_type: String,
+) -> Result<crate::services::usage_stats::ProviderLimitStatus, AppError> {
+    state.db.check_provider_limits(&provider_id, &app_type)
+}
+
 /// 检查 Provider 使用限额
 #[tauri::command]
 pub fn check_provider_limits(
@@ -147,23 +218,30 @@ pub fn check_provider_limits(
     provider_id: String,
     app_type: String,
 ) -> Result<crate::services::usage_stats::ProviderLimitStatus, AppError> {
-    state.db.check_provider_limits(&provider_id, &app_type)
+    check_provider_limits_internal(state.inner(), provider_id, app_type)
 }
 
-/// 删除模型定价
-#[tauri::command]
-pub fn delete_model_pricing(state: State<'_, AppState>, model_id: String) -> Result<(), AppError> {
+pub fn delete_model_pricing_internal(
+    state: &AppState,
+    model_id: String,
+) -> Result<(), AppError> {
     let db = state.db.clone();
     let conn = crate::database::lock_conn!(db.conn);
 
     conn.execute(
         "DELETE FROM model_pricing WHERE model_id = ?1",
-        rusqlite::params![model_id],
+        rusqlite::params![model_id.clone()],
     )
     .map_err(|e| AppError::Database(format!("删除模型定价失败: {e}")))?;
 
     log::info!("已删除模型定价: {model_id}");
     Ok(())
+}
+
+/// 删除模型定价
+#[tauri::command]
+pub fn delete_model_pricing(state: State<'_, AppState>, model_id: String) -> Result<(), AppError> {
+    delete_model_pricing_internal(state.inner(), model_id)
 }
 
 /// 模型定价信息
