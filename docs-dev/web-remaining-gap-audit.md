@@ -1,6 +1,6 @@
 # Web 化剩余缺口审计
 
-更新时间：2026-04-01（完成 Web 兼容 API 收口后）
+更新时间：2026-04-01（完成 Web runtime 差集复核后）
 
 ## 结论
 
@@ -36,7 +36,6 @@
 
 | 项目 | 当前状态 | 建议 | 原因 |
 |---|---|---|---|
-| `restart_app` | Web 未映射 | 删除 Web 依赖，保留 Tauri 或清理 | Web 本地服务模式不需要应用重启入口 |
 | `check_for_updates` | Web 未映射 | 直接保持桌面专用 | 自动更新属于桌面壳能力 |
 | `set_auto_launch` / `get_auto_launch_status` | Web 未映射 | 保持桌面专用或删除 | 开机自启不是浏览器产品能力 |
 | `is_portable_mode` | Web 未映射 | 保持桌面专用或删除 | 属于桌面分发形态判断 |
@@ -96,26 +95,34 @@
 - Web 启动入口已重新接回 WebDAV auto sync worker，数据库变更现在能真正触发本地后台自动同步
 - Web 启动入口已接回周期备份/维护检查，旧备份策略配置重新对 Web 运行模式生效
 - OMO 仅保留 Web 正在使用的“读取本地配置填充表单”路径，旧的 Rust 侧直接导入生成 provider 逻辑已移除
+- `restart_app` 的测试 mock 已删除，Rust 清单中无引用的 `webkit2gtk` / `winreg` / `objc2` / `objc2-app-kit` 直接依赖已移除
 
 ## 四、基于前端命令差集的剩余项
 
-以 `src` 中实际 `invoke(...)` 调用与 Web runtime 映射做差后，当前剩余未映射命令主要如下：
+以 `src` 中实际 `invoke(...)` 调用与 Web runtime 映射做差后，当前结果已经变为：
 
-| 类别 | 命令 | 当前判断 | 建议 |
+| 指标 | 当前结果 | 结论 |
+|---|---|---|
+| 前端实际 `invoke(...)` 命令总数 | 152 | 已完成复核 |
+| Web runtime 已映射命令总数 | 185 | 包含主路径命令和兼容别名 |
+| 前端调用但 Web runtime 未映射 | 0 | 当前不存在“前端调用会直接落到 `not available yet`”的命令差集 |
+
+这意味着当前剩余问题已经不是“Web 核心功能缺失”，而是“兼容层偏厚”。
+
+当前更值得继续清理的是这些“已映射但前端现阶段无调用”的兼容项：
+
+| 类别 | 代表命令 | 当前判断 | 建议 |
 |---|---|---|---|
-| 环境变量治理 | `check_env_conflicts` / `delete_env_vars` / `restore_env_backup` | Web 主界面入口已移除，不属于本地 Web 服务主链 | 保持不映射，并继续清理残余运行时代码 |
-| 桌面对话框 | `pick_directory` / `open_file_dialog` / `save_file_dialog` / `open_zip_file_dialog` | Web 前端主路径已不再依赖 | 不再迁移，并继续清理残余封装 |
-| 桌面目录打开 | `open_workspace_directory` | Web 前端主路径已不再依赖 | 不再迁移，并继续清理残余封装 |
-| 旧 MCP API | `get_claude_mcp_status` / `read_claude_mcp_config` / `upsert_claude_mcp_server` / `delete_claude_mcp_server` / `get_mcp_config` / `upsert_mcp_server_in_config` / `delete_mcp_server_in_config` / `set_mcp_enabled` / `validate_mcp_command` | 当前页面主路径已走统一 MCP API，差集里这批主要是旧封装残留 | 确认无入口后删除旧封装 |
-| 旧 Skills API | `get_skills` / `get_skills_for_app` / `install_skill` / `install_skill_for_app` / `uninstall_skill` / `uninstall_skill_for_app` / `install_skills_from_zip` | 当前页面主路径已走统一 Skills API；前端 ZIP 安装已统一成上传归档 | 确认无入口后继续清理运行时残留 |
-| 旧导入导出文件路径 API | `export_config_to_file` / `import_config_from_file` | Web 前端主路径已不再依赖 | 保留运行时兼容时再评估，前端不再迁移 |
-| 未接入页面的路径查询 | `get_claude_code_config_path` / `get_app_config_path` | 当前 Web 页面未使用 | 评估后删除或继续仅保留桌面 |
+| 旧认证兼容别名 | `auth_*` / `copilot_*` 旧命令别名 | 主要用于兼容旧 API 名称，不是当前页面主路径 | 继续核对是否仍被测试、脚本或外部调用依赖，确认后再收口 |
+| 旧 Workspace / Daily Memory 别名 | `read_workspace_file` / `write_workspace_file` / `list_daily_memory_files` 等 | Web 主路径已能工作，但仍保留旧命令名 | 可以逐步收敛到统一 REST API 对应的调用封装 |
+| 旧通用配置兼容命令 | `get_claude_common_config_snippet` / `get_common_config_snippet` / `extract_common_config_snippet` | 当前更偏兼容层保留 | 后续统一命名，减少别名数量 |
+| 旧代理兼容命令 | `get_global_proxy_url` / `scan_local_proxies` / `test_proxy_url` / `get_upstream_proxy_status` | 已有 Web 路径，但不是所有命令都由当前页面直接触发 | 评估后保留必要能力，删除无入口别名 |
 
-换句话说，当前剩余差集已经不再是“Web 核心功能缺失”，而是：
+换句话说，当前真正剩余的是：
 
 1. 桌面专属能力的有意识不迁移
 2. 旧 API 别名和死代码的收口
-3. 个别只在桌面模式启用的治理型能力
+3. 个别兼容命令在 Web runtime 中仍然保留但暂无当前页面调用
 
 ## 五、当前真正的收尾重点
 
