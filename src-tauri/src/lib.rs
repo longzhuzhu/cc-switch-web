@@ -485,27 +485,6 @@ pub fn run() {
                 });
             });
 
-            // Linux: 禁用 WebKitGTK 硬件加速，防止 EGL 初始化失败导致白屏
-            #[cfg(target_os = "linux")]
-            {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.with_webview(|webview| {
-                        use webkit2gtk::{WebViewExt, SettingsExt, HardwareAccelerationPolicy};
-                        let wk_webview = webview.inner();
-                        if let Some(settings) = WebViewExt::settings(&wk_webview) {
-                            SettingsExt::set_hardware_acceleration_policy(&settings, HardwareAccelerationPolicy::Never);
-                            log::info!("已禁用 WebKitGTK 硬件加速");
-                        }
-                    });
-                }
-            }
-
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                log::info!("正常启动模式：主窗口已显示");
-            }
-
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -707,8 +686,6 @@ pub fn run() {
             commands::test_proxy_url,
             commands::get_upstream_proxy_status,
             commands::scan_local_proxies,
-            // Window theme control
-            commands::set_window_theme,
             // Generic managed auth commands
             commands::auth_start_login,
             commands::auth_poll_for_account,
