@@ -6,7 +6,6 @@ use crate::database::FailoverQueueItem;
 use crate::provider::Provider;
 use crate::store::AppState;
 use std::str::FromStr;
-use tauri::Emitter;
 
 /// 获取故障转移队列
 #[tauri::command]
@@ -77,7 +76,6 @@ pub async fn get_auto_failover_enabled(
 /// 注意：关闭故障转移时不会清除队列，队列内容会保留供下次开启时使用
 #[tauri::command]
 pub async fn set_auto_failover_enabled(
-    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     app_type: String,
     enabled: bool,
@@ -150,14 +148,6 @@ pub async fn set_auto_failover_enabled(
             .proxy_service
             .switch_proxy_target(&app_type, &p1_provider_id)
             .await?;
-
-        // 发射 provider-switched 事件（让前端刷新当前供应商）
-        let event_data = serde_json::json!({
-            "appType": app_type,
-            "providerId": p1_provider_id,
-            "source": "failoverEnabled"
-        });
-        let _ = app.emit("provider-switched", event_data);
     }
 
     Ok(())

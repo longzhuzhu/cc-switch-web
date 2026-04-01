@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { invoke } from "@/lib/runtime/tauri/core";
-import { listen } from "@/lib/runtime/tauri/event";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -29,7 +28,6 @@ import {
   providersApi,
   settingsApi,
   type AppId,
-  type ProviderSwitchEvent,
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
@@ -85,12 +83,6 @@ type View =
   | "openclawEnv"
   | "openclawTools"
   | "openclawAgents";
-
-interface WebDavSyncStatusUpdatedPayload {
-  source?: string;
-  status?: string;
-  error?: string;
-}
 
 const DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px
 const HEADER_HEIGHT = 64; // px
@@ -311,95 +303,6 @@ function App() {
       },
     });
   };
-
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-
-    const setupListener = async () => {
-      try {
-        unsubscribe = await providersApi.onSwitched(
-          async (event: ProviderSwitchEvent) => {
-            if (event.appType === activeApp) {
-              await refetch();
-            }
-          },
-        );
-      } catch (error) {
-        console.error("[App] Failed to subscribe provider switch event", error);
-      }
-    };
-
-    setupListener();
-    return () => {
-      unsubscribe?.();
-    };
-  }, [activeApp, refetch]);
-
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-
-    const setupListener = async () => {
-      try {
-        unsubscribe = await listen("universal-provider-synced", async () => {
-          await queryClient.invalidateQueries({ queryKey: ["providers"] });
-        });
-      } catch (error) {
-        console.error(
-          "[App] Failed to subscribe universal-provider-synced event",
-          error,
-        );
-      }
-    };
-
-    setupListener();
-    return () => {
-      unsubscribe?.();
-    };
-  }, [queryClient]);
-
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let active = true;
-
-    const setupListener = async () => {
-      try {
-        const off = await listen(
-          "webdav-sync-status-updated",
-          async (event) => {
-            const payload = (event.payload ??
-              {}) as WebDavSyncStatusUpdatedPayload;
-            await queryClient.invalidateQueries({ queryKey: ["settings"] });
-
-            if (payload.source !== "auto" || payload.status !== "error") {
-              return;
-            }
-
-            toast.error(
-              t("settings.webdavSync.autoSyncFailedToast", {
-                error: payload.error || t("common.unknown"),
-              }),
-            );
-          },
-        );
-        if (!active) {
-          off();
-          return;
-        }
-        unsubscribe = off;
-      } catch (error) {
-        console.error(
-          "[App] Failed to subscribe webdav-sync-status-updated event",
-          error,
-        );
-      }
-    };
-
-    void setupListener();
-    return () => {
-      active = false;
-      unsubscribe?.();
-    };
-  }, [queryClient, t]);
 
   useEffect(() => {
     if (isWebMode) {

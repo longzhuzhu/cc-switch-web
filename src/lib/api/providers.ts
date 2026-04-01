@@ -1,5 +1,4 @@
 import { invoke } from "@/lib/runtime/tauri/core";
-import { listen, type UnlistenFn } from "@/lib/runtime/tauri/event";
 import type {
   Provider,
   UniversalProvider,
@@ -10,11 +9,6 @@ import type { AppId } from "./types";
 export interface ProviderSortUpdate {
   id: string;
   sortIndex: number;
-}
-
-export interface ProviderSwitchEvent {
-  appType: AppId;
-  providerId: string;
 }
 
 export interface SwitchResult {
@@ -63,15 +57,6 @@ export const providersApi = {
     appId: AppId,
   ): Promise<boolean> {
     return await invoke("update_providers_sort_order", { updates, app: appId });
-  },
-
-  async onSwitched(
-    handler: (event: ProviderSwitchEvent) => void,
-  ): Promise<UnlistenFn> {
-    return await listen("provider-switched", (event) => {
-      const payload = event.payload as ProviderSwitchEvent;
-      handler(payload);
-    });
   },
 
   /**
