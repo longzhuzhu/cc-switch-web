@@ -670,7 +670,6 @@
     "loadSettingsFailed": "Failed to load settings:",
     "getConfigPathFailed": "Failed to get config path:",
     "getConfigDirFailed": "Failed to get config directory:",
-    "detectPortableFailed": "Failed to detect portable mode:",
     "saveSettingsFailed": "Failed to save settings:",
     "updateFailed": "Update failed:",
     "checkUpdateFailed": "Check for updates failed:",

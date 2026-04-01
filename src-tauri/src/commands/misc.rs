@@ -37,31 +37,6 @@ pub async fn open_external(app: AppHandle, url: String) -> Result<bool, String> 
     Ok(true)
 }
 
-/// 检查更新
-#[tauri::command]
-pub async fn check_for_updates(handle: AppHandle) -> Result<bool, String> {
-    handle
-        .opener()
-        .open_url(
-            "https://github.com/farion1231/cc-switch/releases/latest",
-            None::<String>,
-        )
-        .map_err(|e| format!("打开更新页面失败: {e}"))?;
-
-    Ok(true)
-}
-
-/// 判断是否为便携版（绿色版）运行
-#[tauri::command]
-pub async fn is_portable_mode() -> Result<bool, String> {
-    let exe_path = std::env::current_exe().map_err(|e| format!("获取可执行路径失败: {e}"))?;
-    if let Some(dir) = exe_path.parent() {
-        Ok(dir.join("portable.ini").is_file())
-    } else {
-        Ok(false)
-    }
-}
-
 /// 获取应用启动阶段的初始化错误（若有）。
 /// 用于前端在早期主动拉取，避免事件订阅竞态导致的提示缺失。
 #[tauri::command]
