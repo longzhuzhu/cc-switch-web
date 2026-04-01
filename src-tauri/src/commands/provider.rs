@@ -345,7 +345,15 @@ pub async fn test_api_endpoints(
     urls: Vec<String>,
     #[allow(non_snake_case)] timeoutSecs: Option<u64>,
 ) -> Result<Vec<EndpointLatency>, String> {
-    SpeedtestService::test_endpoints(urls, timeoutSecs)
+    test_api_endpoints_internal(urls, timeoutSecs)
+        .await
+}
+
+pub(crate) async fn test_api_endpoints_internal(
+    urls: Vec<String>,
+    timeout_secs: Option<u64>,
+) -> Result<Vec<EndpointLatency>, String> {
+    SpeedtestService::test_endpoints(urls, timeout_secs)
         .await
         .map_err(|e| e.to_string())
 }
@@ -534,9 +542,8 @@ pub fn import_opencode_providers_from_live(state: State<'_, AppState>) -> Result
 
 pub(crate) fn import_opencode_providers_from_live_internal(
     state: &AppState,
-) -> Result<usize, String> {
+) -> Result<usize, crate::error::AppError> {
     crate::services::provider::import_opencode_providers_from_live(state)
-        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

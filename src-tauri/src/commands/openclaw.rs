@@ -14,8 +14,14 @@ use crate::store::AppState;
 /// configured in openclaw.json.
 #[tauri::command]
 pub fn import_openclaw_providers_from_live(state: State<'_, AppState>) -> Result<usize, String> {
-    crate::services::provider::import_openclaw_providers_from_live(state.inner())
+    import_openclaw_providers_from_live_internal(state.inner())
         .map_err(|e| e.to_string())
+}
+
+pub(crate) fn import_openclaw_providers_from_live_internal(
+    state: &AppState,
+) -> Result<usize, crate::error::AppError> {
+    crate::services::provider::import_openclaw_providers_from_live(state)
 }
 
 /// Get provider IDs in the OpenClaw live config.

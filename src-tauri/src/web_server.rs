@@ -458,11 +458,11 @@ async fn import_providers_from_live(
 ) -> Result<Json<usize>, ApiError> {
     let imported = match AppType::from_str(&app) {
         Ok(AppType::OpenCode) => {
-            crate::services::provider::import_opencode_providers_from_live(state.app_state.as_ref())
+            crate::commands::import_opencode_providers_from_live_internal(state.app_state.as_ref())
         }
-        Ok(AppType::OpenClaw) => {
-            crate::services::provider::import_openclaw_providers_from_live(state.app_state.as_ref())
-        }
+        Ok(AppType::OpenClaw) => crate::commands::import_openclaw_providers_from_live_internal(
+            state.app_state.as_ref(),
+        ),
         Ok(app_type) => {
             return Err(ApiError::bad_request(format!(
                 "{} does not support importing providers from live config",
@@ -582,10 +582,9 @@ async fn test_usage_script(
 async fn test_api_endpoints(
     Json(payload): Json<EndpointTestRequest>,
 ) -> Result<Json<Vec<crate::services::EndpointLatency>>, ApiError> {
-    let results =
-        crate::services::SpeedtestService::test_endpoints(payload.urls, payload.timeout_secs)
-            .await
-            .map_err(|e| ApiError::internal(format!("failed to test api endpoints: {e}")))?;
+    let results = crate::commands::test_api_endpoints_internal(payload.urls, payload.timeout_secs)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to test api endpoints: {e}")))?;
     Ok(Json(results))
 }
 
