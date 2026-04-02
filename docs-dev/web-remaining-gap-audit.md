@@ -107,6 +107,7 @@
 - 无 Web 路由入口的 `init_status.rs` 与对应初始化状态拉取命令已删除，避免继续保留未接入的启动阶段兼容状态通道
 - `session_manager` 也已收窄为 crate 内导出，Session API 统一经由 `commands::` 调用
 - `ProxyService` 已不再直接依赖 DAO 中的 legacy 聚合配置接口；代理配置读取/写回已改为由 `GlobalProxyConfig + Claude AppProxyConfig + enabled 派生状态` 组合，`dao/proxy.rs` 中无调用点的 `get_proxy_config / update_proxy_config / set_live_takeover_active` 已删除
+- 旧的熔断器聚合兼容接口也已收口为显式使用 `claude` 的 `AppProxyConfig` 字段，`commands/proxy.rs` 与 `provider_router` 测试已不再依赖 `get_circuit_breaker_config / update_circuit_breaker_config`
 
 ## 四、基于前端命令差集的剩余项
 

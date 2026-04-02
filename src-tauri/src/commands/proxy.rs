@@ -7,6 +7,27 @@ use crate::proxy::types::*;
 use crate::proxy::{CircuitBreakerConfig, CircuitBreakerStats};
 use crate::store::AppState;
 
+fn circuit_breaker_config_from_app(config: &AppProxyConfig) -> CircuitBreakerConfig {
+    CircuitBreakerConfig {
+        failure_threshold: config.circuit_failure_threshold,
+        success_threshold: config.circuit_success_threshold,
+        timeout_seconds: config.circuit_timeout_seconds as u64,
+        error_rate_threshold: config.circuit_error_rate_threshold,
+        min_requests: config.circuit_min_requests,
+    }
+}
+
+fn apply_circuit_breaker_config_to_app(
+    app_config: &mut AppProxyConfig,
+    config: &CircuitBreakerConfig,
+) {
+    app_config.circuit_failure_threshold = config.failure_threshold;
+    app_config.circuit_success_threshold = config.success_threshold;
+    app_config.circuit_timeout_seconds = config.timeout_seconds.min(u32::MAX as u64) as u32;
+    app_config.circuit_error_rate_threshold = config.error_rate_threshold;
+    app_config.circuit_min_requests = config.min_requests;
+}
+
 /// 启动代理服务器（仅启动服务，不接管 Live 配置）
 pub(crate) async fn start_proxy_server_internal(
     state: &AppState,
@@ -270,8 +291,9 @@ pub(crate) async fn get_circuit_breaker_config_internal(
     state: &AppState,
 ) -> Result<CircuitBreakerConfig, String> {
     let db = &state.db;
-    db.get_circuit_breaker_config()
+    db.get_proxy_config_for_app("claude")
         .await
+        .map(|config| circuit_breaker_config_from_app(&config))
         .map_err(|e| e.to_string())
 }
 
@@ -283,7 +305,12 @@ pub(crate) async fn update_circuit_breaker_config_internal(
     let db = &state.db;
 
     // 1. 更新数据库配置
-    db.update_circuit_breaker_config(&config)
+    let mut app_config = db
+        .get_proxy_config_for_app("claude")
+        .await
+        .map_err(|e| e.to_string())?;
+    apply_circuit_breaker_config_to_app(&mut app_config, &config);
+    db.update_proxy_config_for_app(app_config)
         .await
         .map_err(|e| e.to_string())?;
 

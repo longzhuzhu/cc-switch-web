@@ -411,13 +411,10 @@ mod tests {
         let _home = TempHome::new();
         let db = Arc::new(Database::memory().unwrap());
 
-        db.update_circuit_breaker_config(&CircuitBreakerConfig {
-            failure_threshold: 1,
-            timeout_seconds: 0,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+        let mut circuit_config = db.get_proxy_config_for_app("claude").await.unwrap();
+        circuit_config.circuit_failure_threshold = 1;
+        circuit_config.circuit_timeout_seconds = 0;
+        db.update_proxy_config_for_app(circuit_config).await.unwrap();
 
         let provider_a =
             Provider::with_id("a".to_string(), "Provider A".to_string(), json!({}), None);
@@ -455,13 +452,10 @@ mod tests {
         let db = Arc::new(Database::memory().unwrap());
 
         // 配置熔断器：1 次失败即熔断，0 秒超时立即进入 HalfOpen
-        db.update_circuit_breaker_config(&CircuitBreakerConfig {
-            failure_threshold: 1,
-            timeout_seconds: 0,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+        let mut circuit_config = db.get_proxy_config_for_app("claude").await.unwrap();
+        circuit_config.circuit_failure_threshold = 1;
+        circuit_config.circuit_timeout_seconds = 0;
+        db.update_proxy_config_for_app(circuit_config).await.unwrap();
 
         let provider_a =
             Provider::with_id("a".to_string(), "Provider A".to_string(), json!({}), None);
