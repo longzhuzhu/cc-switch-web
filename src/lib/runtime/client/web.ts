@@ -530,8 +530,8 @@ export async function testWebUsageScript(
 export async function testWebApiEndpoints(
   urls: string[],
   timeoutSecs?: number,
-): Promise<import("@/lib/api/vscode").EndpointLatencyResult[]> {
-  return requestWithBody<import("@/lib/api/vscode").EndpointLatencyResult[]>(
+): Promise<import("@/lib/api/providerRuntime").EndpointLatencyResult[]> {
+  return requestWithBody<import("@/lib/api/providerRuntime").EndpointLatencyResult[]>(
     "/api/providers/endpoints/test",
     "POST",
     {

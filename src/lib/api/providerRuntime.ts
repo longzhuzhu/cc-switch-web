@@ -9,7 +9,7 @@ export interface EndpointLatencyResult {
   error?: string;
 }
 
-export const vscodeApi = {
+export const providerRuntimeApi = {
   async getLiveProviderSettings(appId: AppId) {
     return await invoke("read_live_provider_settings", { app: appId });
   },

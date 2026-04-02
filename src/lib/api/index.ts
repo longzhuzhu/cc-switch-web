@@ -6,7 +6,7 @@ export { mcpApi } from "./mcp";
 export { promptsApi } from "./prompts";
 export { skillsApi } from "./skills";
 export { usageApi } from "./usage";
-export { vscodeApi } from "./vscode";
+export { providerRuntimeApi } from "./providerRuntime";
 export { proxyApi } from "./proxy";
 export { openclawApi } from "./openclaw";
 export { sessionsApi } from "./sessions";

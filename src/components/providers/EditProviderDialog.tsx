@@ -8,7 +8,12 @@ import {
   ProviderForm,
   type ProviderFormValues,
 } from "@/components/providers/forms/ProviderForm";
-import { openclawApi, providersApi, vscodeApi, type AppId } from "@/lib/api";
+import {
+  openclawApi,
+  providerRuntimeApi,
+  providersApi,
+  type AppId,
+} from "@/lib/api";
 
 interface EditProviderDialogProps {
   open: boolean;
@@ -98,7 +103,7 @@ export function EditProviderDialog({
         const currentId = await providersApi.getCurrent(appId);
         if (currentId && provider.id === currentId) {
           try {
-            const live = (await vscodeApi.getLiveProviderSettings(
+            const live = (await providerRuntimeApi.getLiveProviderSettings(
               appId,
             )) as Record<string, unknown>;
             if (!cancelled && live && typeof live === "object") {
