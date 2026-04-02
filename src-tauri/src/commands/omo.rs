@@ -1,4 +1,4 @@
-use tauri::State;
+use crate::command_state::State;
 
 use crate::services::omo::{OmoLocalFileData, SLIM, STANDARD};
 use crate::services::OmoService;
@@ -8,7 +8,6 @@ pub(crate) async fn read_omo_local_file_internal() -> Result<OmoLocalFileData, S
     OmoService::read_local_file(&STANDARD).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub async fn read_omo_local_file() -> Result<OmoLocalFileData, String> {
     read_omo_local_file_internal().await
 }
@@ -21,7 +20,6 @@ pub(crate) async fn get_current_omo_provider_id_internal(state: &AppState) -> Re
     Ok(provider.map(|p| p.id).unwrap_or_default())
 }
 
-#[tauri::command]
 pub async fn get_current_omo_provider_id(state: State<'_, AppState>) -> Result<String, String> {
     get_current_omo_provider_id_internal(state.inner()).await
 }
@@ -40,7 +38,6 @@ pub(crate) async fn disable_current_omo_internal(state: &AppState) -> Result<(),
     Ok(())
 }
 
-#[tauri::command]
 pub async fn disable_current_omo(state: State<'_, AppState>) -> Result<(), String> {
     disable_current_omo_internal(state.inner()).await
 }
@@ -51,7 +48,6 @@ pub(crate) async fn read_omo_slim_local_file_internal() -> Result<OmoLocalFileDa
     OmoService::read_local_file(&SLIM).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub async fn read_omo_slim_local_file() -> Result<OmoLocalFileData, String> {
     read_omo_slim_local_file_internal().await
 }
@@ -66,7 +62,6 @@ pub(crate) async fn get_current_omo_slim_provider_id_internal(
     Ok(provider.map(|p| p.id).unwrap_or_default())
 }
 
-#[tauri::command]
 pub async fn get_current_omo_slim_provider_id(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
@@ -87,7 +82,6 @@ pub(crate) async fn disable_current_omo_slim_internal(state: &AppState) -> Resul
     Ok(())
 }
 
-#[tauri::command]
 pub async fn disable_current_omo_slim(state: State<'_, AppState>) -> Result<(), String> {
     disable_current_omo_slim_internal(state.inner()).await
 }

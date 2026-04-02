@@ -2,7 +2,7 @@
 
 use indexmap::IndexMap;
 
-use tauri::State;
+use crate::command_state::State;
 
 use crate::app_config::AppType;
 use crate::services::McpService;
@@ -22,7 +22,6 @@ pub(crate) async fn get_mcp_servers_internal(
 }
 
 /// 获取所有 MCP 服务器（统一结构）
-#[tauri::command]
 pub async fn get_mcp_servers(
     state: State<'_, AppState>,
 ) -> Result<IndexMap<String, McpServer>, String> {
@@ -38,7 +37,6 @@ pub(crate) async fn upsert_mcp_server_internal(
 }
 
 /// 添加或更新 MCP 服务器
-#[tauri::command]
 pub async fn upsert_mcp_server(
     state: State<'_, AppState>,
     server: McpServer,
@@ -55,7 +53,6 @@ pub(crate) async fn delete_mcp_server_internal(
 }
 
 /// 删除 MCP 服务器
-#[tauri::command]
 pub async fn delete_mcp_server(state: State<'_, AppState>, id: String) -> Result<bool, String> {
     delete_mcp_server_internal(state.inner(), id).await
 }
@@ -72,7 +69,6 @@ pub(crate) async fn toggle_mcp_app_internal(
 }
 
 /// 切换 MCP 服务器在指定应用的启用状态
-#[tauri::command]
 pub async fn toggle_mcp_app(
     state: State<'_, AppState>,
     server_id: String,
@@ -93,7 +89,6 @@ pub(crate) async fn import_mcp_from_apps_internal(state: &AppState) -> Result<us
 }
 
 /// 从所有应用导入 MCP 服务器（复用已有的导入逻辑）
-#[tauri::command]
 pub async fn import_mcp_from_apps(state: State<'_, AppState>) -> Result<usize, String> {
     import_mcp_from_apps_internal(state.inner()).await
 }

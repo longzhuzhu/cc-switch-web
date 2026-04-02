@@ -10,7 +10,6 @@ pub async fn list_sessions_internal() -> Result<Vec<session_manager::SessionMeta
     Ok(sessions)
 }
 
-#[tauri::command]
 pub async fn list_sessions() -> Result<Vec<session_manager::SessionMeta>, String> {
     list_sessions_internal().await
 }
@@ -26,7 +25,6 @@ pub async fn get_session_messages_internal(
     .map_err(|e| format!("Failed to load session messages: {e}"))?
 }
 
-#[tauri::command]
 pub async fn get_session_messages(
     providerId: String,
     sourcePath: String,
@@ -50,7 +48,6 @@ pub async fn delete_session_internal(
     .map_err(|e| format!("Failed to delete session: {e}"))?
 }
 
-#[tauri::command]
 pub async fn delete_session(
     providerId: String,
     sessionId: String,
@@ -67,7 +64,6 @@ pub async fn delete_sessions_internal(
         .map_err(|e| format!("Failed to delete sessions: {e}"))
 }
 
-#[tauri::command]
 pub async fn delete_sessions(
     items: Vec<session_manager::DeleteSessionRequest>,
 ) -> Result<Vec<session_manager::DeleteSessionOutcome>, String> {

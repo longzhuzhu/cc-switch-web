@@ -1,4 +1,4 @@
-use tauri::State;
+use crate::command_state::State;
 
 use crate::commands::copilot::CopilotAuthState;
 use crate::proxy::providers::copilot_auth::{GitHubAccount, GitHubDeviceCodeResponse};
@@ -176,7 +176,6 @@ pub async fn auth_logout_internal(
     auth_manager.clear_auth().await.map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "camelCase")]
 pub async fn auth_start_login(
     auth_provider: String,
     state: State<'_, CopilotAuthState>,
@@ -184,7 +183,6 @@ pub async fn auth_start_login(
     auth_start_login_internal(&auth_provider, &state.0).await
 }
 
-#[tauri::command(rename_all = "camelCase")]
 pub async fn auth_poll_for_account(
     auth_provider: String,
     device_code: String,
@@ -193,7 +191,6 @@ pub async fn auth_poll_for_account(
     auth_poll_for_account_internal(&auth_provider, &device_code, &state.0).await
 }
 
-#[tauri::command(rename_all = "camelCase")]
 pub async fn auth_list_accounts(
     auth_provider: String,
     state: State<'_, CopilotAuthState>,
@@ -201,7 +198,6 @@ pub async fn auth_list_accounts(
     auth_list_accounts_internal(&auth_provider, &state.0).await
 }
 
-#[tauri::command(rename_all = "camelCase")]
 pub async fn auth_get_status(
     auth_provider: String,
     state: State<'_, CopilotAuthState>,
@@ -209,7 +205,6 @@ pub async fn auth_get_status(
     auth_get_status_internal(&auth_provider, &state.0).await
 }
 
-#[tauri::command(rename_all = "camelCase")]
 pub async fn auth_remove_account(
     auth_provider: String,
     account_id: String,
@@ -218,7 +213,6 @@ pub async fn auth_remove_account(
     auth_remove_account_internal(&auth_provider, &account_id, &state.0).await
 }
 
-#[tauri::command(rename_all = "camelCase")]
 pub async fn auth_set_default_account(
     auth_provider: String,
     account_id: String,
@@ -227,7 +221,6 @@ pub async fn auth_set_default_account(
     auth_set_default_account_internal(&auth_provider, &account_id, &state.0).await
 }
 
-#[tauri::command(rename_all = "camelCase")]
 pub async fn auth_logout(
     auth_provider: String,
     state: State<'_, CopilotAuthState>,

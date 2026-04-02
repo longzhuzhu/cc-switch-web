@@ -27,7 +27,6 @@ pub fn get_settings_internal() -> crate::settings::AppSettings {
 }
 
 /// 获取设置
-#[tauri::command]
 pub async fn get_settings() -> Result<crate::settings::AppSettings, String> {
     Ok(get_settings_internal())
 }
@@ -40,7 +39,6 @@ pub fn save_settings_internal(settings: crate::settings::AppSettings) -> Result<
     Ok(true)
 }
 
-#[tauri::command]
 pub async fn save_settings(settings: crate::settings::AppSettings) -> Result<bool, String> {
     save_settings_internal(settings)
 }
@@ -51,7 +49,6 @@ pub fn get_app_config_dir_override_internal() -> Result<Option<String>, String> 
         .map(|p| p.to_string_lossy().to_string()))
 }
 
-#[tauri::command]
 pub async fn get_app_config_dir_override() -> Result<Option<String>, String> {
     get_app_config_dir_override_internal()
 }
@@ -62,7 +59,6 @@ pub fn set_app_config_dir_override_internal(path: Option<String>) -> Result<bool
     Ok(true)
 }
 
-#[tauri::command]
 pub async fn set_app_config_dir_override(path: Option<String>) -> Result<bool, String> {
     set_app_config_dir_override_internal(path)
 }
@@ -187,9 +183,8 @@ pub fn get_rectifier_config_internal(
 }
 
 /// 设置整流器配置
-#[tauri::command]
 pub async fn get_rectifier_config(
-    state: tauri::State<'_, crate::AppState>,
+    state: crate::command_state::State<'_, crate::AppState>,
 ) -> Result<crate::proxy::types::RectifierConfig, String> {
     get_rectifier_config_internal(state.inner())
 }
@@ -205,9 +200,8 @@ pub fn set_rectifier_config_internal(
     Ok(true)
 }
 
-#[tauri::command]
 pub async fn set_rectifier_config(
-    state: tauri::State<'_, crate::AppState>,
+    state: crate::command_state::State<'_, crate::AppState>,
     config: crate::proxy::types::RectifierConfig,
 ) -> Result<bool, String> {
     set_rectifier_config_internal(state.inner(), config)
@@ -221,9 +215,8 @@ pub fn get_optimizer_config_internal(
 }
 
 /// 设置优化器配置
-#[tauri::command]
 pub async fn get_optimizer_config(
-    state: tauri::State<'_, crate::AppState>,
+    state: crate::command_state::State<'_, crate::AppState>,
 ) -> Result<crate::proxy::types::OptimizerConfig, String> {
     get_optimizer_config_internal(state.inner())
 }
@@ -248,9 +241,8 @@ pub fn set_optimizer_config_internal(
     Ok(true)
 }
 
-#[tauri::command]
 pub async fn set_optimizer_config(
-    state: tauri::State<'_, crate::AppState>,
+    state: crate::command_state::State<'_, crate::AppState>,
     config: crate::proxy::types::OptimizerConfig,
 ) -> Result<bool, String> {
     set_optimizer_config_internal(state.inner(), config)
@@ -264,9 +256,8 @@ pub fn get_log_config_internal(
 }
 
 /// 设置日志配置
-#[tauri::command]
 pub async fn get_log_config(
-    state: tauri::State<'_, crate::AppState>,
+    state: crate::command_state::State<'_, crate::AppState>,
 ) -> Result<crate::proxy::types::LogConfig, String> {
     get_log_config_internal(state.inner())
 }
@@ -288,9 +279,8 @@ pub fn set_log_config_internal(
     Ok(true)
 }
 
-#[tauri::command]
 pub async fn set_log_config(
-    state: tauri::State<'_, crate::AppState>,
+    state: crate::command_state::State<'_, crate::AppState>,
     config: crate::proxy::types::LogConfig,
 ) -> Result<bool, String> {
     set_log_config_internal(state.inner(), config)

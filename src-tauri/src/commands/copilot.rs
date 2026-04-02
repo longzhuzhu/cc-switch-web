@@ -7,7 +7,7 @@ use crate::proxy::providers::copilot_auth::{
     GitHubDeviceCodeResponse,
 };
 use std::sync::Arc;
-use tauri::State;
+use crate::command_state::State;
 use tokio::sync::RwLock;
 
 /// Copilot 认证状态
@@ -18,7 +18,6 @@ pub struct CopilotAuthState(pub Arc<RwLock<CopilotAuthManager>>);
 /// 启动设备码流程
 ///
 /// 返回设备码和用户码，用于 OAuth 认证
-#[tauri::command]
 pub async fn copilot_start_device_flow(
     state: State<'_, CopilotAuthState>,
 ) -> Result<GitHubDeviceCodeResponse, String> {
@@ -33,7 +32,6 @@ pub async fn copilot_start_device_flow(
 ///
 /// 使用设备码轮询 GitHub，等待用户完成授权
 /// 返回 true 表示授权成功，false 表示等待中
-#[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_poll_for_auth(
     device_code: String,
     state: State<'_, CopilotAuthState>,
@@ -58,7 +56,6 @@ pub async fn copilot_poll_for_auth(
 /// 轮询 OAuth Token（多账号版本）
 ///
 /// 返回新添加的账号信息，如果授权成功
-#[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_poll_for_account(
     device_code: String,
     state: State<'_, CopilotAuthState>,
@@ -79,7 +76,6 @@ pub async fn copilot_poll_for_account(
 // ==================== 多账号管理 ====================
 
 /// 列出所有已认证的账号
-#[tauri::command]
 pub async fn copilot_list_accounts(
     state: State<'_, CopilotAuthState>,
 ) -> Result<Vec<GitHubAccount>, String> {
@@ -88,7 +84,6 @@ pub async fn copilot_list_accounts(
 }
 
 /// 移除指定账号
-#[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_remove_account(
     account_id: String,
     state: State<'_, CopilotAuthState>,
@@ -101,7 +96,6 @@ pub async fn copilot_remove_account(
 }
 
 /// 设置默认账号
-#[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_set_default_account(
     account_id: String,
     state: State<'_, CopilotAuthState>,
@@ -116,7 +110,6 @@ pub async fn copilot_set_default_account(
 // ==================== 状态查询 ====================
 
 /// 获取认证状态（包含所有账号）
-#[tauri::command]
 pub async fn copilot_get_auth_status(
     state: State<'_, CopilotAuthState>,
 ) -> Result<CopilotAuthStatus, String> {
@@ -125,14 +118,12 @@ pub async fn copilot_get_auth_status(
 }
 
 /// 检查是否已认证（有任意账号）
-#[tauri::command]
 pub async fn copilot_is_authenticated(state: State<'_, CopilotAuthState>) -> Result<bool, String> {
     let auth_manager = state.0.read().await;
     Ok(auth_manager.is_authenticated().await)
 }
 
 /// 注销所有 Copilot 认证
-#[tauri::command]
 pub async fn copilot_logout(state: State<'_, CopilotAuthState>) -> Result<(), String> {
     let auth_manager = state.0.write().await;
     auth_manager.clear_auth().await.map_err(|e| e.to_string())
@@ -143,7 +134,6 @@ pub async fn copilot_logout(state: State<'_, CopilotAuthState>) -> Result<(), St
 /// 获取有效的 Copilot Token（向后兼容：使用第一个账号）
 ///
 /// 内部使用，用于代理请求
-#[tauri::command]
 pub async fn copilot_get_token(state: State<'_, CopilotAuthState>) -> Result<String, String> {
     let auth_manager = state.0.read().await;
     auth_manager
@@ -153,7 +143,6 @@ pub async fn copilot_get_token(state: State<'_, CopilotAuthState>) -> Result<Str
 }
 
 /// 获取指定账号的有效 Copilot Token
-#[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_get_token_for_account(
     account_id: String,
     state: State<'_, CopilotAuthState>,
@@ -168,7 +157,6 @@ pub async fn copilot_get_token_for_account(
 // ==================== 模型和使用量 ====================
 
 /// 获取 Copilot 可用模型列表（向后兼容：使用第一个账号）
-#[tauri::command]
 pub async fn copilot_get_models(
     state: State<'_, CopilotAuthState>,
 ) -> Result<Vec<CopilotModel>, String> {
@@ -177,7 +165,6 @@ pub async fn copilot_get_models(
 }
 
 /// 获取指定账号的 Copilot 可用模型列表
-#[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_get_models_for_account(
     account_id: String,
     state: State<'_, CopilotAuthState>,
@@ -190,7 +177,6 @@ pub async fn copilot_get_models_for_account(
 }
 
 /// 获取 Copilot 使用量信息（向后兼容：使用第一个账号）
-#[tauri::command]
 pub async fn copilot_get_usage(
     state: State<'_, CopilotAuthState>,
 ) -> Result<CopilotUsageResponse, String> {
@@ -199,7 +185,6 @@ pub async fn copilot_get_usage(
 }
 
 /// 获取指定账号的 Copilot 使用量信息
-#[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_get_usage_for_account(
     account_id: String,
     state: State<'_, CopilotAuthState>,

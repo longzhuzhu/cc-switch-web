@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use tauri::State;
+use crate::command_state::State;
 
 use crate::app_config::AppType;
 use crate::commands::copilot::CopilotAuthState;
@@ -26,7 +26,6 @@ pub(crate) fn get_providers_internal(
 }
 
 /// 获取所有供应商
-#[tauri::command]
 pub fn get_providers(
     state: State<'_, AppState>,
     app: String,
@@ -39,7 +38,6 @@ pub(crate) fn get_current_provider_internal(state: &AppState, app: String) -> Re
     ProviderService::current(state, app_type).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn get_current_provider(state: State<'_, AppState>, app: String) -> Result<String, String> {
     get_current_provider_internal(state.inner(), app)
 }
@@ -53,7 +51,6 @@ pub(crate) fn add_provider_internal(
     ProviderService::add(state, app_type, provider).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn add_provider(
     state: State<'_, AppState>,
     app: String,
@@ -71,7 +68,6 @@ pub(crate) fn update_provider_internal(
     ProviderService::update(state, app_type, provider).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn update_provider(
     state: State<'_, AppState>,
     app: String,
@@ -91,7 +87,6 @@ pub(crate) fn delete_provider_internal(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn delete_provider(
     state: State<'_, AppState>,
     app: String,
@@ -100,9 +95,8 @@ pub fn delete_provider(
     delete_provider_internal(state.inner(), app, id)
 }
 
-#[tauri::command]
 pub fn remove_provider_from_live_config(
-    state: tauri::State<'_, AppState>,
+    state: crate::command_state::State<'_, AppState>,
     app: String,
     id: String,
 ) -> Result<bool, String> {
@@ -146,7 +140,6 @@ pub fn switch_provider_test_hook(
     switch_provider_internal(state, app_type, id)
 }
 
-#[tauri::command]
 pub fn switch_provider(
     state: State<'_, AppState>,
     app: String,
@@ -191,7 +184,6 @@ pub fn import_default_config_test_hook(
     import_default_config_internal(state, app_type)
 }
 
-#[tauri::command]
 pub fn import_default_config(state: State<'_, AppState>, app: String) -> Result<bool, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
     import_default_config_internal(&state, app_type).map_err(Into::into)
@@ -257,7 +249,6 @@ pub async fn query_provider_usage_internal(
 }
 
 #[allow(non_snake_case)]
-#[tauri::command]
 pub async fn queryProviderUsage(
     state: State<'_, AppState>,
     copilot_state: State<'_, CopilotAuthState>,
@@ -300,7 +291,6 @@ pub async fn test_usage_script_internal(
 
 #[allow(non_snake_case)]
 #[allow(clippy::too_many_arguments)]
-#[tauri::command]
 pub async fn testUsageScript(
     state: State<'_, AppState>,
     #[allow(non_snake_case)] providerId: String,
@@ -330,7 +320,6 @@ pub async fn testUsageScript(
     .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn read_live_provider_settings(app: String) -> Result<serde_json::Value, String> {
     read_live_provider_settings_internal(app)
 }
@@ -340,7 +329,6 @@ pub(crate) fn read_live_provider_settings_internal(app: String) -> Result<serde_
     ProviderService::read_live_settings(app_type).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub async fn test_api_endpoints(
     urls: Vec<String>,
     #[allow(non_snake_case)] timeoutSecs: Option<u64>,
@@ -358,7 +346,6 @@ pub(crate) async fn test_api_endpoints_internal(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn get_custom_endpoints(
     state: State<'_, AppState>,
     app: String,
@@ -377,7 +364,6 @@ pub(crate) fn get_custom_endpoints_internal(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn add_custom_endpoint(
     state: State<'_, AppState>,
     app: String,
@@ -398,7 +384,6 @@ pub(crate) fn add_custom_endpoint_internal(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn remove_custom_endpoint(
     state: State<'_, AppState>,
     app: String,
@@ -419,7 +404,6 @@ pub(crate) fn remove_custom_endpoint_internal(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn update_endpoint_last_used(
     state: State<'_, AppState>,
     app: String,
@@ -440,7 +424,6 @@ pub(crate) fn update_endpoint_last_used_internal(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn update_providers_sort_order(
     state: State<'_, AppState>,
     app: String,
@@ -461,7 +444,6 @@ pub(crate) fn update_providers_sort_order_internal(
 use crate::provider::UniversalProvider;
 use std::collections::HashMap;
 
-#[tauri::command]
 pub fn get_universal_providers(
     state: State<'_, AppState>,
 ) -> Result<HashMap<String, UniversalProvider>, String> {
@@ -474,7 +456,6 @@ pub(crate) fn get_universal_providers_internal(
     ProviderService::list_universal(state).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn get_universal_provider(
     state: State<'_, AppState>,
     id: String,
@@ -489,7 +470,6 @@ pub(crate) fn get_universal_provider_internal(
     ProviderService::get_universal(state, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn upsert_universal_provider(
     state: State<'_, AppState>,
     provider: UniversalProvider,
@@ -504,7 +484,6 @@ pub(crate) fn upsert_universal_provider_internal(
     ProviderService::upsert_universal(state, provider).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn delete_universal_provider(
     state: State<'_, AppState>,
     id: String,
@@ -519,7 +498,6 @@ pub(crate) fn delete_universal_provider_internal(
     ProviderService::delete_universal(state, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn sync_universal_provider(
     state: State<'_, AppState>,
     id: String,
@@ -534,7 +512,6 @@ pub(crate) fn sync_universal_provider_internal(
     ProviderService::sync_universal_to_apps(state, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn import_opencode_providers_from_live(state: State<'_, AppState>) -> Result<usize, String> {
     import_opencode_providers_from_live_internal(state.inner())
         .map_err(|e| e.to_string())
@@ -546,7 +523,6 @@ pub(crate) fn import_opencode_providers_from_live_internal(
     crate::services::provider::import_opencode_providers_from_live(state)
 }
 
-#[tauri::command]
 pub fn get_opencode_live_provider_ids() -> Result<Vec<String>, String> {
     get_opencode_live_provider_ids_internal()
 }

@@ -12,7 +12,7 @@ use crate::services::skill::{
 use crate::store::AppState;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::State;
+use crate::command_state::State;
 
 /// SkillService 状态包装
 pub struct SkillServiceState(pub Arc<SkillService>);
@@ -32,7 +32,6 @@ fn parse_app_type(app: &str) -> Result<AppType, String> {
 // ========== 统一管理命令 ==========
 
 /// 获取所有已安装的 Skills
-#[tauri::command]
 pub fn get_installed_skills(app_state: State<'_, AppState>) -> Result<Vec<InstalledSkill>, String> {
     get_installed_skills_internal(app_state.inner())
 }
@@ -41,7 +40,6 @@ pub(crate) fn get_installed_skills_internal(app_state: &AppState) -> Result<Vec<
     SkillService::get_all_installed(&app_state.db).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn get_skill_backups() -> Result<Vec<SkillBackupEntry>, String> {
     get_skill_backups_internal()
 }
@@ -50,7 +48,6 @@ pub(crate) fn get_skill_backups_internal() -> Result<Vec<SkillBackupEntry>, Stri
     SkillService::list_backups().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn delete_skill_backup(backup_id: String) -> Result<bool, String> {
     delete_skill_backup_internal(backup_id)
 }
@@ -65,7 +62,6 @@ pub(crate) fn delete_skill_backup_internal(backup_id: String) -> Result<bool, St
 /// 参数：
 /// - skill: 从发现列表获取的技能信息
 /// - current_app: 当前选中的应用，安装后默认启用该应用
-#[tauri::command]
 pub async fn install_skill_unified(
     skill: DiscoverableSkill,
     current_app: String,
@@ -76,7 +72,6 @@ pub async fn install_skill_unified(
 }
 
 /// 卸载 Skill（新版统一卸载）
-#[tauri::command]
 pub fn uninstall_skill_unified(
     id: String,
     app_state: State<'_, AppState>,
@@ -91,7 +86,6 @@ pub(crate) fn uninstall_skill_unified_internal(
     SkillService::uninstall(&app_state.db, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub fn restore_skill_backup(
     backup_id: String,
     current_app: String,
@@ -111,7 +105,6 @@ pub(crate) fn restore_skill_backup_internal(
 }
 
 /// 切换 Skill 的应用启用状态
-#[tauri::command]
 pub fn toggle_skill_app(
     id: String,
     app: String,
@@ -133,7 +126,6 @@ pub(crate) fn toggle_skill_app_internal(
 }
 
 /// 扫描未管理的 Skills
-#[tauri::command]
 pub fn scan_unmanaged_skills(
     app_state: State<'_, AppState>,
 ) -> Result<Vec<UnmanagedSkill>, String> {
@@ -147,7 +139,6 @@ pub(crate) fn scan_unmanaged_skills_internal(
 }
 
 /// 从应用目录导入 Skills
-#[tauri::command]
 pub fn import_skills_from_apps(
     imports: Vec<ImportSkillSelection>,
     app_state: State<'_, AppState>,
@@ -186,7 +177,6 @@ pub(crate) fn install_skills_from_zip_internal(
 // ========== 发现功能命令 ==========
 
 /// 发现可安装的 Skills（从仓库获取）
-#[tauri::command]
 pub async fn discover_available_skills(
     _service: State<'_, SkillServiceState>,
     app_state: State<'_, AppState>,
@@ -208,7 +198,6 @@ pub(crate) async fn discover_available_skills_internal(
 // ========== 仓库管理命令 ==========
 
 /// 获取技能仓库列表
-#[tauri::command]
 pub fn get_skill_repos(app_state: State<'_, AppState>) -> Result<Vec<SkillRepo>, String> {
     get_skill_repos_internal(app_state.inner())
 }
@@ -218,7 +207,6 @@ pub(crate) fn get_skill_repos_internal(app_state: &AppState) -> Result<Vec<Skill
 }
 
 /// 添加技能仓库
-#[tauri::command]
 pub fn add_skill_repo(repo: SkillRepo, app_state: State<'_, AppState>) -> Result<bool, String> {
     add_skill_repo_internal(app_state.inner(), repo)
 }
@@ -232,7 +220,6 @@ pub(crate) fn add_skill_repo_internal(app_state: &AppState, repo: SkillRepo) -> 
 }
 
 /// 删除技能仓库
-#[tauri::command]
 pub fn remove_skill_repo(
     owner: String,
     name: String,

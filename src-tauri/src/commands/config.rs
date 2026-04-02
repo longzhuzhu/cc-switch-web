@@ -5,7 +5,6 @@ use crate::codex_config;
 use crate::config::{self, ConfigStatus};
 use crate::settings;
 
-#[tauri::command]
 pub async fn get_claude_config_status() -> Result<ConfigStatus, String> {
     Ok(config::get_claude_config_status())
 }
@@ -78,7 +77,6 @@ pub(crate) fn validate_common_config_snippet(app_type: &str, snippet: &str) -> R
     Ok(())
 }
 
-#[tauri::command]
 pub async fn get_config_status(app: String) -> Result<ConfigStatus, String> {
     match AppType::from_str(&app).map_err(|e| e.to_string())? {
         AppType::Claude => Ok(config::get_claude_config_status()),
@@ -121,7 +119,6 @@ pub async fn get_config_status(app: String) -> Result<ConfigStatus, String> {
     }
 }
 
-#[tauri::command]
 pub async fn get_config_dir(app: String) -> Result<String, String> {
     get_config_dir_internal(app)
 }
@@ -148,17 +145,15 @@ pub(crate) fn get_common_config_snippet_internal(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
 pub async fn get_claude_common_config_snippet(
-    state: tauri::State<'_, crate::store::AppState>,
+    state: crate::command_state::State<'_, crate::store::AppState>,
 ) -> Result<Option<String>, String> {
     get_common_config_snippet_internal(state.inner(), "claude")
 }
 
-#[tauri::command]
 pub async fn set_claude_common_config_snippet(
     snippet: String,
-    state: tauri::State<'_, crate::store::AppState>,
+    state: crate::command_state::State<'_, crate::store::AppState>,
 ) -> Result<(), String> {
     let is_cleared = snippet.trim().is_empty();
 
@@ -179,10 +174,9 @@ pub async fn set_claude_common_config_snippet(
     Ok(())
 }
 
-#[tauri::command]
 pub async fn get_common_config_snippet(
     app_type: String,
-    state: tauri::State<'_, crate::store::AppState>,
+    state: crate::command_state::State<'_, crate::store::AppState>,
 ) -> Result<Option<String>, String> {
     get_common_config_snippet_internal(state.inner(), &app_type)
 }
@@ -266,11 +260,10 @@ pub(crate) fn set_common_config_snippet_internal(
     Ok(())
 }
 
-#[tauri::command]
 pub async fn set_common_config_snippet(
     app_type: String,
     snippet: String,
-    state: tauri::State<'_, crate::store::AppState>,
+    state: crate::command_state::State<'_, crate::store::AppState>,
 ) -> Result<(), String> {
     set_common_config_snippet_internal(state.inner(), &app_type, snippet)
         .map_err(ConfigCommandError::into_string)
@@ -314,11 +307,10 @@ pub(crate) fn extract_common_config_snippet_internal(
         .map_err(|e| ConfigCommandError::internal(e.to_string()))
 }
 
-#[tauri::command]
 pub async fn extract_common_config_snippet(
     appType: String,
     settingsConfig: Option<String>,
-    state: tauri::State<'_, crate::store::AppState>,
+    state: crate::command_state::State<'_, crate::store::AppState>,
 ) -> Result<String, String> {
     let app = AppType::from_str(&appType).map_err(|e| e.to_string())?;
 

@@ -2,6 +2,7 @@ mod app_config;
 mod app_store;
 mod claude_mcp;
 mod codex_config;
+mod command_state;
 mod commands;
 mod config;
 mod database;

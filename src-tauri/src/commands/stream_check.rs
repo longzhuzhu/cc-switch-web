@@ -9,7 +9,7 @@ use crate::services::stream_check::{
 use crate::store::AppState;
 use std::collections::HashSet;
 use std::sync::Arc;
-use tauri::State;
+use crate::command_state::State;
 use tokio::sync::RwLock;
 
 /// 流式健康检查（单个供应商）
@@ -54,7 +54,6 @@ pub async fn stream_check_provider_internal(
 }
 
 /// 流式健康检查（单个供应商）
-#[tauri::command]
 pub async fn stream_check_provider(
     state: State<'_, AppState>,
     copilot_state: State<'_, CopilotAuthState>,
@@ -143,7 +142,6 @@ pub async fn stream_check_all_providers_internal(
 }
 
 /// 批量流式健康检查
-#[tauri::command]
 pub async fn stream_check_all_providers(
     state: State<'_, AppState>,
     copilot_state: State<'_, CopilotAuthState>,
@@ -155,13 +153,11 @@ pub async fn stream_check_all_providers(
 }
 
 /// 获取流式检查配置
-#[tauri::command]
 pub fn get_stream_check_config(state: State<'_, AppState>) -> Result<StreamCheckConfig, AppError> {
     state.db.get_stream_check_config()
 }
 
 /// 保存流式检查配置
-#[tauri::command]
 pub fn save_stream_check_config(
     state: State<'_, AppState>,
     config: StreamCheckConfig,

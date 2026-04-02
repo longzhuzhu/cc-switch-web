@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use serde_json::{json, Value};
-use tauri::State;
+use crate::command_state::State;
 use tokio::task::spawn_blocking;
 
 use crate::database::{backup::BackupEntry, Database};
@@ -25,7 +25,6 @@ pub async fn sync_current_providers_live_internal(db: std::sync::Arc<Database>) 
     .map_err(|e: AppError| e.to_string())
 }
 
-#[tauri::command]
 pub async fn sync_current_providers_live(state: State<'_, AppState>) -> Result<Value, String> {
     sync_current_providers_live_internal(state.db.clone()).await
 }
@@ -48,13 +47,11 @@ pub async fn create_db_backup_internal(db: std::sync::Arc<Database>) -> Result<S
     .map_err(|e: AppError| e.to_string())
 }
 
-#[tauri::command]
 pub async fn create_db_backup(state: State<'_, AppState>) -> Result<String, String> {
     create_db_backup_internal(state.db.clone()).await
 }
 
 /// List all database backup files
-#[tauri::command]
 pub fn list_db_backups() -> Result<Vec<BackupEntry>, String> {
     Database::list_backups().map_err(|e| e.to_string())
 }
@@ -70,7 +67,6 @@ pub async fn restore_db_backup_internal(
         .map_err(|e: AppError| e.to_string())
 }
 
-#[tauri::command]
 pub async fn restore_db_backup(
     state: State<'_, AppState>,
     filename: String,
@@ -79,7 +75,6 @@ pub async fn restore_db_backup(
 }
 
 /// Rename a database backup file
-#[tauri::command]
 pub fn rename_db_backup(
     #[allow(non_snake_case)] oldFilename: String,
     #[allow(non_snake_case)] newName: String,
@@ -88,7 +83,6 @@ pub fn rename_db_backup(
 }
 
 /// Delete a database backup file
-#[tauri::command]
 pub fn delete_db_backup(filename: String) -> Result<(), String> {
     Database::delete_backup(&filename).map_err(|e| e.to_string())
 }

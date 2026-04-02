@@ -3,7 +3,7 @@
 use crate::error::AppError;
 use crate::services::usage_stats::*;
 use crate::store::AppState;
-use tauri::State;
+use crate::command_state::State;
 
 pub fn get_usage_summary_internal(
     state: &AppState,
@@ -14,7 +14,6 @@ pub fn get_usage_summary_internal(
 }
 
 /// 获取使用量汇总
-#[tauri::command]
 pub fn get_usage_summary(
     state: State<'_, AppState>,
     start_date: Option<i64>,
@@ -32,7 +31,6 @@ pub fn get_usage_trends_internal(
 }
 
 /// 获取每日趋势
-#[tauri::command]
 pub fn get_usage_trends(
     state: State<'_, AppState>,
     start_date: Option<i64>,
@@ -46,7 +44,6 @@ pub fn get_provider_stats_internal(state: &AppState) -> Result<Vec<ProviderStats
 }
 
 /// 获取 Provider 统计
-#[tauri::command]
 pub fn get_provider_stats(state: State<'_, AppState>) -> Result<Vec<ProviderStats>, AppError> {
     get_provider_stats_internal(state.inner())
 }
@@ -56,7 +53,6 @@ pub fn get_model_stats_internal(state: &AppState) -> Result<Vec<ModelStats>, App
 }
 
 /// 获取模型统计
-#[tauri::command]
 pub fn get_model_stats(state: State<'_, AppState>) -> Result<Vec<ModelStats>, AppError> {
     get_model_stats_internal(state.inner())
 }
@@ -71,7 +67,6 @@ pub fn get_request_logs_internal(
 }
 
 /// 获取请求日志列表
-#[tauri::command]
 pub fn get_request_logs(
     state: State<'_, AppState>,
     filters: LogFilters,
@@ -89,7 +84,6 @@ pub fn get_request_detail_internal(
 }
 
 /// 获取单个请求详情
-#[tauri::command]
 pub fn get_request_detail(
     state: State<'_, AppState>,
     request_id: String,
@@ -145,7 +139,6 @@ pub fn get_model_pricing_internal(state: &AppState) -> Result<Vec<ModelPricingIn
 }
 
 /// 获取模型定价列表
-#[tauri::command]
 pub fn get_model_pricing(state: State<'_, AppState>) -> Result<Vec<ModelPricingInfo>, AppError> {
     get_model_pricing_internal(state.inner())
 }
@@ -182,7 +175,6 @@ pub fn update_model_pricing_internal(
 }
 
 /// 更新模型定价
-#[tauri::command]
 pub fn update_model_pricing(
     state: State<'_, AppState>,
     model_id: String,
@@ -212,7 +204,6 @@ pub fn check_provider_limits_internal(
 }
 
 /// 检查 Provider 使用限额
-#[tauri::command]
 pub fn check_provider_limits(
     state: State<'_, AppState>,
     provider_id: String,
@@ -239,7 +230,6 @@ pub fn delete_model_pricing_internal(
 }
 
 /// 删除模型定价
-#[tauri::command]
 pub fn delete_model_pricing(state: State<'_, AppState>, model_id: String) -> Result<(), AppError> {
     delete_model_pricing_internal(state.inner(), model_id)
 }
