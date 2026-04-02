@@ -151,6 +151,7 @@
 - `database/dao/failover.rs` 中零调用的 `get_failover_providers / clear_failover_queue / is_in_failover_queue` 已删除；当前故障转移主链统一走已接入 Web 路由的队列查询、增删和可选列表接口
 - `database/dao/proxy.rs` 中零调用的 `reset_provider_health / has_any_live_backup` 已删除；当前健康状态与 Live 备份主链均走更细粒度的现用接口
 - `database/migration.rs` 中零调用的真实写库迁移入口 `migrate_from_json` 已删除；当前仓库只保留 `migrate_from_json_dry_run` 作为旧 JSON 结构兼容校验，不再暗示运行时自动迁移仍可用
+- Web 服务启动阶段已重新接回 `init_default_skill_repos()`；新数据库首次启动时会自动补齐默认 Skill 仓库，避免 Skills 发现源为空
 
 ## 四、基于前端命令差集的剩余项
 

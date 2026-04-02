@@ -2432,6 +2432,15 @@ fn resolve_frontend_dist_dir() -> Option<PathBuf> {
 
 pub async fn run_web_server() -> Result<(), String> {
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
+    match db.init_default_skill_repos() {
+        Ok(count) if count > 0 => {
+            log::info!("startup initialized {count} default skill repositories");
+        }
+        Ok(_) => {}
+        Err(err) => {
+            log::warn!("startup default skill repository init failed: {err}");
+        }
+    }
     if let Err(err) = db.periodic_backup_if_needed() {
         log::warn!("startup periodic maintenance failed: {err}");
     }

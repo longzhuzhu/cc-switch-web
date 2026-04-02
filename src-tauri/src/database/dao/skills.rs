@@ -232,3 +232,37 @@ impl Database {
         Ok(count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    #[test]
+    fn init_default_skill_repos_seeds_once() {
+        let conn = Connection::open_in_memory().expect("open memory db");
+        Database::create_tables_on_conn(&conn).expect("create tables");
+        Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations");
+
+        let db = Database {
+            conn: Mutex::new(conn),
+        };
+
+        let expected = crate::services::skill::SkillStore::default().repos.len();
+
+        assert!(db.get_skill_repos().expect("initial repos").is_empty());
+
+        let inserted = db
+            .init_default_skill_repos()
+            .expect("seed default skill repos");
+        assert_eq!(inserted, expected);
+        assert_eq!(db.get_skill_repos().expect("seeded repos").len(), expected);
+
+        let inserted_again = db
+            .init_default_skill_repos()
+            .expect("seed default skill repos again");
+        assert_eq!(inserted_again, 0);
+        assert_eq!(db.get_skill_repos().expect("repos after reseed").len(), expected);
+    }
+}
