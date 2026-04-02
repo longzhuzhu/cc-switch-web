@@ -184,6 +184,7 @@
 - 历史目录名 `src-tauri/` 已重命名为 `backend/`，并同步修正 package scripts、Dockerfile、启动脚本与 GitHub Actions，仓库层面的 Tauri 命名残留已进一步减少
 - 既然 `MultiAppConfig` 与 `database::migration` 已只剩测试用途，当前也已整体收回测试编译域；正式 Web 后端不再编译旧 `config.json` 容器及其 JSON→SQLite 迁移模块
 - 前端启动阶段原本保留的 `get_migration_result` / `get_skills_migration_result` 空转检查已删除；Web runtime 先前仅固定返回 `false/null`，当前已不再保留这层无后端入口的历史迁移提示链
+- `main.tsx` 中原本保留的 `configLoadError` 事件订阅与 `get_init_error` 启动前检查也已移除；Web runtime 下这两条链路此前分别是 no-op 与固定 `null`，没有真实后端入口
 
 ## 四、基于前端命令差集的剩余项
 

@@ -183,8 +183,6 @@ export async function invoke<T>(
   args?: InvokeArgs,
 ): Promise<T> {
   switch (command) {
-    case "get_init_error":
-      return null as T;
     case "get_settings":
       return (await getWebSettings()) as T;
     case "save_settings":
