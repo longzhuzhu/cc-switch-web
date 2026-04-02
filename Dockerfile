@@ -19,11 +19,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
-    libgtk-3-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    libwebkit2gtk-4.1-dev \
-    libsoup-3.0-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
@@ -63,11 +59,7 @@ ENV HOME=/data \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    libgtk-3-0 \
-    libayatana-appindicator3-1 \
-    librsvg2-2 \
-    libwebkit2gtk-4.1-0 \
-    libsoup-3.0-0 \
+    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=service-builder /app/target/release/cc-switch-web /usr/local/bin/cc-switch-web

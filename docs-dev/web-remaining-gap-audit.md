@@ -125,6 +125,7 @@
 - `services/mod.rs` 已整体收窄为 `pub(crate)` 模块可见性；`webdav_auto_sync` 中仅 crate 内使用的入口也已收窄，继续减少对外暴露的桌面遗留服务面
 - `.github/workflows/web-ci.yml` 的 Linux 依赖已去掉 `webkit2gtk`、`libsoup`、`libgtk-3`、`appindicator` 等 Tauri 桌面构建包，CI 现仅保留 Web 前端与 Rust 本地服务所需检查依赖
 - `src-tauri/icons` 旧桌面打包图标资源目录已删除；当前仓库图标资产仅保留前端 `src/assets` 与页面实际使用的资源
+- `Dockerfile` 的构建/运行阶段已去掉 WebKitGTK、GTK、tray/appindicator 等旧桌面依赖，当前容器仅保留 Rust 服务编译与运行所需的 OpenSSL/证书基础环境
 
 ## 四、基于前端命令差集的剩余项
 
