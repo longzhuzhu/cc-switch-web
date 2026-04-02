@@ -658,7 +658,7 @@ impl ProviderService {
         sync_current_provider_for_app_to_live(state, &app_type)
     }
 
-    pub fn migrate_legacy_common_config_usage(
+    pub(crate) fn migrate_legacy_common_config_usage(
         state: &AppState,
         app_type: AppType,
         legacy_snippet: &str,
@@ -712,7 +712,7 @@ impl ProviderService {
         Ok(())
     }
 
-    pub fn migrate_legacy_common_config_usage_if_needed(
+    pub(crate) fn migrate_legacy_common_config_usage_if_needed(
         state: &AppState,
         app_type: AppType,
     ) -> Result<(), AppError> {
