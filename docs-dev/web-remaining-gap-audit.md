@@ -16,7 +16,7 @@
 
 - 本地运行的 Web 版不是“只存在浏览器里的临时前端”
 - 本地 Rust 服务默认仍然使用 `~/.cc-switch` 作为 CC Switch 自身数据目录
-- 也就是说，本地 Web 模式下的 `config.json`、`settings.json`、`cc-switch.db`、备份、Skills SSOT 等默认与原本地端保持同一路径策略
+- 也就是说，本地 Web 模式下的 `settings.json`、`cc-switch.db`、备份、Skills SSOT 等默认与原本地端保持同一路径策略；旧 `config.json` 仅剩兼容测试/历史迁移语义，不再属于当前运行时主数据面
 - Docker 运行是例外：默认写入容器 volume，而不是宿主机 `~/.cc-switch`
 
 剩余未迁移项现在主要分为两类：

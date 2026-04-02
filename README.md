@@ -86,7 +86,7 @@ If you are looking for the original CC Switch project or upstream release inform
    ~/.cc-switch
    ```
 
-   This includes files such as `config.json`, `settings.json`, `cc-switch.db`, backups, and the unified Skills storage.
+   This includes files such as `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
 
 5. Build once and run the release binary directly:
 
