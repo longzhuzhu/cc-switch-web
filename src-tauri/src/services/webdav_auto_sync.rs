@@ -19,7 +19,7 @@ static AUTO_SYNC_SUPPRESS_DEPTH: AtomicUsize = AtomicUsize::new(0);
 pub(crate) struct AutoSyncSuppressionGuard;
 
 impl AutoSyncSuppressionGuard {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         AUTO_SYNC_SUPPRESS_DEPTH.fetch_add(1, Ordering::SeqCst);
         Self
     }
@@ -38,7 +38,7 @@ pub(crate) fn is_auto_sync_suppressed() -> bool {
     AUTO_SYNC_SUPPRESS_DEPTH.load(Ordering::SeqCst) > 0
 }
 
-pub fn should_trigger_for_table(table: &str) -> bool {
+fn should_trigger_for_table(table: &str) -> bool {
     let normalized = table.trim().to_ascii_lowercase();
     matches!(
         normalized.as_str(),
@@ -108,7 +108,7 @@ async fn run_auto_sync_upload(db: &crate::database::Database) -> Result<(), AppE
     }
 }
 
-pub fn notify_db_changed(table: &str) {
+pub(crate) fn notify_db_changed(table: &str) {
     if is_auto_sync_suppressed() {
         return;
     }
@@ -121,7 +121,7 @@ pub fn notify_db_changed(table: &str) {
     let _ = enqueue_change_signal(tx, table);
 }
 
-pub fn start_worker(db: Arc<crate::database::Database>) {
+pub(crate) fn start_worker(db: Arc<crate::database::Database>) {
     if DB_CHANGE_TX.get().is_some() {
         return;
     }
