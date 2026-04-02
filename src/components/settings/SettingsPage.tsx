@@ -150,7 +150,7 @@ export function SettingsPage({
   }, [closeAfterSave, t]);
 
   // 通用设置即时保存（无需手动点击）
-  // 使用 autoSaveSettings 避免误触发系统 API（开机自启、Claude 插件等）
+  // 使用 autoSaveSettings 避免触发需要显式保存的后置流程
   const handleAutoSave = useCallback(
     async (updates: Partial<SettingsFormState>) => {
       if (!settings) return;

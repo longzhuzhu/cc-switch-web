@@ -119,7 +119,7 @@ export function useSettings(): UseSettingsResult {
   ]);
 
   // 即时保存设置（用于 General 标签页的实时更新）
-  // 保存基础配置 + 独立的系统 API 调用（开机自启）
+  // 仅保存基础设置字段，不触发需要手动确认或后置同步的保存流程
   const autoSaveSettings = useCallback(
     async (updates: Partial<SettingsFormState>): Promise<SaveResult | null> => {
       const mergedSettings = settings ? { ...settings, ...updates } : null;
