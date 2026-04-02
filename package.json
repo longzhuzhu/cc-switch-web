@@ -1,5 +1,5 @@
 {
-  "name": "cc-switch",
+  "name": "cc-switch-web",
   "version": "0.1.0",
   "description": "CC Switch Web branch with local Rust service and browser UI",
   "type": "module",
