@@ -1,5 +1,4 @@
 import { getDefaultAppProxyConfig } from "./defaults";
-import { isTauriRuntime } from "./env";
 import {
   addWebProviderToFailoverQueue,
   addWebProvider,
@@ -181,11 +180,6 @@ export async function invoke<T>(
   command: string,
   args?: InvokeArgs,
 ): Promise<T> {
-  if (isTauriRuntime()) {
-    const mod = await import("@tauri-apps/api/core");
-    return mod.invoke<T>(command, args);
-  }
-
   switch (command) {
     case "get_init_error":
       return null as T;

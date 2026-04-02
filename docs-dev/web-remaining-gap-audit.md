@@ -127,6 +127,7 @@
 - `src-tauri/icons` 旧桌面打包图标资源目录已删除；当前仓库图标资产仅保留前端 `src/assets` 与页面实际使用的资源
 - `Dockerfile` 的构建/运行阶段已去掉 WebKitGTK、GTK、tray/appindicator 等旧桌面依赖，当前容器仅保留 Rust 服务编译与运行所需的 OpenSSL/证书基础环境
 - 前端测试基建已改为 mock 当前运行时适配层而非直接 mock `@tauri-apps/api`；`useDirectorySettings` 测试已同步为 Web 模式“手动填写路径”行为，清理旧桌面目录选择假设
+- 前端运行时适配层中仅剩的 `@tauri-apps/api/core` 动态导入已删除，`package.json` 与 lockfile 也已移除 `@tauri-apps/api` 依赖；当前前端依赖面已不再包含桌面端 JS SDK
 
 ## 四、基于前端命令差集的剩余项
 
