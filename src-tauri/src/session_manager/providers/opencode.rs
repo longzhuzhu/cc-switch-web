@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde_json::Value;
 
+use crate::config::get_home_dir;
 use crate::session_manager::{SessionMessage, SessionMeta};
 
 use super::utils::{parse_timestamp_to_ms, path_basename, truncate_summary};
@@ -19,9 +20,7 @@ pub(crate) fn get_opencode_base_dir() -> PathBuf {
             return PathBuf::from(xdg).join("opencode");
         }
     }
-    dirs::home_dir()
-        .map(|h| h.join(".local/share/opencode"))
-        .unwrap_or_else(|| PathBuf::from(".local/share/opencode"))
+    get_home_dir().join(".local/share/opencode")
 }
 
 /// Return the OpenCode JSON storage directory (legacy flat-file layout).

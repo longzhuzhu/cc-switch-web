@@ -7,6 +7,8 @@ use regex::Regex;
 use std::collections::HashMap;
 #[cfg(any(test, not(target_os = "windows")))]
 use std::path::Path;
+#[cfg(not(target_os = "windows"))]
+use crate::config::get_home_dir;
 
 #[derive(serde::Serialize)]
 pub struct ToolVersion {
@@ -380,7 +382,7 @@ fn tool_executable_candidates(tool: &str, dir: &Path) -> Vec<std::path::PathBuf>
 fn scan_cli_version(tool: &str) -> (Option<String>, Option<String>) {
     use std::process::Command;
 
-    let home = dirs::home_dir().unwrap_or_default();
+    let home = get_home_dir();
 
     // 常见的安装路径（原生安装优先）
     let mut search_paths: Vec<std::path::PathBuf> = Vec::new();
