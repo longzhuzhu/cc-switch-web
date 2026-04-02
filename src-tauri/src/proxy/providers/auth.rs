@@ -34,49 +34,6 @@ impl AuthInfo {
         }
     }
 
-    /// 返回遮蔽后的 API Key（用于日志输出）
-    ///
-    /// 显示前4位和后4位，中间用 `...` 代替
-    /// 如果 key 长度不足8位，则返回 `***`
-    #[allow(dead_code)]
-    pub fn masked_key(&self) -> String {
-        if self.api_key.chars().count() > 8 {
-            let prefix: String = self.api_key.chars().take(4).collect();
-            let suffix: String = self
-                .api_key
-                .chars()
-                .rev()
-                .take(4)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
-            format!("{prefix}...{suffix}")
-        } else {
-            "***".to_string()
-        }
-    }
-
-    /// 返回遮蔽后的 access_token（用于日志输出）
-    #[allow(dead_code)]
-    pub fn masked_access_token(&self) -> Option<String> {
-        self.access_token.as_ref().map(|token| {
-            if token.chars().count() > 8 {
-                let prefix: String = token.chars().take(4).collect();
-                let suffix: String = token
-                    .chars()
-                    .rev()
-                    .take(4)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .collect();
-                format!("{prefix}...{suffix}")
-            } else {
-                "***".to_string()
-            }
-        })
-    }
 }
 
 /// 认证策略
@@ -125,34 +82,59 @@ pub enum AuthStrategy {
 mod tests {
     use super::*;
 
+    fn mask_secret(secret: &str) -> String {
+        if secret.chars().count() > 8 {
+            let prefix: String = secret.chars().take(4).collect();
+            let suffix: String = secret
+                .chars()
+                .rev()
+                .take(4)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+            format!("{prefix}...{suffix}")
+        } else {
+            "***".to_string()
+        }
+    }
+
+    fn masked_key(auth: &AuthInfo) -> String {
+        mask_secret(&auth.api_key)
+    }
+
+    fn masked_access_token(auth: &AuthInfo) -> Option<String> {
+        auth.access_token.as_deref().map(mask_secret)
+    }
+
     #[test]
     fn test_masked_key_long() {
         let auth = AuthInfo::new("sk-1234567890abcdef".to_string(), AuthStrategy::Bearer);
-        assert_eq!(auth.masked_key(), "sk-1...cdef");
+        assert_eq!(masked_key(&auth), "sk-1...cdef");
     }
 
     #[test]
     fn test_masked_key_short() {
         let auth = AuthInfo::new("short".to_string(), AuthStrategy::Bearer);
-        assert_eq!(auth.masked_key(), "***");
+        assert_eq!(masked_key(&auth), "***");
     }
 
     #[test]
     fn test_masked_key_exactly_8() {
         let auth = AuthInfo::new("12345678".to_string(), AuthStrategy::Bearer);
-        assert_eq!(auth.masked_key(), "***");
+        assert_eq!(masked_key(&auth), "***");
     }
 
     #[test]
     fn test_masked_key_9_chars() {
         let auth = AuthInfo::new("123456789".to_string(), AuthStrategy::Bearer);
-        assert_eq!(auth.masked_key(), "1234...6789");
+        assert_eq!(masked_key(&auth), "1234...6789");
     }
 
     #[test]
     fn test_masked_key_utf8_safe() {
         let auth = AuthInfo::new("测试⚠️1234567890".to_string(), AuthStrategy::Bearer);
-        let masked = auth.masked_key();
+        let masked = masked_key(&auth);
         assert!(!masked.is_empty());
     }
 
@@ -187,27 +169,27 @@ mod tests {
     fn test_masked_access_token_long() {
         let auth =
             AuthInfo::with_access_token("refresh".to_string(), "ya29.1234567890abcdef".to_string());
-        assert_eq!(auth.masked_access_token(), Some("ya29...cdef".to_string()));
+        assert_eq!(masked_access_token(&auth), Some("ya29...cdef".to_string()));
     }
 
     #[test]
     fn test_masked_access_token_utf8_safe() {
         let auth =
             AuthInfo::with_access_token("refresh".to_string(), "令牌⚠️1234567890".to_string());
-        let masked = auth.masked_access_token().unwrap();
+        let masked = masked_access_token(&auth).unwrap();
         assert!(!masked.is_empty());
     }
 
     #[test]
     fn test_masked_access_token_short() {
         let auth = AuthInfo::with_access_token("refresh".to_string(), "short".to_string());
-        assert_eq!(auth.masked_access_token(), Some("***".to_string()));
+        assert_eq!(masked_access_token(&auth), Some("***".to_string()));
     }
 
     #[test]
     fn test_masked_access_token_none() {
         let auth = AuthInfo::new("api-key".to_string(), AuthStrategy::Bearer);
-        assert!(auth.masked_access_token().is_none());
+        assert!(masked_access_token(&auth).is_none());
     }
 
     #[test]

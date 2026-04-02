@@ -169,6 +169,7 @@
 - `proxy/session.rs` 中仅供单测使用的 `ClientFormat`、`ProxySession` 及相关测试已删除；当前运行时会话模块已收窄为纯 Session ID 提取逻辑
 - `proxy/http_client.rs` 中零调用的 `update_proxy()`、`is_proxy_enabled()` 已删除；`proxy/error.rs` 中已被主链使用的错误枚举分支与 `categorize_error()` 也已去掉过期的 `#[allow(dead_code)]` 标注
 - 经进一步按真实构造链复核后，`proxy/error.rs` 中从未被构造的 `ProviderUnhealthy`、`InvalidRequest`、`StreamIdleTimeout` 与 `ErrorCategory::ClientAbort` 也已删除；`forwarder.rs`、`error_mapper.rs` 的分支随之同步收口
+- `proxy/providers/auth.rs` 中仅供单测使用的敏感信息掩码 helper 已下沉到测试模块；`ProviderAdapter::transform_response()` 与 Claude 侧未接入的响应转换实现也已删除，避免继续保留无调用的适配器接口
 
 ## 四、基于前端命令差集的剩余项
 
