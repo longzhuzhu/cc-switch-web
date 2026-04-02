@@ -18,10 +18,9 @@ pub mod log_codes;
 pub mod model_mapper;
 pub mod provider_router;
 pub mod providers;
-pub mod response_handler;
 pub mod response_processor;
 pub(crate) mod server;
-pub mod session;
+mod session;
 pub(crate) mod sse;
 pub mod thinking_budget_rectifier;
 pub mod thinking_optimizer;
@@ -39,13 +38,8 @@ pub use error::ProxyError;
 #[allow(unused_imports)]
 pub use provider_router::ProviderRouter;
 #[allow(unused_imports)]
-pub use response_handler::{NonStreamHandler, ResponseType, StreamHandler};
-#[allow(unused_imports)]
-pub use session::{
-    extract_session_id, ClientFormat, ProxySession, SessionIdResult, SessionIdSource,
-};
-#[allow(unused_imports)]
 pub use types::{ProxyConfig, ProxyServerInfo, ProxyStatus};
+pub(crate) use session::extract_session_id;
 
 // 内部模块间共享（供子模块使用）
 // 注意：这个导出用于模块内部，编译器可能警告未使用但实际被子模块使用

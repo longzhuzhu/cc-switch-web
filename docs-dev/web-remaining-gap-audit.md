@@ -165,6 +165,7 @@
 - `proxy/health.rs` 中未接入任何主链的占位 `HealthChecker` 模块已删除；当前代理子模块不再保留纯占位健康检查文件
 - `proxy/providers/codex.rs` 中仅供单测使用的官方客户端识别 helper 已下沉到测试模块；`proxy/providers/gemini.rs` 中未被运行时消费的 `OAuthCredentials` 结构已收窄为只提取 access token 的私有逻辑，继续收紧代理适配层的测试专用辅助面
 - `proxy/handler_config.rs` 中零引用的 `HandlerConfig` 及其四个预设常量已删除；当前代理 handler 统一仍直接使用已接入主链的 parser config，而不再保留未落地的二次封装占位
+- `proxy/response_handler.rs` 整个零引用响应分发模块已删除；`proxy/session.rs` 也已不再通过 `proxy/mod.rs` 对外暴露测试型会话类型，只保留 crate 内部实际使用的 `extract_session_id()` 入口
 
 ## 四、基于前端命令差集的剩余项
 
