@@ -17,6 +17,10 @@ pub fn get_codex_config_dir() -> PathBuf {
         return custom;
     }
 
+    get_default_codex_config_dir()
+}
+
+pub fn get_default_codex_config_dir() -> PathBuf {
     get_home_dir().join(".codex")
 }
 

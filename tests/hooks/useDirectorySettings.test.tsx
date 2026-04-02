@@ -4,28 +4,25 @@ import { useDirectorySettings } from "@/hooks/useDirectorySettings";
 import type { SettingsFormState } from "@/hooks/useSettingsForm";
 
 const getAppConfigDirOverrideMock = vi.hoisted(() => vi.fn());
+const getAppConfigDirMock = vi.hoisted(() => vi.fn());
+const getDefaultAppConfigDirMock = vi.hoisted(() => vi.fn());
 const getConfigDirMock = vi.hoisted(() => vi.fn());
+const getDefaultConfigDirMock = vi.hoisted(() => vi.fn());
 const selectConfigDirectoryMock = vi.hoisted(() => vi.fn());
 const setAppConfigDirOverrideMock = vi.hoisted(() => vi.fn());
-const homeDirMock = vi.hoisted(() => vi.fn<() => Promise<string>>());
-const joinMock = vi.hoisted(() =>
-  vi.fn(async (...segments: string[]) => segments.join("/")),
-);
 const toastErrorMock = vi.hoisted(() => vi.fn());
 const toastInfoMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api", () => ({
   settingsApi: {
     getAppConfigDirOverride: getAppConfigDirOverrideMock,
+    getAppConfigDir: getAppConfigDirMock,
+    getDefaultAppConfigDir: getDefaultAppConfigDirMock,
     getConfigDir: getConfigDirMock,
+    getDefaultConfigDir: getDefaultConfigDirMock,
     selectConfigDirectory: selectConfigDirectoryMock,
     setAppConfigDirOverride: setAppConfigDirOverrideMock,
   },
-}));
-
-vi.mock("@/lib/runtime/client/path", () => ({
-  homeDir: homeDirMock,
-  join: joinMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -57,17 +54,20 @@ describe("useDirectorySettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    homeDirMock.mockResolvedValue("/home/mock");
-    joinMock.mockImplementation(async (...segments: string[]) =>
-      segments.join("/"),
-    );
-
     getAppConfigDirOverrideMock.mockResolvedValue(null);
+    getAppConfigDirMock.mockResolvedValue("/default/app");
+    getDefaultAppConfigDirMock.mockResolvedValue("/default/app");
     getConfigDirMock.mockImplementation(async (app: string) => {
       if (app === "claude") return "/remote/claude";
       if (app === "codex") return "/remote/codex";
       if (app === "gemini") return "/remote/gemini";
       return "/remote/opencode";
+    });
+    getDefaultConfigDirMock.mockImplementation(async (app: string) => {
+      if (app === "claude") return "/default/claude";
+      if (app === "codex") return "/default/codex";
+      if (app === "gemini") return "/default/gemini";
+      return "/default/opencode";
     });
     selectConfigDirectoryMock.mockReset();
   });
@@ -143,6 +143,7 @@ describe("useDirectorySettings", () => {
     });
 
     expect(result.current.appConfigDir).toBeUndefined();
+    expect(result.current.resolvedDirs.appConfig).toBe("/default/app");
     expect(toastInfoMock).toHaveBeenCalled();
     expect(selectConfigDirectoryMock).not.toHaveBeenCalled();
   });
@@ -171,9 +172,9 @@ describe("useDirectorySettings", () => {
     expect(onUpdateSettings).toHaveBeenCalledWith({
       codexConfigDir: undefined,
     });
-    expect(result.current.resolvedDirs.claude).toBe("/home/mock/.claude");
-    expect(result.current.resolvedDirs.codex).toBe("/home/mock/.codex");
-    expect(result.current.resolvedDirs.appConfig).toBe("/home/mock/.cc-switch");
+    expect(result.current.resolvedDirs.claude).toBe("/default/claude");
+    expect(result.current.resolvedDirs.codex).toBe("/default/codex");
+    expect(result.current.resolvedDirs.appConfig).toBe("/default/app");
   });
 
   it("resetAllDirectories applies provided resolved values", async () => {

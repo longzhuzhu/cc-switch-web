@@ -11,6 +11,10 @@ pub fn get_gemini_dir() -> PathBuf {
         return custom;
     }
 
+    get_default_gemini_dir()
+}
+
+pub fn get_default_gemini_dir() -> PathBuf {
     get_home_dir().join(".gemini")
 }
 

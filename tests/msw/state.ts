@@ -226,6 +226,9 @@ export const setSettings = (data: Partial<Settings>) => {
 
 export const getAppConfigDirOverride = () => appConfigDirOverride;
 
+export const getResolvedAppConfigDir = () =>
+  appConfigDirOverride ?? "/default/app";
+
 export const setAppConfigDirOverrideState = (value: string | null) => {
   appConfigDirOverride = value;
 };

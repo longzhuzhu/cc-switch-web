@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { homeDir, join } from "@/lib/runtime/client/path";
 import { settingsApi, type AppId } from "@/lib/api";
 import type { SettingsFormState } from "./useSettingsForm";
 
@@ -19,42 +18,6 @@ const sanitizeDir = (value?: string | null): string | undefined => {
   if (!value) return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-};
-
-const computeDefaultAppConfigDir = async (): Promise<string | undefined> => {
-  try {
-    const home = await homeDir();
-    return await join(home, ".cc-switch");
-  } catch (error) {
-    console.error(
-      "[useDirectorySettings] Failed to resolve default app config dir",
-      error,
-    );
-    return undefined;
-  }
-};
-
-const computeDefaultConfigDir = async (
-  app: AppId,
-): Promise<string | undefined> => {
-  try {
-    const home = await homeDir();
-    const folder =
-      app === "claude"
-        ? ".claude"
-        : app === "codex"
-          ? ".codex"
-          : app === "gemini"
-            ? ".gemini"
-            : ".config/opencode";
-    return await join(home, folder);
-  } catch (error) {
-    console.error(
-      "[useDirectorySettings] Failed to resolve default config dir",
-      error,
-    );
-    return undefined;
-  }
 };
 
 export interface UseDirectorySettingsProps {
@@ -88,7 +51,7 @@ export interface UseDirectorySettingsResult {
  * - resolvedDirs 状态
  * - 目录选择（browse）
  * - 目录重置
- * - 默认值计算
+ * - 默认值加载（由本地 Rust 服务提供）
  */
 export function useDirectorySettings({
   settings: _settings,
@@ -126,6 +89,7 @@ export function useDirectorySettings({
       try {
         const [
           overrideRaw,
+          resolvedAppConfigDir,
           claudeDir,
           codexDir,
           geminiDir,
@@ -137,15 +101,16 @@ export function useDirectorySettings({
           defaultOpencodeDir,
         ] = await Promise.all([
           settingsApi.getAppConfigDirOverride(),
+          settingsApi.getAppConfigDir(),
           settingsApi.getConfigDir("claude"),
           settingsApi.getConfigDir("codex"),
           settingsApi.getConfigDir("gemini"),
           settingsApi.getConfigDir("opencode"),
-          computeDefaultAppConfigDir(),
-          computeDefaultConfigDir("claude"),
-          computeDefaultConfigDir("codex"),
-          computeDefaultConfigDir("gemini"),
-          computeDefaultConfigDir("opencode"),
+          settingsApi.getDefaultAppConfigDir(),
+          settingsApi.getDefaultConfigDir("claude"),
+          settingsApi.getDefaultConfigDir("codex"),
+          settingsApi.getDefaultConfigDir("gemini"),
+          settingsApi.getDefaultConfigDir("opencode"),
         ]);
 
         if (!active) return;
@@ -164,7 +129,10 @@ export function useDirectorySettings({
         initialAppConfigDirRef.current = normalizedOverride;
 
         setResolvedDirs({
-          appConfig: normalizedOverride ?? defaultsRef.current.appConfig,
+          appConfig:
+            normalizedOverride ??
+            resolvedAppConfigDir ??
+            defaultsRef.current.appConfig,
           claude: claudeDir || defaultsRef.current.claude,
           codex: codexDir || defaultsRef.current.codex,
           gemini: geminiDir || defaultsRef.current.gemini,
@@ -266,12 +234,17 @@ export function useDirectorySettings({
               ? "gemini"
               : "opencode";
       if (!defaultsRef.current[key]) {
-        const fallback = await computeDefaultConfigDir(app);
-        if (fallback) {
+        try {
+          const fallback = await settingsApi.getDefaultConfigDir(app);
           defaultsRef.current = {
             ...defaultsRef.current,
             [key]: fallback,
           };
+        } catch (error) {
+          console.error(
+            "[useDirectorySettings] Failed to reload default config dir",
+            error,
+          );
         }
       }
       updateDirectoryState(key, undefined);
@@ -281,12 +254,17 @@ export function useDirectorySettings({
 
   const resetAppConfigDir = useCallback(async () => {
     if (!defaultsRef.current.appConfig) {
-      const fallback = await computeDefaultAppConfigDir();
-      if (fallback) {
+      try {
+        const fallback = await settingsApi.getDefaultAppConfigDir();
         defaultsRef.current = {
           ...defaultsRef.current,
           appConfig: fallback,
         };
+      } catch (error) {
+        console.error(
+          "[useDirectorySettings] Failed to reload default app config dir",
+          error,
+        );
       }
     }
     updateDirectoryState("appConfig", undefined);

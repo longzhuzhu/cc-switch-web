@@ -38,6 +38,10 @@ pub fn get_claude_config_dir() -> PathBuf {
         return custom;
     }
 
+    get_default_claude_config_dir()
+}
+
+pub fn get_default_claude_config_dir() -> PathBuf {
     get_home_dir().join(".claude")
 }
 
@@ -85,12 +89,7 @@ pub fn get_claude_settings_path() -> PathBuf {
     settings
 }
 
-/// 获取应用配置目录路径 (~/.cc-switch)
-pub fn get_app_config_dir() -> PathBuf {
-    if let Some(custom) = crate::app_store::get_app_config_dir_override() {
-        return custom;
-    }
-
+pub fn get_default_app_config_dir() -> PathBuf {
     let default_dir = get_home_dir().join(".cc-switch");
 
     // 兼容 v3.10.3：当用户环境存在 `HOME` 且与真实用户目录不同，
@@ -119,6 +118,15 @@ pub fn get_app_config_dir() -> PathBuf {
     }
 
     default_dir
+}
+
+/// 获取应用配置目录路径 (~/.cc-switch)
+pub fn get_app_config_dir() -> PathBuf {
+    if let Some(custom) = crate::app_store::get_app_config_dir_override() {
+        return custom;
+    }
+
+    get_default_app_config_dir()
 }
 
 /// 获取应用配置文件路径

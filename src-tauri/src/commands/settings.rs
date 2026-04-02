@@ -40,6 +40,20 @@ pub fn get_app_config_dir_override_internal() -> Result<Option<String>, String> 
         .map(|p| p.to_string_lossy().to_string()))
 }
 
+/// 获取当前生效的 app_config_dir
+pub fn get_app_config_dir_internal() -> Result<String, String> {
+    Ok(crate::config::get_app_config_dir()
+        .to_string_lossy()
+        .to_string())
+}
+
+/// 获取默认 app_config_dir（不读取 override）
+pub fn get_default_app_config_dir_internal() -> Result<String, String> {
+    Ok(crate::config::get_default_app_config_dir()
+        .to_string_lossy()
+        .to_string())
+}
+
 /// 设置 app_config_dir 覆盖配置 (到 Store)
 pub fn set_app_config_dir_override_internal(path: Option<String>) -> Result<bool, String> {
     crate::app_store::set_app_config_dir_override(path.as_deref())?;

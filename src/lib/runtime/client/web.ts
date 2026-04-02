@@ -238,6 +238,10 @@ export async function getWebConfigDir(appId: AppId): Promise<string> {
   return requestJson<string>(`/api/settings/config-dir/${appId}`);
 }
 
+export async function getWebDefaultConfigDir(appId: AppId): Promise<string> {
+  return requestJson<string>(`/api/settings/default-config-dir/${appId}`);
+}
+
 export async function getWebCommonConfigSnippet(
   appType: string,
 ): Promise<string | null> {
@@ -280,6 +284,14 @@ export async function syncWebCurrentProvidersLive(): Promise<{
 
 export async function getWebAppConfigDirOverride(): Promise<string | null> {
   return requestJson<string | null>("/api/settings/app-config-dir-override");
+}
+
+export async function getWebAppConfigDir(): Promise<string> {
+  return requestJson<string>("/api/settings/app-config-dir");
+}
+
+export async function getWebDefaultAppConfigDir(): Promise<string> {
+  return requestJson<string>("/api/settings/default-app-config-dir");
 }
 
 export async function setWebAppConfigDirOverride(

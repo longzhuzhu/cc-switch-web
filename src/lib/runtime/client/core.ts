@@ -16,10 +16,13 @@ import {
   getWebCommonConfigSnippet,
   getWebLiveProviderIds,
   getWebAutoFailoverEnabled,
+  getWebAppConfigDir,
   getWebAppConfigDirOverride,
   getWebAvailableProvidersForFailover,
   getWebCircuitBreakerConfig,
   getWebCircuitBreakerStats,
+  getWebDefaultAppConfigDir,
+  getWebDefaultConfigDir,
   getWebDefaultCostMultiplier,
   getWebFailoverQueue,
   getWebGlobalProxyConfig,
@@ -787,12 +790,18 @@ export async function invoke<T>(
       )) as T;
     case "get_app_config_dir_override":
       return (await getWebAppConfigDirOverride()) as T;
+    case "get_app_config_dir":
+      return (await getWebAppConfigDir()) as T;
+    case "get_default_app_config_dir":
+      return (await getWebDefaultAppConfigDir()) as T;
     case "set_app_config_dir_override":
       return (await setWebAppConfigDirOverride(
         (args?.path as string | null | undefined) ?? null,
       )) as T;
     case "get_config_dir":
       return (await getWebConfigDir(args?.app as AppId)) as T;
+    case "get_default_config_dir":
+      return (await getWebDefaultConfigDir(args?.app as AppId)) as T;
     case "open_external": {
       const url = typeof args?.url === "string" ? args.url : undefined;
       if (typeof window !== "undefined" && url) {

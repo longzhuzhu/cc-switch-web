@@ -17,6 +17,7 @@ import {
   getSettings,
   setSettings,
   getAppConfigDirOverride,
+  getResolvedAppConfigDir,
   setAppConfigDirOverrideState,
 } from "./state";
 
@@ -170,9 +171,28 @@ export const handlers = [
     success(getAppConfigDirOverride()),
   ),
 
+  http.post(`${TAURI_ENDPOINT}/get_app_config_dir`, () =>
+    success(getResolvedAppConfigDir()),
+  ),
+
+  http.post(`${TAURI_ENDPOINT}/get_default_app_config_dir`, () =>
+    success("/default/app"),
+  ),
+
   http.post(`${TAURI_ENDPOINT}/get_config_dir`, async ({ request }) => {
     const { app } = await withJson<{ app: AppId }>(request);
-    return success(app === "claude" ? "/default/claude" : "/default/codex");
+    if (app === "claude") return success("/default/claude");
+    if (app === "codex") return success("/default/codex");
+    if (app === "gemini") return success("/default/gemini");
+    return success("/default/opencode");
+  }),
+
+  http.post(`${TAURI_ENDPOINT}/get_default_config_dir`, async ({ request }) => {
+    const { app } = await withJson<{ app: AppId }>(request);
+    if (app === "claude") return success("/default/claude");
+    if (app === "codex") return success("/default/codex");
+    if (app === "gemini") return success("/default/gemini");
+    return success("/default/opencode");
   }),
 
   // Sync current providers live (no-op success)

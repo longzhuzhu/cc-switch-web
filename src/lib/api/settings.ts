@@ -37,8 +37,20 @@ export const settingsApi = {
     return await invoke("get_config_dir", { app: appId });
   },
 
+  async getDefaultConfigDir(appId: AppId): Promise<string> {
+    return await invoke("get_default_config_dir", { app: appId });
+  },
+
   async getAppConfigDirOverride(): Promise<string | null> {
     return await invoke("get_app_config_dir_override");
+  },
+
+  async getAppConfigDir(): Promise<string> {
+    return await invoke("get_app_config_dir");
+  },
+
+  async getDefaultAppConfigDir(): Promise<string> {
+    return await invoke("get_default_app_config_dir");
   },
 
   async setAppConfigDirOverride(path: string | null): Promise<boolean> {

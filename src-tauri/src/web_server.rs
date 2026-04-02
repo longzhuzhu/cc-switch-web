@@ -1441,6 +1441,18 @@ async fn get_app_config_dir_override() -> Json<Option<String>> {
     Json(crate::commands::get_app_config_dir_override_internal().unwrap_or(None))
 }
 
+async fn get_app_config_dir() -> Result<Json<String>, ApiError> {
+    crate::commands::get_app_config_dir_internal()
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to load app config dir: {e}")))
+}
+
+async fn get_default_app_config_dir() -> Result<Json<String>, ApiError> {
+    crate::commands::get_default_app_config_dir_internal()
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to load default app config dir: {e}")))
+}
+
 async fn set_app_config_dir_override(
     Json(payload): Json<OptionalPathRequest>,
 ) -> Result<Json<bool>, ApiError> {
@@ -1834,6 +1846,12 @@ async fn get_current_provider(
 async fn get_config_dir(Path(app): Path<String>) -> Result<Json<String>, ApiError> {
     let dir = crate::commands::get_config_dir_internal(app)
         .map_err(|e| ApiError::internal(format!("failed to load config dir: {e}")))?;
+    Ok(Json(dir))
+}
+
+async fn get_default_config_dir(Path(app): Path<String>) -> Result<Json<String>, ApiError> {
+    let dir = crate::commands::get_default_config_dir_internal(app)
+        .map_err(|e| ApiError::internal(format!("failed to load default config dir: {e}")))?;
     Ok(Json(dir))
 }
 
@@ -2431,9 +2449,18 @@ pub async fn run_web_server() -> Result<(), String> {
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
+        .route("/api/settings/app-config-dir", get(get_app_config_dir))
+        .route(
+            "/api/settings/default-app-config-dir",
+            get(get_default_app_config_dir),
+        )
         .route(
             "/api/settings/app-config-dir-override",
             get(get_app_config_dir_override).put(set_app_config_dir_override),
+        )
+        .route(
+            "/api/settings/default-config-dir/:app",
+            get(get_default_config_dir),
         )
         .route(
             "/api/settings/common-config/:app",

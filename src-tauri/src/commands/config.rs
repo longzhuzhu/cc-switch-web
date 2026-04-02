@@ -79,6 +79,18 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
+pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, String> {
+    let dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
+        AppType::Claude => config::get_default_claude_config_dir(),
+        AppType::Codex => codex_config::get_default_codex_config_dir(),
+        AppType::Gemini => crate::gemini_config::get_default_gemini_dir(),
+        AppType::OpenCode => crate::opencode_config::get_default_opencode_dir(),
+        AppType::OpenClaw => crate::openclaw_config::get_default_openclaw_dir(),
+    };
+
+    Ok(dir.to_string_lossy().to_string())
+}
+
 pub(crate) fn get_common_config_snippet_internal(
     state: &crate::store::AppState,
     app_type: &str,

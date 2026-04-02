@@ -58,8 +58,3 @@ vi.mock("@/lib/runtime/client/event", () => ({
 
 // Ensure the MSW server is referenced so tree shaking doesn't remove imports
 void server;
-
-vi.mock("@/lib/runtime/client/path", () => ({
-  homeDir: async () => "/home/mock",
-  join: async (...segments: string[]) => segments.join("/"),
-}));
