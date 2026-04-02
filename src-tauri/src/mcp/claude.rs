@@ -1,12 +1,11 @@
 //! Claude MCP 同步和导入模块
 
 use serde_json::Value;
-use std::collections::HashMap;
 
-use crate::app_config::{McpApps, McpServer, MultiAppConfig};
 use crate::error::AppError;
 
 use super::validation::validate_server_spec;
+use super::{merge_imported_server, ImportedMcpServers};
 
 fn should_sync_claude_mcp() -> bool {
     // Claude 未安装/未初始化时：通常 ~/.claude 目录与 ~/.claude.json 都不存在。
@@ -16,7 +15,7 @@ fn should_sync_claude_mcp() -> bool {
 
 /// 从 ~/.claude.json 导入 mcpServers 到统一结构（v3.7.0+）
 /// 已存在的服务器将启用 Claude 应用，不覆盖其他字段和应用状态
-pub fn import_from_claude(config: &mut MultiAppConfig) -> Result<usize, AppError> {
+pub fn import_from_claude(servers: &mut ImportedMcpServers) -> Result<usize, AppError> {
     let text_opt = crate::claude_mcp::read_mcp_json()?;
     let Some(text) = text_opt else { return Ok(0) };
 
@@ -25,9 +24,6 @@ pub fn import_from_claude(config: &mut MultiAppConfig) -> Result<usize, AppError
     let Some(map) = v.get("mcpServers").and_then(|x| x.as_object()) else {
         return Ok(0);
     };
-
-    // 确保新结构存在
-    let servers = config.mcp.servers.get_or_insert_with(HashMap::new);
 
     let mut changed = 0;
     let mut errors = Vec::new();
@@ -40,35 +36,9 @@ pub fn import_from_claude(config: &mut MultiAppConfig) -> Result<usize, AppError
             continue;
         }
 
-        if let Some(existing) = servers.get_mut(id) {
-            // 已存在：仅启用 Claude 应用
-            if !existing.apps.claude {
-                existing.apps.claude = true;
-                changed += 1;
-                log::info!("MCP 服务器 '{id}' 已启用 Claude 应用");
-            }
-        } else {
-            // 新建服务器：默认仅启用 Claude
-            servers.insert(
-                id.clone(),
-                McpServer {
-                    id: id.clone(),
-                    name: id.clone(),
-                    server: spec.clone(),
-                    apps: McpApps {
-                        claude: true,
-                        codex: false,
-                        gemini: false,
-                        opencode: false,
-                    },
-                    description: None,
-                    homepage: None,
-                    docs: None,
-                    tags: Vec::new(),
-                },
-            );
+        if merge_imported_server(servers, id, spec.clone(), crate::app_config::AppType::Claude) {
             changed += 1;
-            log::info!("导入新 MCP 服务器 '{id}'");
+            log::info!("导入或启用 Claude MCP 服务器 '{id}'");
         }
     }
 
@@ -80,11 +50,7 @@ pub fn import_from_claude(config: &mut MultiAppConfig) -> Result<usize, AppError
 }
 
 /// 将单个 MCP 服务器同步到 Claude live 配置
-pub fn sync_single_server_to_claude(
-    _config: &MultiAppConfig,
-    id: &str,
-    server_spec: &Value,
-) -> Result<(), AppError> {
+pub fn sync_single_server_to_claude(id: &str, server_spec: &Value) -> Result<(), AppError> {
     if !should_sync_claude_mcp() {
         return Ok(());
     }

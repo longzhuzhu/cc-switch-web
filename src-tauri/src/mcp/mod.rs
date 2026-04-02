@@ -16,6 +16,47 @@ mod gemini;
 mod opencode;
 mod validation;
 
+use std::collections::HashMap;
+
+use crate::app_config::{AppType, McpApps, McpServer};
+
+pub(crate) type ImportedMcpServers = HashMap<String, McpServer>;
+
+pub(crate) fn merge_imported_server(
+    servers: &mut ImportedMcpServers,
+    id: &str,
+    spec: serde_json::Value,
+    app: AppType,
+) -> bool {
+    if let Some(existing) = servers.get_mut(id) {
+        if !existing.apps.is_enabled_for(&app) {
+            existing.apps.set_enabled_for(&app, true);
+            return true;
+        }
+        return false;
+    }
+
+    servers.insert(
+        id.to_string(),
+        McpServer {
+            id: id.to_string(),
+            name: id.to_string(),
+            server: spec,
+            apps: McpApps {
+                claude: matches!(app, AppType::Claude),
+                codex: matches!(app, AppType::Codex),
+                gemini: matches!(app, AppType::Gemini),
+                opencode: matches!(app, AppType::OpenCode),
+            },
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: Vec::new(),
+        },
+    );
+    true
+}
+
 // 仅 crate 内部服务层会调用这些同步/导入函数
 pub(crate) use claude::{
     import_from_claude, remove_server_from_claude, sync_single_server_to_claude,

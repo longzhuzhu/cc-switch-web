@@ -13,13 +13,12 @@
 //! | `url`                | `url`               |
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
 
-use crate::app_config::{McpApps, McpServer, MultiAppConfig};
 use crate::error::AppError;
 use crate::opencode_config;
 
 use super::validation::validate_server_spec;
+use super::{merge_imported_server, ImportedMcpServers};
 
 // ============================================================================
 // Helper Functions
@@ -173,11 +172,7 @@ fn convert_from_opencode_format(spec: &Value) -> Result<Value, AppError> {
 // ============================================================================
 
 /// Sync a single MCP server to OpenCode live config
-pub fn sync_single_server_to_opencode(
-    _config: &MultiAppConfig,
-    id: &str,
-    server_spec: &Value,
-) -> Result<(), AppError> {
+pub fn sync_single_server_to_opencode(id: &str, server_spec: &Value) -> Result<(), AppError> {
     if !should_sync_opencode_mcp() {
         return Ok(());
     }
@@ -201,14 +196,11 @@ pub fn remove_server_from_opencode(id: &str) -> Result<(), AppError> {
 /// Import MCP servers from OpenCode config to unified structure
 ///
 /// Existing servers will have OpenCode app enabled without overwriting other fields.
-pub fn import_from_opencode(config: &mut MultiAppConfig) -> Result<usize, AppError> {
+pub fn import_from_opencode(servers: &mut ImportedMcpServers) -> Result<usize, AppError> {
     let mcp_map = opencode_config::get_mcp_servers()?;
     if mcp_map.is_empty() {
         return Ok(0);
     }
-
-    // Ensure servers map exists
-    let servers = config.mcp.servers.get_or_insert_with(HashMap::new);
 
     let mut changed = 0;
     let mut errors = Vec::new();
@@ -231,35 +223,10 @@ pub fn import_from_opencode(config: &mut MultiAppConfig) -> Result<usize, AppErr
             continue;
         }
 
-        if let Some(existing) = servers.get_mut(&id) {
-            // Existing server: just enable OpenCode app
-            if !existing.apps.opencode {
-                existing.apps.opencode = true;
-                changed += 1;
-                log::info!("MCP server '{id}' enabled for OpenCode");
-            }
-        } else {
-            // New server: default to only OpenCode enabled
-            servers.insert(
-                id.clone(),
-                McpServer {
-                    id: id.clone(),
-                    name: id.clone(),
-                    server: unified_spec,
-                    apps: McpApps {
-                        claude: false,
-                        codex: false,
-                        gemini: false,
-                        opencode: true,
-                    },
-                    description: None,
-                    homepage: None,
-                    docs: None,
-                    tags: Vec::new(),
-                },
-            );
+        if merge_imported_server(servers, &id, unified_spec, crate::app_config::AppType::OpenCode)
+        {
             changed += 1;
-            log::info!("Imported new MCP server '{id}' from OpenCode");
+            log::info!("Imported or enabled OpenCode MCP server '{id}'");
         }
     }
 

@@ -6,12 +6,11 @@
 //! - JSON 到 TOML 的转换逻辑
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
 
-use crate::app_config::{McpApps, McpServer, MultiAppConfig};
 use crate::error::AppError;
 
 use super::validation::validate_server_spec;
+use super::{merge_imported_server, ImportedMcpServers};
 
 fn should_sync_codex_mcp() -> bool {
     // Codex 未安装/未初始化时：~/.codex 目录不存在。
@@ -26,7 +25,7 @@ fn should_sync_codex_mcp() -> bool {
 /// - 错误格式：[mcp.servers.*]（容错读取，用于迁移错误写入的配置）
 ///
 /// 已存在的服务器将启用 Codex 应用，不覆盖其他字段和应用状态
-pub fn import_from_codex(config: &mut MultiAppConfig) -> Result<usize, AppError> {
+pub fn import_from_codex(servers: &mut ImportedMcpServers) -> Result<usize, AppError> {
     let text = crate::codex_config::read_and_validate_codex_config_text()?;
     if text.trim().is_empty() {
         return Ok(0);
@@ -34,9 +33,6 @@ pub fn import_from_codex(config: &mut MultiAppConfig) -> Result<usize, AppError>
 
     let root: toml::Table = toml::from_str(&text)
         .map_err(|e| AppError::McpValidation(format!("解析 ~/.codex/config.toml 失败: {e}")))?;
-
-    // 确保新结构存在
-    let servers = config.mcp.servers.get_or_insert_with(HashMap::new);
 
     let mut changed_total = 0usize;
 
@@ -193,35 +189,9 @@ pub fn import_from_codex(config: &mut MultiAppConfig) -> Result<usize, AppError>
                 continue;
             }
 
-            if let Some(existing) = servers.get_mut(id) {
-                // 已存在：仅启用 Codex 应用
-                if !existing.apps.codex {
-                    existing.apps.codex = true;
-                    changed += 1;
-                    log::info!("MCP 服务器 '{id}' 已启用 Codex 应用");
-                }
-            } else {
-                // 新建服务器：默认仅启用 Codex
-                servers.insert(
-                    id.clone(),
-                    McpServer {
-                        id: id.clone(),
-                        name: id.clone(),
-                        server: spec_v,
-                        apps: McpApps {
-                            claude: false,
-                            codex: true,
-                            gemini: false,
-                            opencode: false,
-                        },
-                        description: None,
-                        homepage: None,
-                        docs: None,
-                        tags: Vec::new(),
-                    },
-                );
+            if merge_imported_server(servers, id, spec_v, crate::app_config::AppType::Codex) {
                 changed += 1;
-                log::info!("导入新 MCP 服务器 '{id}'");
+                log::info!("导入或启用 Codex MCP 服务器 '{id}'");
             }
         }
         changed
@@ -250,11 +220,7 @@ pub fn import_from_codex(config: &mut MultiAppConfig) -> Result<usize, AppError>
 
 /// 将单个 MCP 服务器同步到 Codex live 配置
 /// 始终使用 Codex 官方格式 [mcp_servers]，并清理可能存在的错误格式 [mcp.servers]
-pub fn sync_single_server_to_codex(
-    _config: &MultiAppConfig,
-    id: &str,
-    server_spec: &Value,
-) -> Result<(), AppError> {
+pub fn sync_single_server_to_codex(id: &str, server_spec: &Value) -> Result<(), AppError> {
     if !should_sync_codex_mcp() {
         return Ok(());
     }
