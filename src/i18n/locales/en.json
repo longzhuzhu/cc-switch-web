@@ -40,8 +40,7 @@
     "deleting": "Deleting...",
     "auto": "Auto",
     "enabled": "Enabled",
-    "notSet": "Not Set",
-    "webFeaturePending": "This page is outside the current Web edition scope"
+    "notSet": "Not Set"
   },
   "apiKeyInput": {
     "placeholder": "Enter API Key",

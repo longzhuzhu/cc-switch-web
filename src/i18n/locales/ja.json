@@ -40,8 +40,7 @@
     "deleting": "削除中...",
     "auto": "自動",
     "enabled": "有効",
-    "notSet": "未設定",
-    "webFeaturePending": "このページは現在の Web 版の対象外です"
+    "notSet": "未設定"
   },
   "apiKeyInput": {
     "placeholder": "API Key を入力",

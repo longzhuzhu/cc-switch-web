@@ -40,8 +40,7 @@
     "deleting": "删除中...",
     "auto": "自动",
     "enabled": "已开启",
-    "notSet": "未设置",
-    "webFeaturePending": "该页面不在当前 Web 版支持范围内"
+    "notSet": "未设置"
   },
   "apiKeyInput": {
     "placeholder": "请输入API Key",
