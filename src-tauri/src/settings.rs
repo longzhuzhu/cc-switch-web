@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::{OnceLock, RwLock};
 
 use crate::app_config::AppType;
+use crate::config::get_home_dir;
 use crate::error::AppError;
 use crate::services::skill::SyncMethod;
 
@@ -407,18 +408,13 @@ fn settings_store() -> &'static RwLock<AppSettings> {
 }
 
 fn resolve_override_path(raw: &str) -> PathBuf {
+    let home = get_home_dir();
     if raw == "~" {
-        if let Some(home) = dirs::home_dir() {
-            return home;
-        }
+        return home;
     } else if let Some(stripped) = raw.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
+        return home.join(stripped);
     } else if let Some(stripped) = raw.strip_prefix("~\\") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
+        return home.join(stripped);
     }
 
     PathBuf::from(raw)

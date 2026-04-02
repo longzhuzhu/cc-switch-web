@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::config::get_home_dir;
 use crate::error::AppError;
 
 const STORE_KEY_APP_CONFIG_DIR: &str = "app_config_dir_override";
@@ -19,18 +20,13 @@ fn store_file_path() -> PathBuf {
 }
 
 fn resolve_path(raw: &str) -> PathBuf {
+    let home = get_home_dir();
     if raw == "~" {
-        if let Some(home) = dirs::home_dir() {
-            return home;
-        }
+        return home;
     } else if let Some(stripped) = raw.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
+        return home.join(stripped);
     } else if let Some(stripped) = raw.strip_prefix("~\\") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
+        return home.join(stripped);
     }
 
     PathBuf::from(raw)

@@ -154,6 +154,7 @@
 - Web 服务启动阶段已重新接回 `init_default_skill_repos()`；新数据库首次启动时会自动补齐默认 Skill 仓库，避免 Skills 发现源为空
 - `src-tauri/tests` 中依赖旧 test hook、`ConfigService`、运行时 JSON 迁移入口和已下线兼容标记的过期集成测试已清理；当前测试面保留仍能代表 Web-only 主链行为的配置加载与 Skills 流程测试
 - Provider 默认配置导入命令已去掉遗留的 `test_hook` 命名，当前 Web 路由统一调用 `import_default_config_for_app_internal`
+- `app_store.rs`、`settings.rs`、`prompt_files.rs` 与 `services/skill.rs` 已统一使用 `get_home_dir()` 解析 home 路径；Windows 测试隔离与运行时路径来源现在保持一致，不再混用 `dirs::home_dir()` 的真实用户目录
 
 ## 四、基于前端命令差集的剩余项
 
