@@ -30,7 +30,12 @@
     "test:unit:watch": "vitest watch"
   },
   "keywords": [],
-  "author": "Jason Young",
+  "author": "zuoliangyu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zuoliangyu/zuoliangyu-cc-switch-web.git"
+  },
+  "homepage": "https://github.com/zuoliangyu/zuoliangyu-cc-switch-web",
   "license": "MIT",
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",

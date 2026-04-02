@@ -81,6 +81,10 @@ npm i -g @google/gemini-cli@latest
 # OpenCode
 curl -fsSL https://opencode.ai/install | bash`;
 
+const WEB_REPOSITORY_URL =
+  "https://github.com/zuoliangyu/zuoliangyu-cc-switch-web";
+const AUTHOR_BILIBILI_URL = "https://space.bilibili.com/27619688";
+
 export function AboutSection() {
   const { t } = useTranslation();
   const [version, setVersion] = useState<string | null>(null);
@@ -219,20 +223,36 @@ export function AboutSection() {
           : "";
 
       if (!displayVersion) {
-        await settingsApi.openExternal(
-          "https://github.com/farion1231/cc-switch/releases",
-        );
+        await settingsApi.openExternal(`${WEB_REPOSITORY_URL}/releases`);
         return;
       }
 
       await settingsApi.openExternal(
-        `https://github.com/farion1231/cc-switch/releases/tag/${displayVersion}`,
+        `${WEB_REPOSITORY_URL}/releases/tag/${displayVersion}`,
       );
     } catch (error) {
       console.error("[AboutSection] Failed to open release notes", error);
       toast.error(t("settings.openReleaseNotesFailed"));
     }
   }, [t, version]);
+
+  const handleOpenRepository = useCallback(async () => {
+    try {
+      await settingsApi.openExternal(WEB_REPOSITORY_URL);
+    } catch (error) {
+      console.error("[AboutSection] Failed to open repository", error);
+      toast.error(t("settings.openProjectRepoFailed"));
+    }
+  }, [t]);
+
+  const handleOpenAuthorContact = useCallback(async () => {
+    try {
+      await settingsApi.openExternal(AUTHOR_BILIBILI_URL);
+    } catch (error) {
+      console.error("[AboutSection] Failed to open author contact", error);
+      toast.error(t("settings.openAuthorContactFailed"));
+    }
+  }, [t]);
 
   const handleCopyInstallCommands = useCallback(async () => {
     try {
@@ -288,7 +308,27 @@ export function AboutSection() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleOpenRepository}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t("settings.projectRepo")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleOpenAuthorContact}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t("settings.authorBilibili")}
+            </Button>
             <Button
               type="button"
               variant="outline"

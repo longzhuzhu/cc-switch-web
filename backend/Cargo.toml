@@ -2,7 +2,7 @@
 name = "cc-switch-web"
 version = "0.1.0"
 description = "CC Switch Web branch local Rust service for browser UI"
-authors = ["Jason Young"]
+authors = ["zuoliangyu"]
 license = "MIT"
 repository = "https://github.com/zuoliangyu/zuoliangyu-cc-switch-web"
 edition = "2021"
