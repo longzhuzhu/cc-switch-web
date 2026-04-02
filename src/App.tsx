@@ -37,7 +37,6 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
 import { cn } from "@/lib/utils";
 import { isWindows, isLinux } from "@/lib/platform";
-import { isWebRuntime } from "@/lib/runtime/client/env";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
@@ -119,17 +118,9 @@ const VALID_VIEWS: View[] = [
   "openclawAgents",
 ];
 
-const WEB_BLOCKED_VIEWS: View[] = [];
-
-const isViewBlockedInWebMode = (view: View): boolean =>
-  WEB_BLOCKED_VIEWS.includes(view);
-
 const getInitialView = (): View => {
   const saved = localStorage.getItem(VIEW_STORAGE_KEY) as View | null;
   if (saved && VALID_VIEWS.includes(saved)) {
-    if (isWebRuntime() && isViewBlockedInWebMode(saved)) {
-      return "providers";
-    }
     return saved;
   }
   return "providers";
@@ -137,7 +128,6 @@ const getInitialView = (): View => {
 
 function App() {
   const { t } = useTranslation();
-  const isWebMode = isWebRuntime();
   const queryClient = useQueryClient();
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
@@ -146,15 +136,6 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false);
 
   const handleViewChange = (nextView: View) => {
-    if (isWebMode && isViewBlockedInWebMode(nextView)) {
-      toast.info(
-        t("common.webFeaturePending", {
-          defaultValue: "该页面尚未迁移到 Web 版本，暂不可用",
-        }),
-        { closeButton: true },
-      );
-      return;
-    }
     setCurrentView(nextView);
   };
 
@@ -350,16 +331,6 @@ function App() {
   useEffect(() => {
     currentViewRef.current = currentView;
   }, [currentView]);
-
-  useEffect(() => {
-    if (!isWebMode) {
-      return;
-    }
-
-    if (isViewBlockedInWebMode(currentView)) {
-      setCurrentView("providers");
-    }
-  }, [currentView, isWebMode]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
