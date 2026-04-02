@@ -44,7 +44,7 @@ import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { useSettings } from "@/hooks/useSettings";
 import { useImportExport } from "@/hooks/useImportExport";
-import { isWebRuntime } from "@/lib/runtime/tauri/env";
+import { isWebRuntime } from "@/lib/runtime/client/env";
 import { useTranslation } from "react-i18next";
 import type { SettingsFormState } from "@/hooks/useSettings";
 

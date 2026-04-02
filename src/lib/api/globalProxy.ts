@@ -4,7 +4,7 @@
  * 提供获取、设置和测试全局代理的功能。
  */
 
-import { invoke } from "@/lib/runtime/tauri/core";
+import { invoke } from "@/lib/runtime/client/core";
 
 /**
  * 代理测试结果
@@ -51,7 +51,7 @@ export async function setGlobalProxyUrl(url: string): Promise<void> {
   try {
     return await invoke("set_global_proxy_url", { url });
   } catch (error) {
-    // Tauri invoke 错误可能是字符串
+    // 运行时 invoke 错误可能直接以字符串形式抛出
     throw new Error(typeof error === "string" ? error : String(error));
   }
 }

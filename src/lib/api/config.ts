@@ -1,5 +1,5 @@
 // 配置相关 API
-import { invoke } from "@/lib/runtime/tauri/core";
+import { invoke } from "@/lib/runtime/client/core";
 
 export type AppType = "claude" | "codex" | "gemini" | "omo" | "omo_slim";
 

@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ToggleRow } from "@/components/ui/toggle-row";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import type { SettingsFormState } from "@/hooks/useSettings";
-import { isWebRuntime } from "@/lib/runtime/tauri/env";
+import { isWebRuntime } from "@/lib/runtime/client/env";
 
 interface ProxyTabContentProps {
   settings: SettingsFormState;

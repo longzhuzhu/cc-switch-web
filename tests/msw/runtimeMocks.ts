@@ -4,7 +4,7 @@ import { server } from "./server";
 
 const RUNTIME_ENDPOINT = "http://runtime.local";
 
-vi.mock("@/lib/runtime/tauri/core", () => ({
+vi.mock("@/lib/runtime/client/core", () => ({
   invoke: async (command: string, payload: Record<string, unknown> = {}) => {
     const response = await fetch(`${RUNTIME_ENDPOINT}/${command}`, {
       method: "POST",
@@ -43,7 +43,7 @@ export const emitRuntimeEvent = (event: string, payload: unknown) => {
   handlers?.forEach((handler) => handler({ payload }));
 };
 
-vi.mock("@/lib/runtime/tauri/event", () => ({
+vi.mock("@/lib/runtime/client/event", () => ({
   listen: async (
     event: string,
     handler: (event: { payload: unknown }) => void,
@@ -59,7 +59,7 @@ vi.mock("@/lib/runtime/tauri/event", () => ({
 // Ensure the MSW server is referenced so tree shaking doesn't remove imports
 void server;
 
-vi.mock("@/lib/runtime/tauri/path", () => ({
+vi.mock("@/lib/runtime/client/path", () => ({
   homeDir: async () => "/home/mock",
   join: async (...segments: string[]) => segments.join("/"),
 }));

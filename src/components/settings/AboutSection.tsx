@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { getVersion } from "@/lib/runtime/tauri/app";
+import { getVersion } from "@/lib/runtime/client/app";
 import { settingsApi } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";

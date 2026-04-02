@@ -128,6 +128,7 @@
 - `Dockerfile` 的构建/运行阶段已去掉 WebKitGTK、GTK、tray/appindicator 等旧桌面依赖，当前容器仅保留 Rust 服务编译与运行所需的 OpenSSL/证书基础环境
 - 前端测试基建已改为 mock 当前运行时适配层而非直接 mock `@tauri-apps/api`；`useDirectorySettings` 测试已同步为 Web 模式“手动填写路径”行为，清理旧桌面目录选择假设
 - 前端运行时适配层中仅剩的 `@tauri-apps/api/core` 动态导入已删除，`package.json` 与 lockfile 也已移除 `@tauri-apps/api` 依赖；当前前端依赖面已不再包含桌面端 JS SDK
+- 前端运行时适配目录已从 `src/lib/runtime/tauri` 更名为 `src/lib/runtime/client`，测试 mock 也同步改为 `runtimeMocks`，避免继续以旧桌面运行时命名误导 Web-only 仓库结构
 
 ## 四、基于前端命令差集的剩余项
 

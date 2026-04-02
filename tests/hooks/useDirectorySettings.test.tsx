@@ -23,7 +23,7 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-vi.mock("@/lib/runtime/tauri/path", () => ({
+vi.mock("@/lib/runtime/client/path", () => ({
   homeDir: homeDirMock,
   join: joinMock,
 }));

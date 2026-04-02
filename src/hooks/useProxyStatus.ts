@@ -3,7 +3,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@/lib/runtime/tauri/core";
+import { invoke } from "@/lib/runtime/client/core";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import type {

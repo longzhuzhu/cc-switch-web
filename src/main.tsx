@@ -8,10 +8,10 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/components/theme-provider";
 import { queryClient } from "@/lib/query";
 import { Toaster } from "@/components/ui/sonner";
-import { listen } from "@/lib/runtime/tauri/event";
-import { invoke } from "@/lib/runtime/tauri/core";
-import { message } from "@/lib/runtime/tauri/dialog";
-import { exit } from "@/lib/runtime/tauri/process";
+import { listen } from "@/lib/runtime/client/event";
+import { invoke } from "@/lib/runtime/client/core";
+import { message } from "@/lib/runtime/client/dialog";
+import { exit } from "@/lib/runtime/client/process";
 
 // 根据平台添加 body class，便于平台特定样式
 try {
@@ -65,7 +65,7 @@ try {
     await handleConfigLoadError(evt.payload as ConfigLoadErrorPayload | null);
   });
 } catch (e) {
-  // 忽略事件订阅异常（例如在非 Tauri 环境下）
+  // 当前 Web 运行时下不会订阅到本地事件，这里只保底吞掉异常
   console.error("订阅 configLoadError 事件失败", e);
 }
 

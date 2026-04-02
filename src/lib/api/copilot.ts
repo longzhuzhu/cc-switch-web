@@ -5,7 +5,7 @@
  * 支持多账号管理。
  */
 
-import { invoke } from "@/lib/runtime/tauri/core";
+import { invoke } from "@/lib/runtime/client/core";
 
 /**
  * GitHub 设备码响应

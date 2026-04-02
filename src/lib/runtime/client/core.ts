@@ -174,7 +174,7 @@ type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
 type InvokeArgs = Record<string, unknown> | undefined;
 
 const webUnsupportedError = (command: string): Error =>
-  new Error(`[runtime:web] Tauri command not available yet: ${command}`);
+  new Error(`[runtime:web] command not available in web runtime: ${command}`);
 
 export async function invoke<T>(
   command: string,

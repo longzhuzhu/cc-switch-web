@@ -1,4 +1,4 @@
-import { invoke } from "@/lib/runtime/tauri/core";
+import { invoke } from "@/lib/runtime/client/core";
 import type {
   ProviderHealth,
   CircuitBreakerConfig,

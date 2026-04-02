@@ -1,4 +1,4 @@
-import { invoke } from "@/lib/runtime/tauri/core";
+import { invoke } from "@/lib/runtime/client/core";
 import type { CustomEndpoint } from "@/types";
 import type { AppId } from "./types";
 
