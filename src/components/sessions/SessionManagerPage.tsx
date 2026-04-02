@@ -877,7 +877,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                             <TooltipContent>
                               {selectedSession.resumeCommand
                                 ? t("sessionManager.resumeTooltip", {
-                                    defaultValue: "在终端中恢复此会话",
+                                    defaultValue: "复制此会话的恢复命令",
                                   })
                                 : t("sessionManager.noResumeCommand", {
                                     defaultValue: "此会话无法恢复",

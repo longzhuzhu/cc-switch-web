@@ -245,13 +245,6 @@ pub struct AppSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backup_retain_count: Option<u32>,
 
-    // ===== 终端设置 =====
-    /// 首选终端应用（可选，默认使用系统默认终端）
-    /// - macOS: "terminal" | "iterm2" | "warp" | "alacritty" | "kitty" | "ghostty"
-    /// - Windows: "cmd" | "powershell" | "wt" (Windows Terminal)
-    /// - Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preferred_terminal: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -280,7 +273,6 @@ impl Default for AppSettings {
             webdav_backup: None,
             backup_interval_hours: None,
             backup_retain_count: None,
-            preferred_terminal: None,
         }
     }
 }

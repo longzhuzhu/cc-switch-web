@@ -1,6 +1,6 @@
 # Web 化剩余缺口审计
 
-更新时间：2026-04-02（继续收拢 proxy legacy 配置链路后）
+更新时间：2026-04-02（继续收拢 Web-only 残留终端语义后）
 
 ## 结论
 
@@ -133,6 +133,9 @@
 - 零调用的前端重复 hook `src/hooks/useProxyConfig.ts` 已删除，代理配置主路径继续统一收敛到 `src/lib/query/proxy.ts`
 - 零调用的前端废弃 wrapper `getClaudeCommonConfigSnippet / setClaudeCommonConfigSnippet` 以及运行时中的对应旧命令映射已删除，通用配置片段入口统一为 `getCommonConfigSnippet / setCommonConfigSnippet`
 - 前端代理查询层中仍在使用的 `getProxyConfig / updateProxyConfig / useProxyConfig` 已改为中性“聚合代理配置”表述，不再继续以 `Legacy` 命名误导当前主路径
+- 设置页中的首选终端配置、对应三语文案与本地设置字段已删除；Web-only 分支不再保留仅桌面终端按钮使用的偏好链路
+- Prompt 面板中无发送方的 `prompt-imported` deep link 监听已删除，避免继续保留失效事件通道
+- Session 页面中“恢复会话”操作的提示文案已统一为“复制恢复命令”语义，和当前 Web 行为保持一致
 
 ## 四、基于前端命令差集的剩余项
 

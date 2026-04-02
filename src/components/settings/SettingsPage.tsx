@@ -31,7 +31,6 @@ import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import { AppVisibilitySettings } from "@/components/settings/AppVisibilitySettings";
 import { SkillSyncMethodSettings } from "@/components/settings/SkillSyncMethodSettings";
-import { TerminalSettings } from "@/components/settings/TerminalSettings";
 import { DirectorySettings } from "@/components/settings/DirectorySettings";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 import { BackupListSection } from "@/components/settings/BackupListSection";
@@ -225,14 +224,6 @@ export function SettingsPage({
                         value={settings.skillSyncMethod ?? "auto"}
                         onChange={(method) =>
                           handleAutoSave({ skillSyncMethod: method })
-                        }
-                      />
-                    )}
-                    {!isWebMode && (
-                      <TerminalSettings
-                        value={settings.preferredTerminal}
-                        onChange={(terminal) =>
-                          handleAutoSave({ preferredTerminal: terminal })
                         }
                       />
                     )}
