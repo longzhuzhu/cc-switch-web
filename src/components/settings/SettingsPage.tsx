@@ -219,14 +219,12 @@ export function SettingsPage({
                       settings={settings}
                       onChange={handleAutoSave}
                     />
-                    {!isWebMode && (
-                      <SkillSyncMethodSettings
-                        value={settings.skillSyncMethod ?? "auto"}
-                        onChange={(method) =>
-                          handleAutoSave({ skillSyncMethod: method })
-                        }
-                      />
-                    )}
+                    <SkillSyncMethodSettings
+                      value={settings.skillSyncMethod ?? "auto"}
+                      onChange={(method) =>
+                        handleAutoSave({ skillSyncMethod: method })
+                      }
+                    />
                   </motion.div>
                 ) : null}
               </TabsContent>
@@ -300,7 +298,7 @@ export function SettingsPage({
                         </AccordionTrigger>
                         <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
                           <DirectorySettings
-                            showAppConfigDir={!isWebMode}
+                            showAppConfigDir
                             allowBrowse={!isWebMode}
                             appConfigDir={appConfigDir}
                             resolvedDirs={resolvedDirs}
