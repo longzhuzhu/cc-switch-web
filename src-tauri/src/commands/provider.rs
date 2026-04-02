@@ -2,7 +2,6 @@ use indexmap::IndexMap;
 use crate::command_state::State;
 
 use crate::app_config::AppType;
-use crate::commands::copilot::CopilotAuthState;
 use crate::error::AppError;
 use crate::provider::Provider;
 use crate::services::{
@@ -246,19 +245,6 @@ pub async fn query_provider_usage_internal(
     }
 
     ProviderService::query_usage(state, app_type, provider_id).await
-}
-
-#[allow(non_snake_case)]
-pub async fn queryProviderUsage(
-    state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
-    #[allow(non_snake_case)] providerId: String, // 使用 camelCase 匹配前端
-    app: String,
-) -> Result<crate::provider::UsageResult, String> {
-    let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
-    query_provider_usage_internal(state.inner(), &copilot_state.0, app_type, &providerId)
-        .await
-        .map_err(|e| e.to_string())
 }
 
 #[allow(clippy::too_many_arguments)]

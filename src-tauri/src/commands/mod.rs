@@ -2,8 +2,6 @@
 
 mod auth;
 mod config;
-mod copilot;
-mod failover;
 mod global_proxy;
 mod import_export;
 mod mcp;
@@ -23,10 +21,8 @@ mod usage;
 mod webdav_sync;
 mod workspace;
 
-pub use auth::*;
+pub(crate) use auth::*;
 pub use config::*;
-pub use copilot::*;
-pub use failover::*;
 pub use global_proxy::*;
 pub use import_export::*;
 pub use mcp::*;

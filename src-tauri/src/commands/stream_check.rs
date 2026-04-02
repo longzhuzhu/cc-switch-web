@@ -1,7 +1,6 @@
 //! 流式健康检查命令
 
 use crate::app_config::AppType;
-use crate::commands::copilot::CopilotAuthState;
 use crate::error::AppError;
 use crate::services::stream_check::{
     HealthStatus, StreamCheckConfig, StreamCheckResult, StreamCheckService,
@@ -51,16 +50,6 @@ pub async fn stream_check_provider_internal(
             .save_stream_check_log(provider_id, &provider.name, app_type.as_str(), &result);
 
     Ok(result)
-}
-
-/// 流式健康检查（单个供应商）
-pub async fn stream_check_provider(
-    state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
-    app_type: AppType,
-    provider_id: String,
-) -> Result<StreamCheckResult, AppError> {
-    stream_check_provider_internal(&state, &copilot_state.0, app_type, &provider_id).await
 }
 
 pub async fn stream_check_all_providers_internal(
@@ -139,17 +128,6 @@ pub async fn stream_check_all_providers_internal(
     }
 
     Ok(results)
-}
-
-/// 批量流式健康检查
-pub async fn stream_check_all_providers(
-    state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
-    app_type: AppType,
-    proxy_targets_only: bool,
-) -> Result<Vec<(String, StreamCheckResult)>, AppError> {
-    stream_check_all_providers_internal(&state, &copilot_state.0, app_type, proxy_targets_only)
-        .await
 }
 
 /// 获取流式检查配置

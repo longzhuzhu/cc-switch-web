@@ -1,6 +1,3 @@
-use crate::command_state::State;
-
-use crate::commands::copilot::CopilotAuthState;
 use crate::proxy::providers::copilot_auth::{GitHubAccount, GitHubDeviceCodeResponse};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -72,7 +69,7 @@ fn map_device_code_response(
     }
 }
 
-pub async fn auth_start_login_internal(
+pub(crate) async fn auth_start_login_internal(
     auth_provider: &str,
     state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<ManagedAuthDeviceCodeResponse, String> {
@@ -85,7 +82,7 @@ pub async fn auth_start_login_internal(
     Ok(map_device_code_response(auth_provider, response))
 }
 
-pub async fn auth_poll_for_account_internal(
+pub(crate) async fn auth_poll_for_account_internal(
     auth_provider: &str,
     device_code: &str,
     state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
@@ -105,7 +102,7 @@ pub async fn auth_poll_for_account_internal(
     }
 }
 
-pub async fn auth_list_accounts_internal(
+pub(crate) async fn auth_list_accounts_internal(
     auth_provider: &str,
     state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<Vec<ManagedAuthAccount>, String> {
@@ -120,7 +117,7 @@ pub async fn auth_list_accounts_internal(
         .collect())
 }
 
-pub async fn auth_get_status_internal(
+pub(crate) async fn auth_get_status_internal(
     auth_provider: &str,
     state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<ManagedAuthStatus, String> {
@@ -141,7 +138,7 @@ pub async fn auth_get_status_internal(
     })
 }
 
-pub async fn auth_remove_account_internal(
+pub(crate) async fn auth_remove_account_internal(
     auth_provider: &str,
     account_id: &str,
     state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
@@ -154,7 +151,7 @@ pub async fn auth_remove_account_internal(
         .map_err(|e| e.to_string())
 }
 
-pub async fn auth_set_default_account_internal(
+pub(crate) async fn auth_set_default_account_internal(
     auth_provider: &str,
     account_id: &str,
     state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
@@ -167,63 +164,11 @@ pub async fn auth_set_default_account_internal(
         .map_err(|e| e.to_string())
 }
 
-pub async fn auth_logout_internal(
+pub(crate) async fn auth_logout_internal(
     auth_provider: &str,
     state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<(), String> {
     ensure_auth_provider(auth_provider)?;
     let auth_manager = state.write().await;
     auth_manager.clear_auth().await.map_err(|e| e.to_string())
-}
-
-pub async fn auth_start_login(
-    auth_provider: String,
-    state: State<'_, CopilotAuthState>,
-) -> Result<ManagedAuthDeviceCodeResponse, String> {
-    auth_start_login_internal(&auth_provider, &state.0).await
-}
-
-pub async fn auth_poll_for_account(
-    auth_provider: String,
-    device_code: String,
-    state: State<'_, CopilotAuthState>,
-) -> Result<Option<ManagedAuthAccount>, String> {
-    auth_poll_for_account_internal(&auth_provider, &device_code, &state.0).await
-}
-
-pub async fn auth_list_accounts(
-    auth_provider: String,
-    state: State<'_, CopilotAuthState>,
-) -> Result<Vec<ManagedAuthAccount>, String> {
-    auth_list_accounts_internal(&auth_provider, &state.0).await
-}
-
-pub async fn auth_get_status(
-    auth_provider: String,
-    state: State<'_, CopilotAuthState>,
-) -> Result<ManagedAuthStatus, String> {
-    auth_get_status_internal(&auth_provider, &state.0).await
-}
-
-pub async fn auth_remove_account(
-    auth_provider: String,
-    account_id: String,
-    state: State<'_, CopilotAuthState>,
-) -> Result<(), String> {
-    auth_remove_account_internal(&auth_provider, &account_id, &state.0).await
-}
-
-pub async fn auth_set_default_account(
-    auth_provider: String,
-    account_id: String,
-    state: State<'_, CopilotAuthState>,
-) -> Result<(), String> {
-    auth_set_default_account_internal(&auth_provider, &account_id, &state.0).await
-}
-
-pub async fn auth_logout(
-    auth_provider: String,
-    state: State<'_, CopilotAuthState>,
-) -> Result<(), String> {
-    auth_logout_internal(&auth_provider, &state.0).await
 }
