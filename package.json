@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "pnpm dev:web",
     "build": "pnpm build:d",
-    "dev:renderer": "vite",
     "dev:web": "node scripts/dev-web.mjs",
     "dev:web:ui": "vite --host 127.0.0.1 --port 3000",
     "dev:web:service": "cargo run --manifest-path backend/Cargo.toml --bin cc-switch-web",
@@ -24,7 +23,6 @@
     "up:d": "docker compose up -d",
     "down:d": "docker compose down",
     "logs:d": "docker compose logs -f",
-    "build:renderer": "vite build",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx,css,json}\"",
