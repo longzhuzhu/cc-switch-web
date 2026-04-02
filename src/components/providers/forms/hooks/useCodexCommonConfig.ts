@@ -8,7 +8,6 @@ import {
 import { configApi } from "@/lib/api";
 import { normalizeTomlText } from "@/utils/textNormalization";
 
-const LEGACY_STORAGE_KEY = "cc-switch:codex-common-config-snippet";
 const DEFAULT_CODEX_COMMON_CONFIG_SNIPPET = `# Common Codex config
 # Add your common TOML configuration here`;
 
@@ -24,7 +23,7 @@ interface UseCodexCommonConfigProps {
 
 /**
  * 管理 Codex 通用配置片段 (TOML 格式)
- * 从 config.json 读取和保存，支持从 localStorage 平滑迁移
+ * 从统一配置存储读取和保存
  */
 export function useCodexCommonConfig({
   codexConfig,
@@ -79,7 +78,7 @@ export function useCodexCommonConfig({
     }
   }, []);
 
-  // 初始化：从 config.json 加载，支持从 localStorage 迁移
+  // 初始化：从统一配置存储加载
   useEffect(() => {
     let mounted = true;
 
@@ -91,28 +90,6 @@ export function useCodexCommonConfig({
         if (snippet && snippet.trim()) {
           if (mounted) {
             setCommonConfigSnippetState(snippet);
-          }
-        } else {
-          // 如果 config.json 中没有，尝试从 localStorage 迁移
-          if (typeof window !== "undefined") {
-            try {
-              const legacySnippet =
-                window.localStorage.getItem(LEGACY_STORAGE_KEY);
-              if (legacySnippet && legacySnippet.trim()) {
-                // 迁移到 config.json
-                await configApi.setCommonConfigSnippet("codex", legacySnippet);
-                if (mounted) {
-                  setCommonConfigSnippetState(legacySnippet);
-                }
-                // 清理 localStorage
-                window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-                console.log(
-                  "[迁移] Codex 通用配置已从 localStorage 迁移到 config.json",
-                );
-              }
-            } catch (e) {
-              console.warn("[迁移] 从 localStorage 迁移失败:", e);
-            }
           }
         }
       } catch (error) {
