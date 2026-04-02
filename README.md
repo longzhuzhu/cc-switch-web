@@ -26,7 +26,7 @@ This repository now treats `0.1.0` as its initial Web release baseline. Previous
 
 - Upstream project: [cc-switch](https://github.com/farion1231/cc-switch)
 - Current Web repository: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
-- Author contact (Bilibili): [https://space.bilibili.com/27619688](https://space.bilibili.com/27619688)
+- Author: 左岚 ([Bilibili](https://space.bilibili.com/27619688))
 - This repository focuses on the Web branch direction of CC Switch
 - When project positioning or external description changes, all language README files in this repository should be updated together
 
