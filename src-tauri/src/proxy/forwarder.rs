@@ -42,9 +42,9 @@ pub struct RequestForwarder {
     current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
     /// 故障转移切换管理器
     failover_manager: Arc<FailoverSwitchManager>,
-    /// Copilot 鉴权状态（显式注入，避免依赖 Tauri 容器）
+    /// Copilot 鉴权状态（显式注入，避免依赖旧运行时容器状态）
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
-    /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
+    /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步前端状态）
     current_provider_id_at_start: String,
     /// 整流器配置
     rectifier_config: RectifierConfig,
@@ -210,7 +210,7 @@ impl RequestForwarder {
                         if should_switch {
                             status.failover_count += 1;
 
-                            // 异步触发供应商切换，更新 UI/托盘，并把“当前供应商”同步为实际使用的 provider
+                            // 异步触发供应商切换，并把“当前供应商”同步为实际使用的 provider
                             let fm = self.failover_manager.clone();
                             let pid = provider.id.clone();
                             let pname = provider.name.clone();
@@ -342,7 +342,7 @@ impl RequestForwarder {
                                             if should_switch {
                                                 status.failover_count += 1;
 
-                                                // 异步触发供应商切换，更新 UI/托盘
+                                                // 异步触发供应商切换，更新当前供应商状态
                                                 let fm = self.failover_manager.clone();
                                                 let pid = provider.id.clone();
                                                 let pname = provider.name.clone();

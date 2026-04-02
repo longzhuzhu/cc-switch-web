@@ -634,11 +634,11 @@ impl Database {
         Ok(())
     }
 
-    // ==================== Sync Methods for Tray Menu ====================
+    // ==================== Sync Methods for Compatibility ====================
 
     /// 同步获取应用的 proxy 启用状态和自动故障转移状态
     ///
-    /// 用于托盘菜单构建等同步场景
+    /// 用于需要同步读取 proxy 标记的兼容场景
     /// 返回 (enabled, auto_failover_enabled)
     pub fn get_proxy_flags_sync(&self, app_type: &str) -> (bool, bool) {
         let conn = match self.conn.lock() {
@@ -656,7 +656,7 @@ impl Database {
 
     /// 同步设置应用的 proxy 启用状态和自动故障转移状态
     ///
-    /// 用于托盘菜单点击等同步场景
+    /// 用于需要同步写入 proxy 标记的兼容场景
     pub fn set_proxy_flags_sync(
         &self,
         app_type: &str,

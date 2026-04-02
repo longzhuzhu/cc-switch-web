@@ -37,7 +37,7 @@ pub struct ProxyState {
     pub current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
     /// 共享的 ProviderRouter（持有熔断器状态，跨请求保持）
     pub provider_router: Arc<ProviderRouter>,
-    /// Copilot 鉴权状态（显式注入，避免服务层依赖 Tauri 容器）
+    /// Copilot 鉴权状态（显式注入，避免服务层依赖旧运行时容器状态）
     pub copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,

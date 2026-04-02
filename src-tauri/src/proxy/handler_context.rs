@@ -41,10 +41,10 @@ pub struct RequestContext {
     pub provider: Provider,
     /// 完整的 Provider 列表（用于故障转移）
     providers: Vec<Provider>,
-    /// 请求开始时的"当前供应商"（用于判断是否需要同步 UI/托盘）
+    /// 请求开始时的"当前供应商"（用于判断是否需要同步前端状态）
     ///
     /// 这里使用本地 settings 的设备级 current provider。
-    /// 代理模式下如果实际使用的 provider 与此不一致，会触发切换以确保 UI 始终准确。
+    /// 代理模式下如果实际使用的 provider 与此不一致，会触发切换以确保前端状态准确。
     pub current_provider_id: String,
     /// 请求中的模型名称
     pub request_model: String,

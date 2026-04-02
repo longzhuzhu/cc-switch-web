@@ -1,5 +1,8 @@
 # CC Switch Web 化改造完整计划
 
+> 说明：本文档保留为早期迁移阶段的历史计划归档。
+> 当前仓库已进入 Web-only 收尾阶段，现状与剩余项请以 `docs-dev/web-remaining-gap-audit.md` 为准。
+
 ## 1. 背景
 
 当前仓库仍然是以 Tauri 桌面应用为中心的架构：
