@@ -19,7 +19,6 @@ use crate::app_config::{AppType, McpServer};
 use crate::database::FailoverQueueItem;
 use crate::prompt::Prompt;
 use crate::provider::Provider;
-use crate::proxy::http_client;
 use crate::proxy::circuit_breaker::{CircuitBreakerConfig, CircuitBreakerStats};
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::types::{
@@ -1452,7 +1451,7 @@ async fn get_common_config_snippet(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
 ) -> Result<Json<Option<String>>, ApiError> {
-    crate::get_common_config_snippet_internal(state.app_state.as_ref(), &app)
+    crate::commands::get_common_config_snippet_internal(state.app_state.as_ref(), &app)
         .map(Json)
         .map_err(|e| ApiError::internal(format!("failed to load common config snippet: {e}")))
 }
@@ -1462,16 +1461,16 @@ async fn set_common_config_snippet(
     Path(app): Path<String>,
     Json(payload): Json<SnippetRequest>,
 ) -> Result<StatusCode, ApiError> {
-    match crate::set_common_config_snippet_internal(
+    match crate::commands::set_common_config_snippet_internal(
         state.app_state.as_ref(),
         &app,
         payload.snippet,
     ) {
         Ok(()) => {}
-        Err(crate::ConfigCommandError::BadRequest(message)) => {
+        Err(crate::commands::ConfigCommandError::BadRequest(message)) => {
             return Err(ApiError::bad_request(message));
         }
-        Err(crate::ConfigCommandError::Internal(message)) => {
+        Err(crate::commands::ConfigCommandError::Internal(message)) => {
             return Err(ApiError::internal(format!(
                 "failed to save common config snippet: {message}"
             )));
@@ -1495,19 +1494,22 @@ async fn extract_common_config_snippet(
     {
         Some(
             serde_json::from_str(settings_config)
-                .map_err(|e| ApiError::bad_request(crate::invalid_json_format_error(e)))?,
+                .map_err(|e| ApiError::bad_request(crate::commands::invalid_json_format_error(e)))?,
         )
     } else {
         None
     };
 
-    match crate::extract_common_config_snippet_internal(state.app_state.as_ref(), app_type, settings)
-    {
+    match crate::commands::extract_common_config_snippet_internal(
+        state.app_state.as_ref(),
+        app_type,
+        settings,
+    ) {
         Ok(snippet) => Ok(Json(snippet)),
-        Err(crate::ConfigCommandError::BadRequest(message)) => {
+        Err(crate::commands::ConfigCommandError::BadRequest(message)) => {
             Err(ApiError::bad_request(message))
         }
-        Err(crate::ConfigCommandError::Internal(message)) => Err(
+        Err(crate::commands::ConfigCommandError::Internal(message)) => Err(
             ApiError::internal(format!("failed to extract common config snippet: {message}")),
         ),
     }
@@ -1828,7 +1830,7 @@ async fn get_current_provider(
 }
 
 async fn get_config_dir(Path(app): Path<String>) -> Result<Json<String>, ApiError> {
-    let dir = crate::get_config_dir_internal(app)
+    let dir = crate::commands::get_config_dir_internal(app)
         .map_err(|e| ApiError::internal(format!("failed to load config dir: {e}")))?;
     Ok(Json(dir))
 }
@@ -2056,10 +2058,7 @@ async fn update_global_proxy_config(
 async fn get_global_proxy_url(
     State(state): State<WebApiState>,
 ) -> Result<Json<Option<String>>, ApiError> {
-    let url = state
-        .app_state
-        .db
-        .get_global_proxy_url()
+    let url = crate::commands::get_global_proxy_url_internal(state.app_state.as_ref())
         .map_err(|e| ApiError::internal(format!("failed to load global proxy url: {e}")))?;
     Ok(Json(url))
 }
@@ -2068,35 +2067,26 @@ async fn set_global_proxy_url(
     State(state): State<WebApiState>,
     Json(payload): Json<ValueRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let url_opt = if payload.value.trim().is_empty() {
-        None
-    } else {
-        Some(payload.value.as_str())
-    };
-
-    http_client::validate_proxy(url_opt).map_err(ApiError::bad_request)?;
-    state
-        .app_state
-        .db
-        .set_global_proxy_url(url_opt)
-        .map_err(|e| ApiError::internal(format!("failed to save global proxy url: {e}")))?;
-    http_client::apply_proxy(url_opt).map_err(ApiError::bad_request)?;
+    crate::commands::set_global_proxy_url_internal(state.app_state.as_ref(), payload.value)
+        .map_err(ApiError::bad_request)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn test_proxy_url(
     Json(payload): Json<ValueRequest>,
-) -> Result<Json<crate::ProxyTestResult>, ApiError> {
-    let result = crate::test_proxy_url(payload.value).await.map_err(ApiError::bad_request)?;
+) -> Result<Json<crate::commands::ProxyTestResult>, ApiError> {
+    let result = crate::commands::test_proxy_url_internal(payload.value)
+        .await
+        .map_err(ApiError::bad_request)?;
     Ok(Json(result))
 }
 
-async fn get_upstream_proxy_status() -> Json<crate::UpstreamProxyStatus> {
-    Json(crate::get_upstream_proxy_status())
+async fn get_upstream_proxy_status() -> Json<crate::commands::UpstreamProxyStatus> {
+    Json(crate::commands::get_upstream_proxy_status_internal())
 }
 
-async fn scan_local_proxies() -> Json<Vec<crate::DetectedProxy>> {
-    Json(crate::scan_local_proxies().await)
+async fn scan_local_proxies() -> Json<Vec<crate::commands::DetectedProxy>> {
+    Json(crate::commands::scan_local_proxies_internal().await)
 }
 
 async fn update_proxy_config_for_app(

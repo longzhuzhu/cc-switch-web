@@ -22,8 +22,8 @@ mod webdav_sync;
 mod workspace;
 
 pub(crate) use auth::*;
-pub use config::*;
-pub use global_proxy::*;
+pub(crate) use config::*;
+pub(crate) use global_proxy::*;
 pub(crate) use import_export::*;
 pub(crate) use mcp::*;
 pub use misc::*;
