@@ -11,7 +11,7 @@ COPY . .
 RUN pnpm exec vite build
 
 
-FROM rust:1.88.1-alpine3.20 AS service-builder
+FROM rust:1.88-alpine3.20 AS service-builder
 
 WORKDIR /app
 

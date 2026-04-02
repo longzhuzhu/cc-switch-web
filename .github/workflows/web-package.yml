@@ -55,7 +55,7 @@ jobs:
         if: runner.os != 'Linux'
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.88.1
+          toolchain: 1.88.0
 
       - name: Add macOS Rust targets
         if: runner.os == 'macOS'

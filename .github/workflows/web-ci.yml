@@ -75,7 +75,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.88.1
+          toolchain: 1.88.0
 
       - name: Install Linux system deps
         if: runner.os == 'Linux'
