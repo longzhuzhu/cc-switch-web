@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::str::FromStr;
 
+#[cfg(test)]
+use std::collections::HashMap;
+
+#[cfg(test)]
 use crate::services::skill::SkillStore;
 
 /// MCP 服务器应用状态（标记应用到哪些客户端）
@@ -176,6 +179,7 @@ pub struct McpServer {
 }
 
 /// MCP 配置：单客户端维度（v3.6.x 及以前，保留用于向后兼容）
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct McpConfig {
     /// 以 id 为键的服务器定义（宽松 JSON 对象，包含 enabled/source 等 UI 辅助字段）
@@ -183,6 +187,7 @@ pub struct McpConfig {
     pub servers: HashMap<String, serde_json::Value>,
 }
 
+#[cfg(test)]
 impl McpConfig {
     /// 检查配置是否为空
     pub fn is_empty(&self) -> bool {
@@ -191,6 +196,7 @@ impl McpConfig {
 }
 
 /// MCP 根配置（v3.7.0 新旧结构并存）
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpRoot {
     /// 统一的 MCP 服务器存储（v3.7.0+）
@@ -212,6 +218,7 @@ pub struct McpRoot {
     pub openclaw: McpConfig,
 }
 
+#[cfg(test)]
 impl Default for McpRoot {
     fn default() -> Self {
         Self {
@@ -228,6 +235,7 @@ impl Default for McpRoot {
 }
 
 /// Prompt 配置：单客户端维度
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PromptConfig {
     #[serde(default)]
@@ -235,6 +243,7 @@ pub struct PromptConfig {
 }
 
 /// Prompt 根：按客户端分开维护
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PromptRoot {
     #[serde(default)]
@@ -250,10 +259,11 @@ pub struct PromptRoot {
 }
 
 use crate::error::AppError;
-use crate::provider::ProviderManager;
 
 #[cfg(test)]
 use crate::config::{copy_file, get_app_config_dir, get_app_config_path, write_json_file};
+#[cfg(test)]
+use crate::provider::ProviderManager;
 #[cfg(test)]
 use crate::prompt_files::prompt_file_path;
 
@@ -321,6 +331,7 @@ impl FromStr for AppType {
 }
 
 /// 通用配置片段（按应用分治）
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CommonConfigSnippets {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -340,6 +351,7 @@ pub struct CommonConfigSnippets {
 }
 
 /// 多应用配置结构（向后兼容）
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiAppConfig {
     #[serde(default = "default_version")]
@@ -364,10 +376,12 @@ pub struct MultiAppConfig {
     pub claude_common_config_snippet: Option<String>,
 }
 
+#[cfg(test)]
 fn default_version() -> u32 {
     2
 }
 
+#[cfg(test)]
 impl Default for MultiAppConfig {
     fn default() -> Self {
         let mut apps = HashMap::new();
@@ -389,6 +403,7 @@ impl Default for MultiAppConfig {
     }
 }
 
+#[cfg(test)]
 impl MultiAppConfig {
     /// 从文件加载配置（仅支持 v2 结构）
     #[cfg(test)]

@@ -25,6 +25,7 @@
 
 pub(crate) mod backup;
 mod dao;
+#[cfg(test)]
 mod migration;
 mod schema;
 
