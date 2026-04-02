@@ -46,7 +46,6 @@ import type { SwitchResult } from "@/lib/api/providers";
 import type {
   AppProxyConfig,
   CircuitBreakerConfig,
-  CircuitBreakerStats,
   FailoverQueueItem,
   GlobalProxyConfig,
   ProviderHealth,
@@ -899,23 +898,6 @@ export async function updateWebCircuitBreakerConfig(
     "PUT",
     config,
   );
-}
-
-export async function getWebCircuitBreakerStats(
-  appId: AppId,
-  providerId: string,
-): Promise<CircuitBreakerStats | null> {
-  try {
-    return await requestJson<CircuitBreakerStats | null>(
-      `/api/failover/apps/${appId}/providers/${providerId}/circuit-breaker-stats`,
-    );
-  } catch (error) {
-    console.warn(
-      `[runtime:web] failed to load circuit breaker stats for ${appId}/${providerId}`,
-      error,
-    );
-    return null;
-  }
 }
 
 export async function getWebFailoverQueue(

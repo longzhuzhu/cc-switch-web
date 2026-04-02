@@ -201,23 +201,6 @@ impl ProviderRouter {
         }
     }
 
-    /// 获取熔断器状态
-    #[allow(dead_code)]
-    pub async fn get_circuit_breaker_stats(
-        &self,
-        provider_id: &str,
-        app_type: &str,
-    ) -> Option<crate::proxy::circuit_breaker::CircuitBreakerStats> {
-        let circuit_key = format!("{app_type}:{provider_id}");
-        let breakers = self.circuit_breakers.read().await;
-
-        if let Some(breaker) = breakers.get(&circuit_key) {
-            Some(breaker.get_stats().await)
-        } else {
-            None
-        }
-    }
-
     /// 获取或创建熔断器
     async fn get_or_create_circuit_breaker(&self, key: &str) -> Arc<CircuitBreaker> {
         // 先尝试读锁获取

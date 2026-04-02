@@ -20,7 +20,6 @@ import {
   getWebAppConfigDirOverride,
   getWebAvailableProvidersForFailover,
   getWebCircuitBreakerConfig,
-  getWebCircuitBreakerStats,
   getWebDefaultAppConfigDir,
   getWebDefaultConfigDir,
   getWebDefaultCostMultiplier,
@@ -760,11 +759,6 @@ export async function invoke<T>(
       return (await getWebCircuitBreakerConfig()) as T;
     case "update_circuit_breaker_config":
       return (await updateWebCircuitBreakerConfig(args?.config as any)) as T;
-    case "get_circuit_breaker_stats":
-      return (await getWebCircuitBreakerStats(
-        args?.appType as AppId,
-        args?.providerId as string,
-      )) as T;
     case "get_failover_queue":
       return (await getWebFailoverQueue(args?.appType as AppId)) as T;
     case "get_available_providers_for_failover":

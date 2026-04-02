@@ -8,6 +8,7 @@ mod live;
 mod usage;
 
 use indexmap::IndexMap;
+#[cfg(test)]
 use regex::Regex;
 use serde::Deserialize;
 use serde_json::Value;
@@ -1141,7 +1142,7 @@ impl ProviderService {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn extract_credentials(
         provider: &Provider,
         app_type: &AppType,

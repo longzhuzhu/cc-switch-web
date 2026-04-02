@@ -214,8 +214,8 @@ impl CopilotToken {
 struct CopilotTokenResponse {
     token: String,
     expires_at: i64,
-    #[allow(dead_code)]
-    refresh_in: Option<i64>,
+    #[serde(rename = "refresh_in")]
+    _refresh_in: Option<i64>,
 }
 
 /// GitHub 用户信息

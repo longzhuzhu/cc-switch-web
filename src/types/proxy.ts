@@ -71,14 +71,6 @@ export interface CircuitBreakerConfig {
 
 export type CircuitState = "closed" | "open" | "half_open";
 
-export interface CircuitBreakerStats {
-  state: CircuitState;
-  consecutiveFailures: number;
-  consecutiveSuccesses: number;
-  totalRequests: number;
-  failedRequests: number;
-}
-
 // 供应商健康状态枚举
 export enum ProviderHealthStatus {
   Healthy = "healthy",

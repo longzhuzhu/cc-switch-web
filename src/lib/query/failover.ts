@@ -77,18 +77,6 @@ export function useUpdateCircuitBreakerConfig() {
   });
 }
 
-/**
- * 获取熔断器统计信息
- */
-export function useCircuitBreakerStats(providerId: string, appType: string) {
-  return useQuery({
-    queryKey: ["circuitBreakerStats", providerId, appType],
-    queryFn: () => failoverApi.getCircuitBreakerStats(providerId, appType),
-    enabled: !!providerId && !!appType,
-    refetchInterval: 5000, // 每 5 秒刷新一次
-  });
-}
-
 // ========== 故障转移队列 Hooks（新） ==========
 
 /**
@@ -168,14 +156,6 @@ export function useRemoveFromFailoverQueue() {
       // 清除该供应商的健康状态缓存（退出队列后不再需要健康监控）
       queryClient.invalidateQueries({
         queryKey: ["providerHealth", variables.providerId, variables.appType],
-      });
-      // 清除该供应商的熔断器统计缓存
-      queryClient.invalidateQueries({
-        queryKey: [
-          "circuitBreakerStats",
-          variables.providerId,
-          variables.appType,
-        ],
       });
     },
   });

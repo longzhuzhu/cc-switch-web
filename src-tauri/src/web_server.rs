@@ -19,7 +19,7 @@ use crate::app_config::{AppType, McpServer};
 use crate::database::FailoverQueueItem;
 use crate::prompt::Prompt;
 use crate::provider::Provider;
-use crate::proxy::circuit_breaker::{CircuitBreakerConfig, CircuitBreakerStats};
+use crate::proxy::circuit_breaker::CircuitBreakerConfig;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::types::{
     AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, ProviderHealth, ProxyConfig,
@@ -2225,20 +2225,6 @@ async fn update_circuit_breaker_config(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn get_circuit_breaker_stats(
-    State(state): State<WebApiState>,
-    Path((app, provider_id)): Path<(String, String)>,
-) -> Result<Json<Option<CircuitBreakerStats>>, ApiError> {
-    let stats = crate::commands::get_circuit_breaker_stats_internal(
-        state.app_state.as_ref(),
-        provider_id,
-        app,
-    )
-    .await
-    .map_err(|e| ApiError::internal(format!("failed to load circuit breaker stats: {e}")))?;
-    Ok(Json(stats))
-}
-
 async fn get_failover_queue(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
@@ -2810,10 +2796,6 @@ pub async fn run_web_server() -> Result<(), String> {
         .route(
             "/api/failover/circuit-breaker-config",
             get(get_circuit_breaker_config).put(update_circuit_breaker_config),
-        )
-        .route(
-            "/api/failover/apps/:app/providers/:provider_id/circuit-breaker-stats",
-            get(get_circuit_breaker_stats),
         )
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
         .layer(CorsLayer::permissive())

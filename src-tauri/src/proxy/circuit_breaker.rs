@@ -275,25 +275,12 @@ impl CircuitBreaker {
     }
 
     /// 获取当前状态
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub async fn get_state(&self) -> CircuitState {
         *self.state.read().await
     }
 
-    /// 获取统计信息
-    #[allow(dead_code)]
-    pub async fn get_stats(&self) -> CircuitBreakerStats {
-        CircuitBreakerStats {
-            state: *self.state.read().await,
-            consecutive_failures: self.consecutive_failures.load(Ordering::SeqCst),
-            consecutive_successes: self.consecutive_successes.load(Ordering::SeqCst),
-            total_requests: self.total_requests.load(Ordering::SeqCst),
-            failed_requests: self.failed_requests.load(Ordering::SeqCst),
-        }
-    }
-
     /// 重置熔断器（手动恢复）
-    #[allow(dead_code)]
     pub async fn reset(&self) {
         log::info!("[{}] 熔断器手动重置 → Closed", log_cb::MANUAL_RESET);
         self.transition_to_closed().await;
@@ -372,17 +359,6 @@ impl CircuitBreaker {
         self.total_requests.store(0, Ordering::SeqCst);
         self.failed_requests.store(0, Ordering::SeqCst);
     }
-}
-
-/// 熔断器统计信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CircuitBreakerStats {
-    pub state: CircuitState,
-    pub consecutive_failures: u32,
-    pub consecutive_successes: u32,
-    pub total_requests: u32,
-    pub failed_requests: u32,
 }
 
 #[cfg(test)]
