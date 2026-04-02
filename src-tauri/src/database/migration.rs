@@ -2,26 +2,12 @@
 //!
 //! 将旧版 config.json (MultiAppConfig) 数据迁移到 SQLite 数据库。
 
-use super::{lock_conn, to_json_string, Database};
+use super::{to_json_string, Database};
 use crate::app_config::MultiAppConfig;
 use crate::error::AppError;
 use rusqlite::{params, Connection};
 
 impl Database {
-    /// 从 MultiAppConfig 迁移数据到数据库
-    pub fn migrate_from_json(&self, config: &MultiAppConfig) -> Result<(), AppError> {
-        let mut conn = lock_conn!(self.conn);
-        let tx = conn
-            .transaction()
-            .map_err(|e| AppError::Database(e.to_string()))?;
-
-        Self::migrate_from_json_tx(&tx, config)?;
-
-        tx.commit()
-            .map_err(|e| AppError::Database(format!("Commit migration failed: {e}")))?;
-        Ok(())
-    }
-
     /// 运行迁移的 dry-run 模式（在内存数据库中验证，不写入磁盘）
     ///
     /// 用于部署前验证迁移逻辑是否正确。
