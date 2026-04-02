@@ -1,4 +1,4 @@
-pub mod providers;
+mod providers;
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

@@ -31,8 +31,8 @@ mod schema;
 #[cfg(test)]
 mod tests;
 
-// DAO 类型导出供外部使用
-pub use dao::FailoverQueueItem;
+// Failover 队列项仅在 crate 内部 API 层使用
+pub(crate) use dao::FailoverQueueItem;
 
 use crate::config::get_app_config_dir;
 use crate::error::AppError;
