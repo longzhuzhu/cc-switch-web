@@ -106,7 +106,7 @@
 - `web_server.rs` 中原本直接调用 `McpService` / `PromptService` / `ProviderService` / `SkillService` / `OmoService` / `SpeedtestService` / live provider import 的重复逻辑已全部收口到 `commands/*_internal`，当前这批 Web handler 的 service 直调差集已清零
 - Skills ZIP 上传安装、配置导入后的后置同步告警计算等残余共享流程也已收口到命令层辅助函数，`web_server.rs` 的职责进一步收敛为 HTTP 协议适配
 - `commands/*.rs` 已整体去掉 `#[tauri::command]` 和 `tauri::State`，改为本地轻量 `command_state::State`
-- `src-tauri/Cargo.toml` 中的 `tauri` 依赖已移除，当前 `cc-switch-web` 可在无 Tauri crate 前提下通过 `cargo check`
+- `backend/Cargo.toml` 中的 `tauri` 依赖已移除，当前 `cc-switch-web` 可在无 Tauri crate 前提下通过 `cargo check`
 - `mcp`、`omo`、`openclaw`、`import_export`、`settings`、`webdav_sync`、`usage`、`skill`、`stream_check`、`provider`、`global_proxy`、`config`、`proxy` 模块中仅供旧桌面命令层复用的 public wrapper 已删除，Web handler 统一直接走 `commands/*_internal`
 - `command_state.rs` 已删除，命令层已不再保留仅用于过渡期的本地 `State` 包装类型
 - `misc` 与 `workspace` 也已从根级公开 re-export 收窄为 crate 内使用，`web_server.rs` 不再通过根模块直接调用这两组命令
@@ -127,10 +127,10 @@
 - `ProxyService` 中零调用的整机接管/异常恢复旧入口 `start_with_takeover / stop_with_restore_keep_state / recover_from_crash / detect_takeover_in_live_configs` 已删除，当前 Web 主链统一走按应用接管的显式流程
 - 零调用的 `ConfigService` 已整体删除，相关同步/备份逻辑不再作为独立服务层残留
 - `ProviderService` 中仅作为旧转发存在、且已无调用点的 `write_gemini_live` 包装方法已删除
-- `src-tauri/target`、`src-tauri/gen` 与空的 `src-tauri/capabilities` 旧桌面生成/编译目录已从当前仓库工作区清理，避免继续与 Web-only 代码混放
+- 原 `src-tauri/gen` 与空的 `src-tauri/capabilities` 旧桌面生成目录已从当前仓库工作区清理；当前后端编译产物统一位于 `backend/target`
 - `services/mod.rs` 已整体收窄为 `pub(crate)` 模块可见性；`webdav_auto_sync` 中仅 crate 内使用的入口也已收窄，继续减少对外暴露的桌面遗留服务面
 - `.github/workflows/web-ci.yml` 的 Linux 依赖已去掉 `webkit2gtk`、`libsoup`、`libgtk-3`、`appindicator` 等 Tauri 桌面构建包，CI 现仅保留 Web 前端与 Rust 本地服务所需检查依赖
-- `src-tauri/icons` 旧桌面打包图标资源目录已删除；当前仓库图标资产仅保留前端 `src/assets` 与页面实际使用的资源
+- 原 `src-tauri/icons` 旧桌面打包图标资源目录已删除；当前仓库图标资产仅保留前端 `src/assets` 与页面实际使用的资源
 - `Dockerfile` 的构建/运行阶段已去掉 WebKitGTK、GTK、tray/appindicator 等旧桌面依赖，当前容器仅保留 Rust 服务编译与运行所需的 OpenSSL/证书基础环境
 - 前端测试基建已改为 mock 当前运行时适配层而非直接 mock `@tauri-apps/api`；`useDirectorySettings` 测试已同步为 Web 模式“手动填写路径”行为，清理旧桌面目录选择假设
 - 前端运行时适配层中仅剩的 `@tauri-apps/api/core` 动态导入已删除，`package.json` 与 lockfile 也已移除 `@tauri-apps/api` 依赖；当前前端依赖面已不再包含桌面端 JS SDK
@@ -152,13 +152,13 @@
 - `database/dao/proxy.rs` 中零调用的 `reset_provider_health / has_any_live_backup` 已删除；当前健康状态与 Live 备份主链均走更细粒度的现用接口
 - `database/migration.rs` 中零调用的真实写库迁移入口 `migrate_from_json` 已删除；当前仓库只保留 `migrate_from_json_dry_run` 作为旧 JSON 结构兼容校验，不再暗示运行时自动迁移仍可用
 - Web 服务启动阶段已重新接回 `init_default_skill_repos()`；新数据库首次启动时会自动补齐默认 Skill 仓库，避免 Skills 发现源为空
-- `src-tauri/tests` 中依赖旧 test hook、`ConfigService`、运行时 JSON 迁移入口和已下线兼容标记的过期集成测试已清理；当前测试面保留仍能代表 Web-only 主链行为的配置加载与 Skills 流程测试
+- 原 `src-tauri/tests` 中依赖旧 test hook、`ConfigService`、运行时 JSON 迁移入口和已下线兼容标记的过期集成测试已清理；当前测试面保留仍能代表 Web-only 主链行为的配置加载与 Skills 流程测试
 - Provider 默认配置导入命令已去掉遗留的 `test_hook` 命名，当前 Web 路由统一调用 `import_default_config_for_app_internal`
 - `app_store.rs`、`settings.rs`、`prompt_files.rs` 与 `services/skill.rs` 已统一使用 `get_home_dir()` 解析 home 路径；Windows 测试隔离与运行时路径来源现在保持一致，不再混用 `dirs::home_dir()` 的真实用户目录
 - `commands/misc.rs` 与 `session_manager/providers/opencode.rs` 中剩余的运行时 home 路径读取也已切换到 `get_home_dir()`；当前 Web-only 主链的路径来源已不再分裂为多套实现
-- `src-tauri/src/lib.rs` 的公开导出面已收窄为当前 Web 二进制与保留测试真实需要的接口，避免继续把旧 MCP / Provider / Proxy 服务入口作为库级公共 API 暴露
-- `src-tauri/Cargo.toml` 与前端三语应用描述已同步改为 Web 分支定位，减少仓库说明、包元信息与界面文案之间的不一致
-- `src-tauri/src/mcp/*` 中零调用的聚合同步链 `sync_enabled_to_claude/codex/gemini` 及其辅助提取函数已删除；当前 MCP 主链只保留前端实际使用的导入、单项同步与移除能力
+- `backend/src/lib.rs` 的公开导出面已收窄为当前 Web 二进制与保留测试真实需要的接口，避免继续把旧 MCP / Provider / Proxy 服务入口作为库级公共 API 暴露
+- `backend/Cargo.toml` 与前端三语应用描述已同步改为 Web 分支定位，减少仓库说明、包元信息与界面文案之间的不一致
+- `backend/src/mcp/*` 中零调用的聚合同步链 `sync_enabled_to_claude/codex/gemini` 及其辅助提取函数已删除；当前 MCP 主链只保留前端实际使用的导入、单项同步与移除能力
 - `mcp/opencode.rs` 中仅供模块内部与同文件测试使用的格式转换函数已收回私有；`opencode_config.rs` 与 `openclaw_config.rs` 中零引用的 `get_opencode_env_path()`、`OpenClawAgents` 也已删除，继续缩小无实际使用的公开面
 - `provider_defaults.rs` 整个零引用默认图标模块已删除；同时 `codex_config.rs` 与 `config.rs` 中只服务旧供应商文件拆分方案的路径辅助函数也已移除，避免继续保留无入口的历史文件布局接口
 - `tests/support.rs` 中只供 `skill_sync` 使用的 `create_test_state()` 已下沉到对应测试文件；`gemini_config.rs` 中仅被单测使用的严格 `.env` 解析 helper 也已收回测试模块，避免在运行时代码中保留无入口辅助函数
@@ -174,8 +174,8 @@
 - `services/provider/live.rs` 中零引用的 `LiveSnapshot` 旧恢复结构已删除；多处测试内仅用于维持临时目录生命周期的字段已改名为 `_dir`；`usage/parser.rs` 中运行时真实使用的方法已移除过期 `dead_code` 标注，纯测试路径则改为测试编译专用
 - `proxy/usage/mod.rs` 与 `proxy/mod.rs` 中仅为迁移期保留的根级 re-export 已继续收窄；外部调用已改为显式子模块路径，减少 Web-only 仓库中的历史耦合出口
 - `proxy/mod.rs` 中仍然标记为 `pub mod` 的内部实现子模块已统一收口为 `pub(crate)`，当前代理子系统进一步明确为 crate 内部实现细节，而非可对外复用的公共库 API
-- `src-tauri/src/lib.rs` 的根级公共导出面已进一步缩到仅保留 Web 二进制入口真实需要的 `run_web_server`；`Database`、`AppState` 等内部类型已回退为显式模块路径引用，避免继续把内部实现包装成库级公共 API
-- 为适配上述收口，`src-tauri/tests/` 下依赖根级公共导出的历史集成测试已迁回 `app_config.rs` 与 `services/skill.rs` 模块内测试，避免仅为测试维持一层面向外部的伪公共 API
+- `backend/src/lib.rs` 的根级公共导出面已进一步缩到仅保留 Web 二进制入口真实需要的 `run_web_server`；`Database`、`AppState` 等内部类型已回退为显式模块路径引用，避免继续把内部实现包装成库级公共 API
+- 为适配上述收口，原 `src-tauri/tests/` 下依赖根级公共导出的历史集成测试已迁回 `app_config.rs` 与 `services/skill.rs` 模块内测试，避免仅为测试维持一层面向外部的伪公共 API
 - `mcp`、`database::dao`、`session_manager::providers` 等只在 crate 内部流转的模块/类型已继续改为 crate 级或私有可见性，进一步去掉“可当通用库复用”的历史错觉
 - `Database::memory`、`Database::migrate_from_json_dry_run`、`ProxyService::new`、`UniversalProvider::new` 等仅测试路径使用的辅助 API 已收回测试编译域；同时清除了 `VisibleApps::is_visible` 与 Copilot 认证管理器中零引用的方法/错误枚举项
 - `clear_skills`、`LegacySkillMigrationRow`、`migrate_skills_to_ssot` 等当前只剩单测消费的旧迁移辅助逻辑，也已缩到测试编译域，避免继续进入 Web 正式产物
@@ -205,7 +205,7 @@
 补充说明：
 
 - 当前仓库已经没有桌面 `main.rs` / `tauri::Builder` / `generate_handler!` / 托盘或窗口启动入口
-- 当前可执行入口是 `src-tauri/src/bin/cc-switch-web.rs`
+- 当前可执行入口是 `backend/src/bin/cc-switch-web.rs`
 - 原先命令层对 `tauri` crate 的最后一层依赖已经移除，当前 Rust Web 二进制可以独立于 Tauri 编译
 - 下一阶段的重点已经从“去掉 Tauri 编译依赖”切换为“继续清理旧兼容 API 与桌面语义残留”
 

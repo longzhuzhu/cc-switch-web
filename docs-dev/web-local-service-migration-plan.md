@@ -88,9 +88,9 @@ Local Rust Service
 
 以下内容应优先保留并复用：
 
-- `src-tauri/src/database/`
-- `src-tauri/src/services/`
-- `src-tauri/src/proxy/`
+- `backend/src/database/`
+- `backend/src/services/`
+- `backend/src/proxy/`
 - 各类配置模型、Provider 逻辑、Settings 逻辑
 - 前端现有页面结构、组件、状态组织方式
 
@@ -398,8 +398,8 @@ Local Rust Service
 
 ## 8.2 后端优先改造区域
 
-- `src-tauri/src/lib.rs`
-- `src-tauri/src/commands/*`
+- `backend/src/lib.rs`
+- `backend/src/commands/*`
 - 新增 Web API 入口模块
 
 ## 8.3 预期下线区域
@@ -463,7 +463,7 @@ Local Rust Service
 
 ### 11.2 不建议的做法
 
-- 不建议先大规模删除 `src-tauri`
+- 不建议先大规模删除后端目录
 - 不建议先删前端里的所有 Tauri 引用再想替代方案
 - 不建议一开始就同时做全部模块迁移
 - 不建议先做 UI 重构，再做运行时改造
