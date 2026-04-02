@@ -207,7 +207,7 @@ export function useCommonConfigSnippet({
 
       if (!value.trim()) {
         setCommonConfigError("");
-        // 保存到 config.json（清空）
+        // 保存到统一配置存储（清空）
         configApi
           .setCommonConfigSnippet("claude", "")
           .catch((error: unknown) => {
@@ -235,7 +235,7 @@ export function useCommonConfigSnippet({
         setCommonConfigError(validationError);
       } else {
         setCommonConfigError("");
-        // 保存到 config.json
+        // 保存到统一配置存储
         configApi
           .setCommonConfigSnippet("claude", value)
           .catch((error: unknown) => {

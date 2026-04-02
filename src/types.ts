@@ -19,7 +19,7 @@ export interface Provider {
   sortIndex?: number; // 排序索引（用于自定义拖拽排序）
   // 备注信息
   notes?: string;
-  // 可选：供应商元数据（仅存于 ~/.cc-switch/config.json，不写入 live 配置）
+  // 可选：供应商元数据（仅存于统一配置存储，不写入 live 配置）
   meta?: ProviderMeta;
   // 图标配置
   icon?: string; // 图标名称（如 "openai", "anthropic"）
@@ -354,7 +354,7 @@ export interface McpStatus {
   serverCount: number;
 }
 
-// 新：来自 config.json 的 MCP 列表响应
+// 统一 MCP 配置列表响应
 export interface McpConfigResponse {
   configPath: string;
   servers: Record<string, McpServer>;

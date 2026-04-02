@@ -25,7 +25,7 @@ const createNpxCommand = (
 
 // 预设 MCP（逻辑简化版）：
 // - 仅包含最常用、可快速落地的 stdio 模式示例
-// - 不涉及分类/模板/测速等复杂逻辑，默认以 disabled 形式"回种"到 config.json
+// - 不涉及分类/模板/测速等复杂逻辑，默认以 disabled 形式写入统一 MCP 配置
 // - 用户可在 MCP 面板中一键启用/编辑
 // - description 字段使用国际化 key，在使用时通过 t() 函数获取翻译
 export const mcpPresets: McpPreset[] = [
