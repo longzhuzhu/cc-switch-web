@@ -38,10 +38,10 @@ if (result.status !== 0) {
 
 if (exportDirOnly) {
   console.log(
-    `[build:pkg:l] Linux 发布目录已导出: ${path.join(outputRoot, "cc-switch-web-linux-x64")}`,
+    `[build:pkg:l] Exported Linux release directory: ${path.join(outputRoot, "cc-switch-web-linux-x64")}`,
   );
 } else {
   console.log(
-    `[build:pkg:l] Linux 发布包已导出: ${path.join(outputRoot, "cc-switch-web-linux-x64.tar.gz")}`,
+    `[build:pkg:l] Exported Linux release archive: ${path.join(outputRoot, "cc-switch-web-linux-x64.tar.gz")}`,
   );
 }

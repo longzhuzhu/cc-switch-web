@@ -11,21 +11,21 @@ const hasDist = existsSync(distDir);
 const host = process.env.CC_SWITCH_WEB_HOST || "127.0.0.1";
 const port = process.env.CC_SWITCH_WEB_PORT || "8788";
 
-console.log("CC Switch Web 已启动");
-console.log(`监听地址: ${host}:${port}`);
-console.log(`访问地址: http://${host}:${port}`);
+console.log("CC Switch Web started");
+console.log(`Bind address: ${host}:${port}`);
+console.log(`Open in browser: http://${host}:${port}`);
 if (hasDist) {
-  console.log(`前端目录: ${distDir}`);
+  console.log(`Frontend directory: ${distDir}`);
 } else {
-  console.log("前端资源: 将优先使用已嵌入的静态资源");
+  console.log("Frontend assets: embedded resources will be used when available");
 }
 console.log(
-  "服务命令: cargo run --manifest-path backend/Cargo.toml --bin cc-switch-web",
+  "Service command: cargo run --manifest-path backend/Cargo.toml --bin cc-switch-web",
 );
 if (host === "0.0.0.0") {
-  console.log("当前绑定到 0.0.0.0，请使用服务器 IP 或本机地址访问");
+  console.log("Bound to 0.0.0.0, use the server IP or local machine address to access it");
 }
-console.log("按 Ctrl+C 停止服务");
+console.log("Press Ctrl+C to stop the service");
 console.log("");
 
 const child = spawn(

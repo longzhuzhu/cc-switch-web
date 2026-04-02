@@ -9,8 +9,8 @@ DIST_DIR="${CC_SWITCH_WEB_DIST_DIR:-${REPO_ROOT}/dist}"
 BINARY_PATH="${REPO_ROOT}/backend/target/release/cc-switch-web"
 
 if [[ ! -x "${BINARY_PATH}" ]]; then
-  echo "服务二进制不存在: ${BINARY_PATH}" >&2
-  echo "请先执行: pnpm build:web:service" >&2
+  echo "Service binary not found: ${BINARY_PATH}" >&2
+  echo "Run this first: pnpm build:web:service" >&2
   exit 1
 fi
 
@@ -26,18 +26,18 @@ else
   unset CC_SWITCH_WEB_DIST_DIR || true
 fi
 
-echo "CC Switch Web 已启动"
-echo "监听地址: ${CC_SWITCH_WEB_HOST}:${CC_SWITCH_WEB_PORT}"
-echo "访问地址: http://${CC_SWITCH_WEB_HOST}:${CC_SWITCH_WEB_PORT}"
+echo "CC Switch Web started"
+echo "Bind address: ${CC_SWITCH_WEB_HOST}:${CC_SWITCH_WEB_PORT}"
+echo "Open in browser: http://${CC_SWITCH_WEB_HOST}:${CC_SWITCH_WEB_PORT}"
 if [[ -n "${DIST_DIR}" ]]; then
-  echo "前端目录: ${CC_SWITCH_WEB_DIST_DIR}"
+  echo "Frontend directory: ${CC_SWITCH_WEB_DIST_DIR}"
 else
-  echo "前端资源: 内嵌到服务二进制"
+  echo "Frontend assets: embedded in the service binary"
 fi
-echo "服务二进制: ${BINARY_PATH}"
+echo "Service binary: ${BINARY_PATH}"
 if [[ "${CC_SWITCH_WEB_HOST}" == "0.0.0.0" ]]; then
-  echo "当前绑定到 0.0.0.0，请使用服务器 IP 或本机地址访问"
+  echo "Bound to 0.0.0.0, use the server IP or local machine address to access it"
 fi
-echo "按 Ctrl+C 停止服务"
+echo "Press Ctrl+C to stop the service"
 echo
 exec "${BINARY_PATH}"

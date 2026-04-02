@@ -16,8 +16,8 @@ $distDir = if ($env:CC_SWITCH_WEB_DIST_DIR) {
 $binaryPath = Join-Path $repoRoot "backend\target\release\cc-switch-web.exe"
 
 if (-not (Test-Path $binaryPath)) {
-  Write-Error "服务二进制不存在: $binaryPath"
-  Write-Host "请先执行: pnpm build:web:service"
+  Write-Error "Service binary not found: $binaryPath"
+  Write-Host "Run this first: pnpm build:web:service"
   exit 1
 }
 
@@ -29,19 +29,19 @@ if ($distDir) {
   Remove-Item Env:CC_SWITCH_WEB_DIST_DIR -ErrorAction SilentlyContinue
 }
 
-Write-Host "CC Switch Web 已启动"
-Write-Host "监听地址: $BindHost`:$Port"
-Write-Host "访问地址: http://$BindHost`:$Port"
+Write-Host "CC Switch Web started"
+Write-Host "Bind address: $BindHost`:$Port"
+Write-Host "Open in browser: http://$BindHost`:$Port"
 if ($distDir) {
-  Write-Host "前端目录: $($env:CC_SWITCH_WEB_DIST_DIR)"
+  Write-Host "Frontend directory: $($env:CC_SWITCH_WEB_DIST_DIR)"
 } else {
-  Write-Host "前端资源: 内嵌到服务二进制"
+  Write-Host "Frontend assets: embedded in the service binary"
 }
-Write-Host "服务二进制: $binaryPath"
+Write-Host "Service binary: $binaryPath"
 if ($BindHost -eq "0.0.0.0") {
-  Write-Host "当前绑定到 0.0.0.0，请使用服务器 IP 或本机地址访问"
+  Write-Host "Bound to 0.0.0.0, use the server IP or local machine address to access it"
 }
-Write-Host "按 Ctrl+C 停止服务"
+Write-Host "Press Ctrl+C to stop the service"
 Write-Host ""
 & $binaryPath
 exit $LASTEXITCODE
