@@ -879,8 +879,7 @@ mod tests {
     use tempfile::TempDir;
 
     struct TempHome {
-        #[allow(dead_code)] // 字段通过 Drop trait 管理临时目录生命周期
-        dir: TempDir,
+        _dir: TempDir,
         original_home: Option<String>,
         original_userprofile: Option<String>,
         original_test_home: Option<String>,
@@ -898,7 +897,7 @@ mod tests {
             env::set_var("CC_SWITCH_TEST_HOME", dir.path());
 
             Self {
-                dir,
+                _dir: dir,
                 original_home,
                 original_userprofile,
                 original_test_home,

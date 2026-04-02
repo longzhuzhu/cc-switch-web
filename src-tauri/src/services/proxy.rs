@@ -1670,8 +1670,7 @@ mod tests {
     use tempfile::TempDir;
 
     struct TempHome {
-        #[allow(dead_code)]
-        dir: TempDir,
+        _dir: TempDir,
         original_home: Option<String>,
         original_userprofile: Option<String>,
     }
@@ -1686,7 +1685,7 @@ mod tests {
             env::set_var("USERPROFILE", dir.path());
 
             Self {
-                dir,
+                _dir: dir,
                 original_home,
                 original_userprofile,
             }

@@ -171,6 +171,7 @@
 - 经进一步按真实构造链复核后，`proxy/error.rs` 中从未被构造的 `ProviderUnhealthy`、`InvalidRequest`、`StreamIdleTimeout` 与 `ErrorCategory::ClientAbort` 也已删除；`forwarder.rs`、`error_mapper.rs` 的分支随之同步收口
 - `proxy/providers/auth.rs` 中仅供单测使用的敏感信息掩码 helper 已下沉到测试模块；`ProviderAdapter::transform_response()` 与 Claude 侧未接入的响应转换实现也已删除，避免继续保留无调用的适配器接口
 - `circuit-breaker-stats` 前后端占位链路已删除：Web runtime/API/hook 无实际消费、后端也仅返回 `None`，因此同步移除未落地接口；同时 `RequestContext.app_type`、`ProviderType` 测试专用 helper、`ApiFormat` 占位枚举与 Copilot token 解析中的过期 `dead_code` 标注也已继续收口
+- `services/provider/live.rs` 中零引用的 `LiveSnapshot` 旧恢复结构已删除；多处测试内仅用于维持临时目录生命周期的字段已改名为 `_dir`；`usage/parser.rs` 中运行时真实使用的方法已移除过期 `dead_code` 标注，纯测试路径则改为测试编译专用
 
 ## 四、基于前端命令差集的剩余项
 
