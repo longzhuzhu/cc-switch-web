@@ -145,17 +145,6 @@ impl ProxyService {
         Ok(())
     }
 
-    async fn set_takeover_enabled_for_apps(
-        &self,
-        app_types: &[&str],
-        enabled: bool,
-    ) -> Result<(), String> {
-        for app_type in app_types {
-            self.set_takeover_enabled_for_app(app_type, enabled).await?;
-        }
-        Ok(())
-    }
-
     /// 清理接管模式下 Claude Live 配置中的模型覆盖字段。
     ///
     /// 这可以避免"接管开启后切换供应商仍使用旧模型"的问题。
@@ -228,76 +217,6 @@ impl ProxyService {
 
         log::info!("代理服务器已启动: {}:{}", info.address, info.port);
         Ok(info)
-    }
-
-    /// 启动代理服务器（带 Live 配置接管）
-    pub async fn start_with_takeover(&self) -> Result<ProxyServerInfo, String> {
-        // 1. 备份各应用的 Live 配置
-        self.backup_live_configs().await?;
-
-        // 2. 同步 Live 配置中的 Token 到数据库（确保代理能读到最新的 Token）
-        if let Err(e) = self.sync_live_to_providers().await {
-            // 同步失败时尚未写入接管配置，但备份可能包含敏感信息，尽量清理
-            if let Err(clean_err) = self.db.delete_all_live_backups().await {
-                log::warn!("清理 Live 备份失败: {clean_err}");
-            }
-            return Err(e);
-        }
-
-        // 3. 接管各应用的 Live 配置（写入代理地址，清空 Token）
-        if let Err(e) = self.takeover_live_configs().await {
-            // 接管失败（可能是部分写入），尝试恢复原始配置；若恢复失败则保留备份，等待下次启动自动恢复。
-            log::error!("接管 Live 配置失败，尝试恢复原始配置: {e}");
-            match self.restore_live_configs().await {
-                Ok(()) => {
-                    let _ = self.db.delete_all_live_backups().await;
-                }
-                Err(restore_err) => {
-                    log::error!("恢复原始配置失败，将保留备份以便下次启动恢复: {restore_err}");
-                }
-            }
-            return Err(e);
-        }
-
-        if let Err(e) = self
-            .set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, true)
-            .await
-        {
-            log::error!("写入接管 enabled 状态失败，尝试恢复原始配置: {e}");
-            match self.restore_live_configs().await {
-                Ok(()) => {
-                    let _ = self
-                        .set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, false)
-                        .await;
-                    let _ = self.db.delete_all_live_backups().await;
-                }
-                Err(restore_err) => {
-                    log::error!("恢复原始配置失败，将保留备份以便下次启动恢复: {restore_err}");
-                }
-            }
-            return Err(e);
-        }
-
-        // 4. 启动代理服务器
-        match self.start().await {
-            Ok(info) => Ok(info),
-            Err(e) => {
-                // 启动失败，恢复原始配置
-                log::error!("代理启动失败，尝试恢复原始配置: {e}");
-                match self.restore_live_configs().await {
-                    Ok(()) => {
-                        let _ = self
-                            .set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, false)
-                            .await;
-                        let _ = self.db.delete_all_live_backups().await;
-                    }
-                    Err(restore_err) => {
-                        log::error!("恢复原始配置失败，将保留备份以便下次启动恢复: {restore_err}");
-                    }
-                }
-                Err(e)
-            }
-        }
     }
 
     /// 获取各应用的接管状态（是否改写该应用的 Live 配置指向本地代理）
@@ -688,26 +607,6 @@ impl ProxyService {
         Ok(())
     }
 
-    async fn sync_live_to_providers(&self) -> Result<(), String> {
-        if let Ok(live_config) = self.read_claude_live() {
-            self.sync_live_config_to_provider(&AppType::Claude, &live_config)
-                .await?;
-        }
-
-        if let Ok(live_config) = self.read_codex_live() {
-            self.sync_live_config_to_provider(&AppType::Codex, &live_config)
-                .await?;
-        }
-
-        if let Ok(live_config) = self.read_gemini_live() {
-            self.sync_live_config_to_provider(&AppType::Gemini, &live_config)
-                .await?;
-        }
-
-        log::info!("Live 配置 Token 同步完成");
-        Ok(())
-    }
-
     /// 停止代理服务器
     pub async fn stop(&self) -> Result<(), String> {
         if let Some(server) = self.server.write().await.take() {
@@ -773,70 +672,6 @@ impl ProxyService {
         Ok(())
     }
 
-    /// 停止代理服务器（恢复 Live 配置，但保留 settings 表中的代理状态）
-    ///
-    /// 用于程序正常退出时，保留代理状态以便下次启动时自动恢复
-    pub async fn stop_with_restore_keep_state(&self) -> Result<(), String> {
-        // 1. 停止代理服务器（即使未运行也继续执行恢复逻辑）
-        if let Err(e) = self.stop().await {
-            log::warn!("停止代理服务器失败（将继续恢复 Live 配置）: {e}");
-        }
-
-        // 2. 恢复原始 Live 配置
-        self.restore_live_configs().await?;
-
-        // 3. 删除备份（Live 配置已恢复，备份不再需要）
-        self.db
-            .delete_all_live_backups()
-            .await
-            .map_err(|e| format!("删除备份失败: {e}"))?;
-
-        // 4. 重置健康状态
-        self.db
-            .clear_all_provider_health()
-            .await
-            .map_err(|e| format!("重置健康状态失败: {e}"))?;
-
-        log::info!("代理已停止，Live 配置已恢复（保留代理状态，下次启动将自动恢复）");
-        Ok(())
-    }
-
-    /// 备份各应用的 Live 配置
-    async fn backup_live_configs(&self) -> Result<(), String> {
-        // Claude
-        if let Ok(config) = self.read_claude_live() {
-            let json_str = serde_json::to_string(&config)
-                .map_err(|e| format!("序列化 Claude 配置失败: {e}"))?;
-            self.db
-                .save_live_backup("claude", &json_str)
-                .await
-                .map_err(|e| format!("备份 Claude 配置失败: {e}"))?;
-        }
-
-        // Codex
-        if let Ok(config) = self.read_codex_live() {
-            let json_str = serde_json::to_string(&config)
-                .map_err(|e| format!("序列化 Codex 配置失败: {e}"))?;
-            self.db
-                .save_live_backup("codex", &json_str)
-                .await
-                .map_err(|e| format!("备份 Codex 配置失败: {e}"))?;
-        }
-
-        // Gemini
-        if let Ok(config) = self.read_gemini_live() {
-            let json_str = serde_json::to_string(&config)
-                .map_err(|e| format!("序列化 Gemini 配置失败: {e}"))?;
-            self.db
-                .save_live_backup("gemini", &json_str)
-                .await
-                .map_err(|e| format!("备份 Gemini 配置失败: {e}"))?;
-        }
-
-        log::info!("已备份所有应用的 Live 配置");
-        Ok(())
-    }
-
     /// 备份指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
     async fn backup_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
         let (app_type_str, config) = match app_type {
@@ -885,96 +720,6 @@ impl ProxyService {
         let proxy_codex_base_url = format!("{}/v1", proxy_origin.trim_end_matches('/'));
 
         Ok((proxy_url, proxy_codex_base_url))
-    }
-
-    /// 接管各应用的 Live 配置（写入代理地址）
-    ///
-    /// 代理服务器的路由已经根据 API 端点自动区分应用类型：
-    /// - `/v1/messages` → Claude
-    /// - `/v1/chat/completions`, `/v1/responses` → Codex
-    /// - `/v1beta/*` → Gemini
-    ///
-    /// 因此不需要在 URL 中添加应用前缀。
-    async fn takeover_live_configs(&self) -> Result<(), String> {
-        let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
-
-        // Claude: 修改 ANTHROPIC_BASE_URL，使用占位符替代真实 Token（代理会注入真实 Token）
-        if let Ok(mut live_config) = self.read_claude_live() {
-            if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
-                env.insert("ANTHROPIC_BASE_URL".to_string(), json!(&proxy_url));
-                // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
-                for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
-                    env.remove(key);
-                }
-                // 仅覆盖已存在的 Token 字段，避免新增字段导致用户困惑；
-                // 若完全没有 Token 字段，则写入 ANTHROPIC_AUTH_TOKEN 占位符用于避免客户端警告。
-                let token_keys = [
-                    "ANTHROPIC_AUTH_TOKEN",
-                    "ANTHROPIC_API_KEY",
-                    "OPENROUTER_API_KEY",
-                    "OPENAI_API_KEY",
-                ];
-
-                let mut replaced_any = false;
-                for key in token_keys {
-                    if env.contains_key(key) {
-                        env.insert(key.to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
-                        replaced_any = true;
-                    }
-                }
-
-                if !replaced_any {
-                    env.insert(
-                        "ANTHROPIC_AUTH_TOKEN".to_string(),
-                        json!(PROXY_TOKEN_PLACEHOLDER),
-                    );
-                }
-            } else {
-                live_config["env"] = json!({
-                    "ANTHROPIC_BASE_URL": &proxy_url,
-                    "ANTHROPIC_AUTH_TOKEN": PROXY_TOKEN_PLACEHOLDER
-                });
-            }
-            self.write_claude_live(&live_config)?;
-            log::info!("Claude Live 配置已接管，代理地址: {proxy_url}");
-        }
-
-        // Codex: 修改 config.toml 的 base_url，auth.json 的 OPENAI_API_KEY（代理会注入真实 Token）
-        if let Ok(mut live_config) = self.read_codex_live() {
-            // 1. 修改 auth.json 中的 OPENAI_API_KEY（使用占位符）
-            if let Some(auth) = live_config.get_mut("auth").and_then(|v| v.as_object_mut()) {
-                auth.insert("OPENAI_API_KEY".to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
-            }
-
-            // 2. 修改 config.toml 中的 base_url
-            let config_str = live_config
-                .get("config")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let updated_config = Self::update_toml_base_url(config_str, &proxy_codex_base_url);
-            live_config["config"] = json!(updated_config);
-
-            self.write_codex_live(&live_config)?;
-            log::info!("Codex Live 配置已接管，代理地址: {proxy_codex_base_url}");
-        }
-
-        // Gemini: 修改 GOOGLE_GEMINI_BASE_URL，使用占位符替代真实 Token（代理会注入真实 Token）
-        if let Ok(mut live_config) = self.read_gemini_live() {
-            if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
-                env.insert("GOOGLE_GEMINI_BASE_URL".to_string(), json!(&proxy_url));
-                // 使用占位符，避免显示缺少 key 的警告
-                env.insert("GEMINI_API_KEY".to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
-            } else {
-                live_config["env"] = json!({
-                    "GOOGLE_GEMINI_BASE_URL": &proxy_url,
-                    "GEMINI_API_KEY": PROXY_TOKEN_PLACEHOLDER
-                });
-            }
-            self.write_gemini_live(&live_config)?;
-            log::info!("Gemini Live 配置已接管，代理地址: {proxy_url}");
-        }
-
-        Ok(())
     }
 
     /// 接管指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
@@ -1452,54 +1197,6 @@ impl ProxyService {
         Ok(status.claude || status.codex || status.gemini)
     }
 
-    /// 从异常退出中恢复（启动时调用）
-    ///
-    /// 检测到 Live 备份残留时调用此方法。
-    /// 会恢复 Live 配置、清除接管标志、删除备份。
-    pub async fn recover_from_crash(&self) -> Result<(), String> {
-        // 1. 恢复 Live 配置
-        self.restore_live_configs().await?;
-
-        // 2. 清除所有应用的 enabled 状态，避免恢复后仍被视为接管中
-        self.set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, false)
-            .await?;
-
-        // 3. 删除备份
-        self.db
-            .delete_all_live_backups()
-            .await
-            .map_err(|e| format!("删除备份失败: {e}"))?;
-
-        log::info!("已从异常退出中恢复 Live 配置");
-        Ok(())
-    }
-
-    /// 检测 Live 配置是否处于"被接管"的残留状态
-    ///
-    /// 用于兜底处理：当数据库备份缺失但 Live 文件已经写成代理占位符时，
-    /// 启动流程可以据此触发恢复逻辑。
-    pub fn detect_takeover_in_live_configs(&self) -> bool {
-        if let Ok(config) = self.read_claude_live() {
-            if Self::is_claude_live_taken_over(&config) {
-                return true;
-            }
-        }
-
-        if let Ok(config) = self.read_codex_live() {
-            if Self::is_codex_live_taken_over(&config) {
-                return true;
-            }
-        }
-
-        if let Ok(config) = self.read_gemini_live() {
-            if Self::is_gemini_live_taken_over(&config) {
-                return true;
-            }
-        }
-
-        false
-    }
-
     fn is_claude_live_taken_over(config: &Value) -> bool {
         let env = match config.get("env").and_then(|v| v.as_object()) {
             Some(env) => env,
@@ -1538,7 +1235,7 @@ impl ProxyService {
 
     /// 从供应商配置更新 Live 备份（用于代理模式下的热切换）
     ///
-    /// 与 backup_live_configs() 不同，此方法从供应商的 settings_config 生成备份，
+    /// 与直接读取 Live 文件的旧备份流程不同，此方法从供应商的 settings_config 生成备份，
     /// 而不是从 Live 文件读取（因为 Live 文件已被代理接管）。
     pub async fn update_live_backup_from_provider(
         &self,
