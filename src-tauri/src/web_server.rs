@@ -1936,10 +1936,7 @@ async fn switch_provider(
 }
 
 async fn get_proxy_status(State(state): State<WebApiState>) -> Result<Json<ProxyStatus>, ApiError> {
-    let status = state
-        .app_state
-        .proxy_service
-        .get_status()
+    let status = crate::commands::get_proxy_status_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to load proxy status: {e}")))?;
     Ok(Json(status))
@@ -1948,20 +1945,14 @@ async fn get_proxy_status(State(state): State<WebApiState>) -> Result<Json<Proxy
 async fn get_proxy_takeover_status(
     State(state): State<WebApiState>,
 ) -> Result<Json<ProxyTakeoverStatus>, ApiError> {
-    let status = state
-        .app_state
-        .proxy_service
-        .get_takeover_status()
+    let status = crate::commands::get_proxy_takeover_status_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to load proxy takeover status: {e}")))?;
     Ok(Json(status))
 }
 
 async fn get_proxy_config(State(state): State<WebApiState>) -> Result<Json<ProxyConfig>, ApiError> {
-    let config = state
-        .app_state
-        .proxy_service
-        .get_config()
+    let config = crate::commands::get_proxy_config_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to load proxy config: {e}")))?;
     Ok(Json(config))
@@ -1970,10 +1961,7 @@ async fn get_proxy_config(State(state): State<WebApiState>) -> Result<Json<Proxy
 async fn get_global_proxy_config(
     State(state): State<WebApiState>,
 ) -> Result<Json<GlobalProxyConfig>, ApiError> {
-    let config = state
-        .app_state
-        .db
-        .get_global_proxy_config()
+    let config = crate::commands::get_global_proxy_config_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to load global proxy config: {e}")))?;
     Ok(Json(config))
@@ -1983,25 +1971,18 @@ async fn get_proxy_config_for_app(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
 ) -> Result<Json<AppProxyConfig>, ApiError> {
-    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let config = state
-        .app_state
-        .db
-        .get_proxy_config_for_app(app_type.as_str())
+    let config = crate::commands::get_proxy_config_for_app_internal(state.app_state.as_ref(), app)
         .await
         .map_err(|e| ApiError::internal(format!("failed to load app proxy config: {e}")))?;
     Ok(Json(config))
 }
 
 async fn is_proxy_running(State(state): State<WebApiState>) -> Json<bool> {
-    Json(state.app_state.proxy_service.is_running().await)
+    Json(crate::commands::is_proxy_running_internal(state.app_state.as_ref()).await.unwrap_or(false))
 }
 
 async fn is_live_takeover_active(State(state): State<WebApiState>) -> Result<Json<bool>, ApiError> {
-    let active = state
-        .app_state
-        .proxy_service
-        .is_takeover_active()
+    let active = crate::commands::is_live_takeover_active_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to load proxy takeover state: {e}")))?;
     Ok(Json(active))
@@ -2010,20 +1991,14 @@ async fn is_live_takeover_active(State(state): State<WebApiState>) -> Result<Jso
 async fn start_proxy_server(
     State(state): State<WebApiState>,
 ) -> Result<Json<ProxyServerInfo>, ApiError> {
-    let info = state
-        .app_state
-        .proxy_service
-        .start()
+    let info = crate::commands::start_proxy_server_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to start proxy server: {e}")))?;
     Ok(Json(info))
 }
 
 async fn stop_proxy_with_restore(State(state): State<WebApiState>) -> Result<StatusCode, ApiError> {
-    state
-        .app_state
-        .proxy_service
-        .stop_with_restore()
+    crate::commands::stop_proxy_with_restore_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to stop proxy server: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -2033,10 +2008,7 @@ async fn update_proxy_config(
     State(state): State<WebApiState>,
     Json(config): Json<ProxyConfig>,
 ) -> Result<StatusCode, ApiError> {
-    state
-        .app_state
-        .proxy_service
-        .update_config(&config)
+    crate::commands::update_proxy_config_internal(state.app_state.as_ref(), config)
         .await
         .map_err(|e| ApiError::internal(format!("failed to update proxy config: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -2046,10 +2018,7 @@ async fn update_global_proxy_config(
     State(state): State<WebApiState>,
     Json(config): Json<GlobalProxyConfig>,
 ) -> Result<StatusCode, ApiError> {
-    state
-        .app_state
-        .db
-        .update_global_proxy_config(config)
+    crate::commands::update_global_proxy_config_internal(state.app_state.as_ref(), config)
         .await
         .map_err(|e| ApiError::internal(format!("failed to update global proxy config: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -2096,10 +2065,7 @@ async fn update_proxy_config_for_app(
 ) -> Result<StatusCode, ApiError> {
     let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
     config.app_type = app_type.as_str().to_string();
-    state
-        .app_state
-        .db
-        .update_proxy_config_for_app(config)
+    crate::commands::update_proxy_config_for_app_internal(state.app_state.as_ref(), config)
         .await
         .map_err(|e| ApiError::internal(format!("failed to update app proxy config: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -2110,11 +2076,11 @@ async fn set_proxy_takeover_for_app(
     Path(app): Path<String>,
     Json(payload): Json<EnabledRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    state
-        .app_state
-        .proxy_service
-        .set_takeover_for_app(app_type.as_str(), payload.enabled)
+    crate::commands::set_proxy_takeover_for_app_internal(
+        state.app_state.as_ref(),
+        app,
+        payload.enabled,
+    )
         .await
         .map_err(|e| ApiError::internal(format!("failed to update proxy takeover: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -2124,11 +2090,7 @@ async fn switch_proxy_provider(
     State(state): State<WebApiState>,
     Path((app, id)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
-    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    state
-        .app_state
-        .proxy_service
-        .switch_proxy_target(app_type.as_str(), &id)
+    crate::commands::switch_proxy_provider_internal(state.app_state.as_ref(), app, id)
         .await
         .map_err(|e| ApiError::internal(format!("failed to switch proxy provider: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -2139,10 +2101,10 @@ async fn get_default_cost_multiplier(
     Path(app): Path<String>,
 ) -> Result<Json<String>, ApiError> {
     let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let value = state
-        .app_state
-        .db
-        .get_default_cost_multiplier(app_type.as_str())
+    let value = crate::commands::get_default_cost_multiplier_internal(
+        state.app_state.as_ref(),
+        app_type.as_str(),
+    )
         .await
         .map_err(|e| ApiError::internal(format!("failed to load default cost multiplier: {e}")))?;
     Ok(Json(value))
@@ -2154,10 +2116,11 @@ async fn set_default_cost_multiplier(
     Json(payload): Json<ValueRequest>,
 ) -> Result<StatusCode, ApiError> {
     let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    state
-        .app_state
-        .db
-        .set_default_cost_multiplier(app_type.as_str(), &payload.value)
+    crate::commands::set_default_cost_multiplier_internal(
+        state.app_state.as_ref(),
+        app_type.as_str(),
+        &payload.value,
+    )
         .await
         .map_err(|e| {
             ApiError::internal(format!("failed to update default cost multiplier: {e}"))
@@ -2170,10 +2133,10 @@ async fn get_pricing_model_source(
     Path(app): Path<String>,
 ) -> Result<Json<String>, ApiError> {
     let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let value = state
-        .app_state
-        .db
-        .get_pricing_model_source(app_type.as_str())
+    let value = crate::commands::get_pricing_model_source_internal(
+        state.app_state.as_ref(),
+        app_type.as_str(),
+    )
         .await
         .map_err(|e| ApiError::internal(format!("failed to load pricing model source: {e}")))?;
     Ok(Json(value))
@@ -2185,10 +2148,11 @@ async fn set_pricing_model_source(
     Json(payload): Json<ValueRequest>,
 ) -> Result<StatusCode, ApiError> {
     let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    state
-        .app_state
-        .db
-        .set_pricing_model_source(app_type.as_str(), &payload.value)
+    crate::commands::set_pricing_model_source_internal(
+        state.app_state.as_ref(),
+        app_type.as_str(),
+        &payload.value,
+    )
         .await
         .map_err(|e| ApiError::internal(format!("failed to update pricing model source: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
@@ -2199,10 +2163,11 @@ async fn get_provider_health(
     Path((app, provider_id)): Path<(String, String)>,
 ) -> Result<Json<ProviderHealth>, ApiError> {
     let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let value = state
-        .app_state
-        .db
-        .get_provider_health(&provider_id, app_type.as_str())
+    let value = crate::commands::get_provider_health_internal(
+        state.app_state.as_ref(),
+        provider_id,
+        app_type.as_str().to_string(),
+    )
         .await
         .map_err(|e| ApiError::internal(format!("failed to load provider health: {e}")))?;
     Ok(Json(value))
@@ -2212,89 +2177,16 @@ async fn reset_circuit_breaker(
     State(state): State<WebApiState>,
     Path((app, provider_id)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
-    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let app_type_str = app_type.as_str().to_string();
-
-    state
-        .app_state
-        .db
-        .update_provider_health(&provider_id, &app_type_str, true, None)
+    crate::commands::reset_circuit_breaker_internal(state.app_state.as_ref(), provider_id, app)
         .await
-        .map_err(|e| ApiError::internal(format!("failed to reset provider health: {e}")))?;
-
-    state
-        .app_state
-        .proxy_service
-        .reset_provider_circuit_breaker(&provider_id, &app_type_str)
-        .await
-        .map_err(|e| {
-            ApiError::internal(format!("failed to reset in-memory circuit breaker: {e}"))
-        })?;
-
-    let (app_enabled, auto_failover_enabled) = match state
-        .app_state
-        .db
-        .get_proxy_config_for_app(&app_type_str)
-        .await
-    {
-        Ok(config) => (config.enabled, config.auto_failover_enabled),
-        Err(e) => {
-            log::error!(
-                "[{app_type_str}] Failed to read proxy_config: {e}, defaulting to disabled"
-            );
-            (false, false)
-        }
-    };
-
-    if app_enabled && auto_failover_enabled && state.app_state.proxy_service.is_running().await {
-        let current_id = state
-            .app_state
-            .db
-            .get_current_provider(&app_type_str)
-            .map_err(|e| ApiError::internal(format!("failed to load current provider: {e}")))?;
-
-        if let Some(current_id) = current_id {
-            let queue = state
-                .app_state
-                .db
-                .get_failover_queue(&app_type_str)
-                .map_err(|e| ApiError::internal(format!("failed to load failover queue: {e}")))?;
-
-            let restored_order = queue
-                .iter()
-                .find(|item| item.provider_id == provider_id)
-                .and_then(|item| item.sort_index);
-
-            let current_order = queue
-                .iter()
-                .find(|item| item.provider_id == current_id)
-                .and_then(|item| item.sort_index);
-
-            if let (Some(restored), Some(current)) = (restored_order, current_order) {
-                if restored < current {
-                    state
-                        .app_state
-                        .proxy_service
-                        .switch_proxy_target(&app_type_str, &provider_id)
-                        .await
-                        .map_err(|e| {
-                            ApiError::internal(format!("failed to switch recovered provider: {e}"))
-                        })?;
-                }
-            }
-        }
-    }
-
+        .map_err(|e| ApiError::internal(format!("failed to reset circuit breaker: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn get_circuit_breaker_config(
     State(state): State<WebApiState>,
 ) -> Result<Json<CircuitBreakerConfig>, ApiError> {
-    let value = state
-        .app_state
-        .db
-        .get_circuit_breaker_config()
+    let value = crate::commands::get_circuit_breaker_config_internal(state.app_state.as_ref())
         .await
         .map_err(|e| ApiError::internal(format!("failed to load circuit breaker config: {e}")))?;
     Ok(Json(value))
@@ -2304,17 +2196,7 @@ async fn update_circuit_breaker_config(
     State(state): State<WebApiState>,
     Json(config): Json<CircuitBreakerConfig>,
 ) -> Result<StatusCode, ApiError> {
-    state
-        .app_state
-        .db
-        .update_circuit_breaker_config(&config)
-        .await
-        .map_err(|e| ApiError::internal(format!("failed to update circuit breaker config: {e}")))?;
-
-    state
-        .app_state
-        .proxy_service
-        .update_circuit_breaker_configs(config)
+    crate::commands::update_circuit_breaker_config_internal(state.app_state.as_ref(), config)
         .await
         .map_err(|e| {
             ApiError::internal(format!("failed to hot reload circuit breaker config: {e}"))
@@ -2324,9 +2206,17 @@ async fn update_circuit_breaker_config(
 }
 
 async fn get_circuit_breaker_stats(
-    Path((_app, _provider_id)): Path<(String, String)>,
-) -> Json<Option<CircuitBreakerStats>> {
-    Json(None)
+    State(state): State<WebApiState>,
+    Path((app, provider_id)): Path<(String, String)>,
+) -> Result<Json<Option<CircuitBreakerStats>>, ApiError> {
+    let stats = crate::commands::get_circuit_breaker_stats_internal(
+        state.app_state.as_ref(),
+        provider_id,
+        app,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to load circuit breaker stats: {e}")))?;
+    Ok(Json(stats))
 }
 
 async fn get_failover_queue(
