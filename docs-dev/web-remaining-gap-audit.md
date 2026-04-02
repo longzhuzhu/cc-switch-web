@@ -1,6 +1,6 @@
 # Web 化剩余缺口审计
 
-更新时间：2026-04-02（继续清理 Web-only 兼容命令外壳后）
+更新时间：2026-04-02（继续收拢 proxy legacy 配置链路后）
 
 ## 结论
 
@@ -106,6 +106,7 @@
 - `misc` 与 `workspace` 也已从根级公开 re-export 收窄为 crate 内使用，`web_server.rs` 不再通过根模块直接调用这两组命令
 - 无 Web 路由入口的 `init_status.rs` 与对应初始化状态拉取命令已删除，避免继续保留未接入的启动阶段兼容状态通道
 - `session_manager` 也已收窄为 crate 内导出，Session API 统一经由 `commands::` 调用
+- `ProxyService` 已不再直接依赖 DAO 中的 legacy 聚合配置接口；代理配置读取/写回已改为由 `GlobalProxyConfig + Claude AppProxyConfig + enabled 派生状态` 组合，`dao/proxy.rs` 中无调用点的 `get_proxy_config / update_proxy_config / set_live_takeover_active` 已删除
 
 ## 四、基于前端命令差集的剩余项
 

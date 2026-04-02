@@ -19,6 +19,7 @@ use tokio::sync::RwLock;
 
 /// 用于接管 Live 配置时的占位符（避免客户端提示缺少 key，同时不泄露真实 Token）
 const PROXY_TOKEN_PLACEHOLDER: &str = "PROXY_MANAGED";
+const PROXY_TAKEOVER_APPS: [&str; 3] = ["claude", "codex", "gemini"];
 
 /// 代理接管模式下需要从 Claude Live 配置中移除的"模型覆盖"字段。
 ///
@@ -58,6 +59,101 @@ impl ProxyService {
             copilot_auth_state,
             server: Arc::new(RwLock::new(None)),
         }
+    }
+
+    async fn load_proxy_config_view(&self) -> Result<ProxyConfig, String> {
+        let global_config = self
+            .db
+            .get_global_proxy_config()
+            .await
+            .map_err(|e| format!("获取全局代理配置失败: {e}"))?;
+        let claude_config = self
+            .db
+            .get_proxy_config_for_app("claude")
+            .await
+            .map_err(|e| format!("获取 Claude 代理配置失败: {e}"))?;
+
+        Ok(ProxyConfig {
+            listen_address: global_config.listen_address,
+            listen_port: global_config.listen_port,
+            max_retries: claude_config.max_retries.min(u8::MAX as u32) as u8,
+            request_timeout: claude_config.non_streaming_timeout as u64,
+            enable_logging: global_config.enable_logging,
+            live_takeover_active: self.is_takeover_active().await?,
+            streaming_first_byte_timeout: claude_config.streaming_first_byte_timeout as u64,
+            streaming_idle_timeout: claude_config.streaming_idle_timeout as u64,
+            non_streaming_timeout: claude_config.non_streaming_timeout as u64,
+        })
+    }
+
+    async fn save_proxy_config_view(&self, config: &ProxyConfig) -> Result<(), String> {
+        let current_global = self
+            .db
+            .get_global_proxy_config()
+            .await
+            .map_err(|e| format!("获取全局代理配置失败: {e}"))?;
+        self.db
+            .update_global_proxy_config(GlobalProxyConfig {
+                proxy_enabled: current_global.proxy_enabled,
+                listen_address: config.listen_address.clone(),
+                listen_port: config.listen_port,
+                enable_logging: config.enable_logging,
+            })
+            .await
+            .map_err(|e| format!("保存全局代理配置失败: {e}"))?;
+
+        let mut claude_config = self
+            .db
+            .get_proxy_config_for_app("claude")
+            .await
+            .map_err(|e| format!("获取 Claude 代理配置失败: {e}"))?;
+        claude_config.max_retries = config.max_retries as u32;
+        claude_config.streaming_first_byte_timeout =
+            config.streaming_first_byte_timeout.min(u32::MAX as u64) as u32;
+        claude_config.streaming_idle_timeout =
+            config.streaming_idle_timeout.min(u32::MAX as u64) as u32;
+        claude_config.non_streaming_timeout =
+            config.non_streaming_timeout.min(u32::MAX as u64) as u32;
+        self.db
+            .update_proxy_config_for_app(claude_config)
+            .await
+            .map_err(|e| format!("保存 Claude 代理配置失败: {e}"))?;
+
+        Ok(())
+    }
+
+    async fn set_takeover_enabled_for_app(
+        &self,
+        app_type: &str,
+        enabled: bool,
+    ) -> Result<(), String> {
+        let mut config = self
+            .db
+            .get_proxy_config_for_app(app_type)
+            .await
+            .map_err(|e| format!("获取 {app_type} 配置失败: {e}"))?;
+        if config.enabled == enabled {
+            return Ok(());
+        }
+
+        config.enabled = enabled;
+        self.db
+            .update_proxy_config_for_app(config)
+            .await
+            .map_err(|e| format!("更新 {app_type} 接管状态失败: {e}"))?;
+
+        Ok(())
+    }
+
+    async fn set_takeover_enabled_for_apps(
+        &self,
+        app_types: &[&str],
+        enabled: bool,
+    ) -> Result<(), String> {
+        for app_type in app_types {
+            self.set_takeover_enabled_for_app(app_type, enabled).await?;
+        }
+        Ok(())
     }
 
     /// 清理接管模式下 Claude Live 配置中的模型覆盖字段。
@@ -103,11 +199,7 @@ impl ProxyService {
         }
 
         // 2. 获取配置
-        let config = self
-            .db
-            .get_proxy_config()
-            .await
-            .map_err(|e| format!("获取代理配置失败: {e}"))?;
+        let config = self.load_proxy_config_view().await?;
 
         // 3. 若已在运行：确保持久化状态（如需要）并返回当前信息
         if let Some(server) = self.server.read().await.as_ref() {
@@ -152,22 +244,12 @@ impl ProxyService {
             return Err(e);
         }
 
-        // 3. 在写入接管配置之前先落盘接管标志：
-        //    这样即使在接管过程中断电/kill，下次启动也能检测到并自动恢复。
-        if let Err(e) = self.db.set_live_takeover_active(true).await {
-            if let Err(clean_err) = self.db.delete_all_live_backups().await {
-                log::warn!("清理 Live 备份失败: {clean_err}");
-            }
-            return Err(format!("设置接管状态失败: {e}"));
-        }
-
-        // 4. 接管各应用的 Live 配置（写入代理地址，清空 Token）
+        // 3. 接管各应用的 Live 配置（写入代理地址，清空 Token）
         if let Err(e) = self.takeover_live_configs().await {
-            // 接管失败（可能是部分写入），尝试恢复原始配置；若恢复失败则保留标志与备份，等待下次启动自动恢复。
+            // 接管失败（可能是部分写入），尝试恢复原始配置；若恢复失败则保留备份，等待下次启动自动恢复。
             log::error!("接管 Live 配置失败，尝试恢复原始配置: {e}");
             match self.restore_live_configs().await {
                 Ok(()) => {
-                    let _ = self.db.set_live_takeover_active(false).await;
                     let _ = self.db.delete_all_live_backups().await;
                 }
                 Err(restore_err) => {
@@ -177,7 +259,26 @@ impl ProxyService {
             return Err(e);
         }
 
-        // 5. 启动代理服务器
+        if let Err(e) = self
+            .set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, true)
+            .await
+        {
+            log::error!("写入接管 enabled 状态失败，尝试恢复原始配置: {e}");
+            match self.restore_live_configs().await {
+                Ok(()) => {
+                    let _ = self
+                        .set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, false)
+                        .await;
+                    let _ = self.db.delete_all_live_backups().await;
+                }
+                Err(restore_err) => {
+                    log::error!("恢复原始配置失败，将保留备份以便下次启动恢复: {restore_err}");
+                }
+            }
+            return Err(e);
+        }
+
+        // 4. 启动代理服务器
         match self.start().await {
             Ok(info) => Ok(info),
             Err(e) => {
@@ -185,7 +286,9 @@ impl ProxyService {
                 log::error!("代理启动失败，尝试恢复原始配置: {e}");
                 match self.restore_live_configs().await {
                     Ok(()) => {
-                        let _ = self.db.set_live_takeover_active(false).await;
+                        let _ = self
+                            .set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, false)
+                            .await;
                         let _ = self.db.delete_all_live_backups().await;
                     }
                     Err(restore_err) => {
@@ -298,19 +401,7 @@ impl ProxyService {
             }
 
             // 6) 设置 proxy_config.enabled = true
-            let mut updated_config = self
-                .db
-                .get_proxy_config_for_app(app_type_str)
-                .await
-                .map_err(|e| format!("获取 {app_type_str} 配置失败: {e}"))?;
-            updated_config.enabled = true;
-            self.db
-                .update_proxy_config_for_app(updated_config)
-                .await
-                .map_err(|e| format!("设置 {app_type_str} enabled 状态失败: {e}"))?;
-
-            // 7) 兼容旧逻辑：写入 any-of 标志（失败不影响功能）
-            let _ = self.db.set_live_takeover_active(true).await;
+            self.set_takeover_enabled_for_app(app_type_str, true).await?;
             return Ok(());
         }
 
@@ -335,16 +426,7 @@ impl ProxyService {
             .map_err(|e| format!("删除 {app_type_str} Live 备份失败: {e}"))?;
 
         // 3) 设置 proxy_config.enabled = false
-        let mut updated_config = self
-            .db
-            .get_proxy_config_for_app(app_type_str)
-            .await
-            .map_err(|e| format!("获取 {app_type_str} 配置失败: {e}"))?;
-        updated_config.enabled = false;
-        self.db
-            .update_proxy_config_for_app(updated_config)
-            .await
-            .map_err(|e| format!("清除 {app_type_str} enabled 状态失败: {e}"))?;
+        self.set_takeover_enabled_for_app(app_type_str, false).await?;
 
         // 4) 清除该应用的健康状态（关闭代理时重置队列状态）
         self.db
@@ -352,17 +434,10 @@ impl ProxyService {
             .await
             .map_err(|e| format!("清除 {app_type_str} 健康状态失败: {e}"))?;
 
-        // 5) 若无其它接管，更新旧标志，并停止代理服务
-        // 检查是否还有其它 app 的 enabled = true
-        let any_enabled = self
-            .db
-            .is_live_takeover_active()
-            .await
-            .map_err(|e| format!("检查接管状态失败: {e}"))?;
+        // 5) 若无其它接管，则停止代理服务
+        let any_enabled = self.is_takeover_active().await?;
 
         if !any_enabled {
-            let _ = self.db.set_live_takeover_active(false).await;
-
             if self.is_running().await {
                 // 此时没有任何 app 处于接管状态，停止服务即可
                 let _ = self.stop().await;
@@ -674,31 +749,20 @@ impl ProxyService {
         // 2. 恢复原始 Live 配置
         self.restore_live_configs().await?;
 
-        // 3. 清除 proxy_config 表中的接管状态（兼容旧版）
-        self.db
-            .set_live_takeover_active(false)
-            .await
-            .map_err(|e| format!("清除接管状态失败: {e}"))?;
-
-        // 4. 清除所有应用的 enabled 状态（用户手动关闭，不需要下次自动恢复）
-        for app_type in ["claude", "codex", "gemini"] {
-            if let Ok(mut config) = self.db.get_proxy_config_for_app(app_type).await {
-                if config.enabled {
-                    config.enabled = false;
-                    if let Err(e) = self.db.update_proxy_config_for_app(config).await {
-                        log::warn!("清除 {app_type} enabled 状态失败: {e}");
-                    }
-                }
+        // 3. 清除所有应用的 enabled 状态（用户手动关闭，不需要下次自动恢复）
+        for app_type in PROXY_TAKEOVER_APPS {
+            if let Err(e) = self.set_takeover_enabled_for_app(app_type, false).await {
+                log::warn!("清除 {app_type} enabled 状态失败: {e}");
             }
         }
 
-        // 5. 删除备份
+        // 4. 删除备份
         self.db
             .delete_all_live_backups()
             .await
             .map_err(|e| format!("删除备份失败: {e}"))?;
 
-        // 6. 重置健康状态（让健康徽章恢复为正常）
+        // 5. 重置健康状态（让健康徽章恢复为正常）
         self.db
             .clear_all_provider_health()
             .await
@@ -721,20 +785,13 @@ impl ProxyService {
         // 2. 恢复原始 Live 配置
         self.restore_live_configs().await?;
 
-        // 3. 更新 proxy_config 表中的 live_takeover_active 标志（兼容旧版）
-        //    注意：保留 proxy_config.enabled 状态，下次启动时自动恢复
-        if let Ok(mut config) = self.db.get_proxy_config().await {
-            config.live_takeover_active = false;
-            let _ = self.db.update_proxy_config(config).await;
-        }
-
-        // 4. 删除备份（Live 配置已恢复，备份不再需要）
+        // 3. 删除备份（Live 配置已恢复，备份不再需要）
         self.db
             .delete_all_live_backups()
             .await
             .map_err(|e| format!("删除备份失败: {e}"))?;
 
-        // 5. 重置健康状态
+        // 4. 重置健康状态
         self.db
             .clear_all_provider_health()
             .await
@@ -808,11 +865,7 @@ impl ProxyService {
 
     /// 构造写入 Live 的代理地址（处理 0.0.0.0 / IPv6 等特殊情况）
     async fn build_proxy_urls(&self) -> Result<(String, String), String> {
-        let config = self
-            .db
-            .get_proxy_config()
-            .await
-            .map_err(|e| format!("获取代理配置失败: {e}"))?;
+        let config = self.load_proxy_config_view().await?;
 
         // listen_address 可能是 0.0.0.0（用于监听所有网卡），但客户端无法用 0.0.0.0 连接；
         // 因此写回到各应用配置时，优先使用本机回环地址。
@@ -1407,11 +1460,9 @@ impl ProxyService {
         // 1. 恢复 Live 配置
         self.restore_live_configs().await?;
 
-        // 2. 清除接管标志
-        self.db
-            .set_live_takeover_active(false)
-            .await
-            .map_err(|e| format!("清除接管状态失败: {e}"))?;
+        // 2. 清除所有应用的 enabled 状态，避免恢复后仍被视为接管中
+        self.set_takeover_enabled_for_apps(&PROXY_TAKEOVER_APPS, false)
+            .await?;
 
         // 3. 删除备份
         self.db
@@ -1797,29 +1848,19 @@ impl ProxyService {
 
     /// 获取代理配置
     pub async fn get_config(&self) -> Result<ProxyConfig, String> {
-        self.db
-            .get_proxy_config()
-            .await
-            .map_err(|e| format!("获取代理配置失败: {e}"))
+        self.load_proxy_config_view().await
     }
 
     /// 更新代理配置
     pub async fn update_config(&self, config: &ProxyConfig) -> Result<(), String> {
         // 记录旧配置用于判定是否需要重启
-        let previous = self
-            .db
-            .get_proxy_config()
-            .await
-            .map_err(|e| format!("获取代理配置失败: {e}"))?;
+        let previous = self.load_proxy_config_view().await?;
 
-        // 保存到数据库（保持 live_takeover_active 状态不变）
+        // 保存到数据库（live_takeover_active 为派生字段，不直接持久化）
         let mut new_config = config.clone();
         new_config.live_takeover_active = previous.live_takeover_active;
 
-        self.db
-            .update_proxy_config(new_config.clone())
-            .await
-            .map_err(|e| format!("保存代理配置失败: {e}"))?;
+        self.save_proxy_config_view(&new_config).await?;
 
         // 检查服务器当前状态
         let mut server_guard = self.server.write().await;
