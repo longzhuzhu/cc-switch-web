@@ -33,7 +33,6 @@ FROM debian:bookworm-slim AS package-linux-dir
 WORKDIR /out/cc-switch-web-linux-x64
 
 COPY --from=service-builder /app/backend/target/release/cc-switch-web ./cc-switch-web
-COPY --from=frontend-builder /app/dist ./dist
 COPY scripts/run-web-release.sh ./run-web.sh
 
 RUN chmod +x ./cc-switch-web ./run-web.sh
@@ -54,8 +53,7 @@ WORKDIR /app
 
 ENV HOME=/data \
     CC_SWITCH_WEB_HOST=0.0.0.0 \
-    CC_SWITCH_WEB_PORT=8788 \
-    CC_SWITCH_WEB_DIST_DIR=/app/dist
+    CC_SWITCH_WEB_PORT=8788
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -63,7 +61,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=service-builder /app/backend/target/release/cc-switch-web /usr/local/bin/cc-switch-web
-COPY --from=frontend-builder /app/dist ./dist
 
 VOLUME ["/data"]
 

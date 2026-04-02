@@ -11,7 +11,7 @@
     "dev:web:service": "cargo run --manifest-path backend/Cargo.toml --bin cc-switch-web",
     "dev:d": "docker compose up --build",
     "build:web": "vite build",
-    "build:web:service": "cargo build --manifest-path backend/Cargo.toml --bin cc-switch-web",
+    "build:web:service": "cargo build --release --manifest-path backend/Cargo.toml --bin cc-switch-web",
     "build:d": "docker compose build",
     "build:pkg:l": "node scripts/package-linux-docker.mjs",
     "build:pkg:l:dir": "node scripts/package-linux-docker.mjs --dir",

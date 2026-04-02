@@ -103,6 +103,8 @@ If you are looking for the original CC Switch project or upstream release inform
    pnpm build:web:service
    ```
 
+   `pnpm build:web` builds the frontend bundle, and `pnpm build:web:service` embeds that bundle into the release binary.
+
    Linux:
 
    ```bash
@@ -218,7 +220,6 @@ release/docker-linux/cc-switch-web-linux-x64/
 The package contains:
 
 - `cc-switch-web`
-- `dist/`
 - `run-web.sh`
 
 After extracting on Linux, run:
@@ -253,7 +254,6 @@ Recommended steps:
    - `Group`
    - `WorkingDirectory`
    - `HOME`
-   - `CC_SWITCH_WEB_DIST_DIR`
 
 4. Reload and start:
 

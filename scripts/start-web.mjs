@@ -7,19 +7,18 @@ const isWindows = process.platform === "win32";
 const cargoCmd = isWindows ? "cargo.exe" : "cargo";
 const distDir =
   process.env.CC_SWITCH_WEB_DIST_DIR || path.join(process.cwd(), "dist");
+const hasDist = existsSync(distDir);
 const host = process.env.CC_SWITCH_WEB_HOST || "127.0.0.1";
 const port = process.env.CC_SWITCH_WEB_PORT || "8788";
-
-if (!existsSync(distDir)) {
-  console.error(`[start:web] dist 目录不存在: ${distDir}`);
-  console.error("[start:web] 请先执行: pnpm build:web");
-  process.exit(1);
-}
 
 console.log("CC Switch Web 已启动");
 console.log(`监听地址: ${host}:${port}`);
 console.log(`访问地址: http://${host}:${port}`);
-console.log(`前端目录: ${distDir}`);
+if (hasDist) {
+  console.log(`前端目录: ${distDir}`);
+} else {
+  console.log("前端资源: 将优先使用已嵌入的静态资源");
+}
 console.log(
   "服务命令: cargo run --manifest-path backend/Cargo.toml --bin cc-switch-web",
 );
@@ -39,7 +38,7 @@ const child = spawn(
       ...process.env,
       CC_SWITCH_WEB_HOST: host,
       CC_SWITCH_WEB_PORT: port,
-      CC_SWITCH_WEB_DIST_DIR: distDir,
+      ...(hasDist ? { CC_SWITCH_WEB_DIST_DIR: distDir } : {}),
     },
   },
 );

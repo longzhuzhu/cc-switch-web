@@ -8,7 +8,6 @@ services:
       HOME: /data
       CC_SWITCH_WEB_HOST: 0.0.0.0
       CC_SWITCH_WEB_PORT: 8788
-      CC_SWITCH_WEB_DIST_DIR: /app/dist
     ports:
       - "${CC_SWITCH_WEB_PORT:-8788}:8788"
     volumes:
@@ -24,4 +23,3 @@ services:
 
 volumes:
   cc-switch-web-data:
-

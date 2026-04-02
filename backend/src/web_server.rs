@@ -6,10 +6,11 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
-use axum::http::{header, HeaderValue, StatusCode};
+use axum::http::{header, HeaderValue, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, get_service, post, put};
 use axum::{Json, Router};
+use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tower_http::cors::CorsLayer;
@@ -35,6 +36,8 @@ use crate::settings::WebDavSyncSettings;
 use crate::store::AppState;
 use crate::database::Database;
 use tokio::sync::RwLock;
+
+static EMBEDDED_FRONTEND_DIST: Dir<'static> = include_dir!("$CC_SWITCH_WEB_EMBED_DIST_DIR");
 
 #[derive(Clone)]
 struct WebApiState {
@@ -2416,6 +2419,94 @@ fn resolve_frontend_dist_dir() -> Option<PathBuf> {
     }
 }
 
+fn has_embedded_frontend_dist() -> bool {
+    env!("CC_SWITCH_WEB_HAS_EMBEDDED_DIST") == "1"
+        && EMBEDDED_FRONTEND_DIST.get_file("index.html").is_some()
+}
+
+fn normalize_frontend_path(path: &str) -> Option<String> {
+    let trimmed = path.trim_start_matches('/').trim();
+    if trimmed.is_empty() {
+        return Some("index.html".to_string());
+    }
+
+    let segments = trimmed
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+
+    if segments
+        .iter()
+        .any(|segment| *segment == "." || *segment == "..")
+    {
+        return None;
+    }
+
+    Some(segments.join("/"))
+}
+
+fn embedded_frontend_candidates(path: &str) -> Option<Vec<String>> {
+    let normalized = normalize_frontend_path(path)?;
+    let mut candidates = vec![normalized.clone()];
+
+    if !normalized.contains('.') && normalized != "index.html" {
+        candidates.push(format!("{normalized}/index.html"));
+    }
+
+    if normalized != "index.html" {
+        candidates.push("index.html".to_string());
+    }
+
+    Some(candidates)
+}
+
+fn build_embedded_file_response(path: &str, contents: &'static [u8]) -> Response {
+    let mime = mime_guess::from_path(path).first_or_octet_stream();
+    let mut response = Response::new(Body::from(contents));
+    *response.status_mut() = StatusCode::OK;
+
+    if let Ok(value) = HeaderValue::from_str(mime.as_ref()) {
+        response.headers_mut().insert(header::CONTENT_TYPE, value);
+    }
+
+    if path.ends_with(".html") {
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache"),
+        );
+    }
+
+    response
+}
+
+fn embedded_frontend_response(path: &str) -> Option<Response> {
+    if !has_embedded_frontend_dist() {
+        return None;
+    }
+
+    let candidates = embedded_frontend_candidates(path)?;
+
+    for candidate in candidates {
+        if let Some(file) = EMBEDDED_FRONTEND_DIST.get_file(&candidate) {
+            return Some(build_embedded_file_response(&candidate, file.contents()));
+        }
+    }
+
+    None
+}
+
+async fn serve_embedded_frontend(uri: Uri) -> Response {
+    embedded_frontend_response(uri.path()).unwrap_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "frontend asset not found".to_string(),
+            }),
+        )
+            .into_response()
+    })
+}
+
 pub async fn run_web_server() -> Result<(), String> {
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
     match db.init_default_skill_repos() {
@@ -2439,7 +2530,7 @@ pub async fn run_web_server() -> Result<(), String> {
     let bind_addr = resolve_bind_addr()?;
 
     let mut app = Router::new()
-        .route("/", get(root))
+        .route("/api", get(root))
         .route("/api/health", get(health))
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
@@ -2809,8 +2900,12 @@ pub async fn run_web_server() -> Result<(), String> {
         app = app.fallback_service(get_service(
             ServeDir::new(dist_dir).append_index_html_on_directories(true),
         ));
+    } else if has_embedded_frontend_dist() {
+        println!("cc-switch web service will serve embedded frontend static assets");
+        app = app.fallback(serve_embedded_frontend);
     } else {
         println!("cc-switch web service running without frontend static assets");
+        app = app.route("/", get(root));
     }
 
     println!("cc-switch web service listening on http://{bind_addr}");

@@ -93,7 +93,6 @@ jobs:
           Copy-Item 'backend/target/release/cc-switch-web.exe' (Join-Path $pkgDir 'cc-switch-web.exe')
           Copy-Item 'scripts/run-web-release.cmd' (Join-Path $pkgDir 'run-web.cmd')
           Copy-Item 'scripts/run-web-release.ps1' (Join-Path $pkgDir 'run-web.ps1')
-          Copy-Item 'dist' (Join-Path $pkgDir 'dist') -Recurse
           Compress-Archive -Path $pkgDir -DestinationPath '${{ matrix.archive_name }}' -Force
 
       - name: Package Linux archive
@@ -124,7 +123,6 @@ jobs:
             -output "$pkg_dir/cc-switch-web"
           cp scripts/run-web-release.command "$pkg_dir/run-web.command"
           cp scripts/run-web-release.sh "$pkg_dir/run-web.sh"
-          cp -R dist "$pkg_dir/dist"
           chmod +x "$pkg_dir/cc-switch-web" "$pkg_dir/run-web.command" "$pkg_dir/run-web.sh"
           ditto -c -k --keepParent "$pkg_dir" "${{ matrix.archive_name }}"
 

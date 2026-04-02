@@ -11,7 +11,6 @@ WorkingDirectory=/opt/cc-switch-web
 Environment=HOME=/home/ccswitch
 Environment=CC_SWITCH_WEB_HOST=127.0.0.1
 Environment=CC_SWITCH_WEB_PORT=8788
-Environment=CC_SWITCH_WEB_DIST_DIR=/opt/cc-switch-web/dist
 ExecStart=/usr/bin/bash /opt/cc-switch-web/scripts/run-web.sh
 Restart=on-failure
 RestartSec=5

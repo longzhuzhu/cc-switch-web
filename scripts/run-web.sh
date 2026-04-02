@@ -8,26 +8,32 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${CC_SWITCH_WEB_DIST_DIR:-${REPO_ROOT}/dist}"
 BINARY_PATH="${REPO_ROOT}/backend/target/release/cc-switch-web"
 
-if [[ ! -d "${DIST_DIR}" ]]; then
-  echo "dist 目录不存在: ${DIST_DIR}" >&2
-  echo "请先执行: pnpm build:web" >&2
-  exit 1
-fi
-
 if [[ ! -x "${BINARY_PATH}" ]]; then
   echo "服务二进制不存在: ${BINARY_PATH}" >&2
   echo "请先执行: pnpm build:web:service" >&2
   exit 1
 fi
 
+if [[ ! -d "${DIST_DIR}" ]]; then
+  DIST_DIR=""
+fi
+
 export CC_SWITCH_WEB_HOST="${CC_SWITCH_WEB_HOST:-127.0.0.1}"
 export CC_SWITCH_WEB_PORT="${CC_SWITCH_WEB_PORT:-8788}"
-export CC_SWITCH_WEB_DIST_DIR="$(cd "${DIST_DIR}" && pwd)"
+if [[ -n "${DIST_DIR}" ]]; then
+  export CC_SWITCH_WEB_DIST_DIR="$(cd "${DIST_DIR}" && pwd)"
+else
+  unset CC_SWITCH_WEB_DIST_DIR || true
+fi
 
 echo "CC Switch Web 已启动"
 echo "监听地址: ${CC_SWITCH_WEB_HOST}:${CC_SWITCH_WEB_PORT}"
 echo "访问地址: http://${CC_SWITCH_WEB_HOST}:${CC_SWITCH_WEB_PORT}"
-echo "前端目录: ${CC_SWITCH_WEB_DIST_DIR}"
+if [[ -n "${DIST_DIR}" ]]; then
+  echo "前端目录: ${CC_SWITCH_WEB_DIST_DIR}"
+else
+  echo "前端资源: 内嵌到服务二进制"
+fi
 echo "服务二进制: ${BINARY_PATH}"
 if [[ "${CC_SWITCH_WEB_HOST}" == "0.0.0.0" ]]; then
   echo "当前绑定到 0.0.0.0，请使用服务器 IP 或本机地址访问"
