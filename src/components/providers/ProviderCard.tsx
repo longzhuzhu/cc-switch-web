@@ -217,11 +217,10 @@ export function ProviderCard({
         "relative overflow-hidden rounded-xl border border-border p-4 transition-all duration-300",
         "bg-card text-card-foreground group",
         isAutoFailoverEnabled || isProxyTakeover
-          ? "hover:border-emerald-500/50"
+          ? "hover:border-[hsl(var(--success)/0.45)]"
           : "hover:border-border-active",
-        shouldUseGreen &&
-          "border-emerald-500/60 shadow-sm shadow-emerald-500/10",
-        shouldUseBlue && "border-blue-500/60 shadow-sm shadow-blue-500/10",
+        shouldUseGreen && "provider-card-active-success",
+        shouldUseBlue && "provider-card-active-primary",
         !isActiveProvider && "hover:shadow-sm",
         dragHandleProps?.isDragging &&
           "cursor-grabbing border-primary shadow-lg scale-105 z-10",
@@ -230,8 +229,8 @@ export function ProviderCard({
       <div
         className={cn(
           "absolute inset-0 bg-gradient-to-r to-transparent transition-opacity duration-500 pointer-events-none",
-          shouldUseGreen && "from-emerald-500/10",
-          shouldUseBlue && "from-blue-500/10",
+          shouldUseGreen && "provider-card-overlay-success",
+          shouldUseBlue && "provider-card-overlay-primary",
           !isActiveProvider && "from-primary/10",
           isActiveProvider ? "opacity-100" : "opacity-0",
         )}
@@ -268,13 +267,13 @@ export function ProviderCard({
               </h3>
 
               {isOmo && (
-                <span className="inline-flex items-center rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                <span className="theme-chip-primary inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold">
                   OMO
                 </span>
               )}
 
               {isOmoSlim && (
-                <span className="inline-flex items-center rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                <span className="theme-chip-tertiary inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold">
                   Slim
                 </span>
               )}
@@ -300,7 +299,7 @@ export function ProviderCard({
                 className={cn(
                   "inline-flex items-center text-sm max-w-[280px]",
                   isClickableUrl
-                    ? "text-blue-500 transition-colors hover:underline dark:text-blue-400 cursor-pointer"
+                    ? "theme-primary-link cursor-pointer hover:underline"
                     : "text-muted-foreground cursor-default",
                 )}
                 title={displayUrl}
@@ -323,7 +322,7 @@ export function ProviderCard({
           <div className="ml-auto">
             <div className="flex items-center gap-1 transition-transform duration-200 group-hover:-translate-x-[var(--actions-width)] group-focus-within:-translate-x-[var(--actions-width)]">
               {hasMultiplePlans ? (
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="font-medium">
                     {t("usage.multiplePlans", {
                       count: usage?.data?.length || 0,
@@ -348,7 +347,7 @@ export function ProviderCard({
                     e.stopPropagation();
                     setIsExpanded(!isExpanded);
                   }}
-                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400 flex-shrink-0"
+                  className="p-1 rounded hover:bg-accent/70 transition-colors text-muted-foreground flex-shrink-0"
                   title={
                     isExpanded
                       ? t("usage.collapse", { defaultValue: "收起" })

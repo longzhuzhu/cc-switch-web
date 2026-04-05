@@ -220,6 +220,54 @@ struct DailyMemorySearchQuery {
     query: String,
 }
 
+const DEFAULT_WEB_HOST: &str = "127.0.0.1";
+const DEFAULT_WEB_PORT: u16 = 8890;
+const DEFAULT_PORT_SCAN_COUNT: usize = 32;
+
+#[derive(Debug, Clone)]
+pub struct WebServerOptions {
+    pub host: String,
+    pub preferred_port: u16,
+    pub port_scan_count: usize,
+}
+
+impl Default for WebServerOptions {
+    fn default() -> Self {
+        Self {
+            host: DEFAULT_WEB_HOST.to_string(),
+            preferred_port: DEFAULT_WEB_PORT,
+            port_scan_count: DEFAULT_PORT_SCAN_COUNT,
+        }
+    }
+}
+
+impl WebServerOptions {
+    pub fn from_env() -> Self {
+        let mut options = Self::default();
+
+        if let Ok(host) = std::env::var("CC_SWITCH_WEB_HOST") {
+            let trimmed = host.trim();
+            if !trimmed.is_empty() {
+                options.host = trimmed.to_string();
+            }
+        }
+
+        if let Ok(port) = std::env::var("CC_SWITCH_WEB_PORT") {
+            if let Ok(parsed) = port.trim().parse::<u16>() {
+                options.preferred_port = parsed;
+            }
+        }
+
+        if let Ok(count) = std::env::var("CC_SWITCH_WEB_PORT_SCAN_COUNT") {
+            if let Ok(parsed) = count.trim().parse::<usize>() {
+                options.port_scan_count = parsed.max(1);
+            }
+        }
+
+        options
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionMessagesQuery {
@@ -2466,18 +2514,64 @@ async fn set_auto_failover_enabled(
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn resolve_bind_addr() -> Result<SocketAddr, String> {
-    let host = std::env::var("CC_SWITCH_WEB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = std::env::var("CC_SWITCH_WEB_PORT")
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-        .unwrap_or(8788);
+#[derive(Debug, Clone)]
+struct ResolvedBindOptions {
+    ip: IpAddr,
+    preferred_port: u16,
+    port_scan_count: usize,
+}
 
-    let ip = host
-        .parse::<IpAddr>()
-        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
+fn resolve_bind_options(options: &WebServerOptions) -> Result<ResolvedBindOptions, String> {
+    let host = options.host.trim();
+    if host.is_empty() {
+        return Err("bind host cannot be empty".to_string());
+    }
 
-    Ok(SocketAddr::new(ip, port))
+    let ip = if host.eq_ignore_ascii_case("localhost") {
+        IpAddr::V4(Ipv4Addr::LOCALHOST)
+    } else {
+        host
+            .parse::<IpAddr>()
+            .map_err(|e| format!("invalid bind host '{host}': {e}"))?
+    };
+
+    Ok(ResolvedBindOptions {
+        ip,
+        preferred_port: options.preferred_port,
+        port_scan_count: options.port_scan_count.max(1),
+    })
+}
+
+async fn bind_listener(
+    options: &ResolvedBindOptions,
+) -> Result<(tokio::net::TcpListener, SocketAddr), String> {
+    let max_port = u16::MAX as usize;
+    let available_slots = max_port.saturating_sub(options.preferred_port as usize) + 1;
+    let attempt_count = options.port_scan_count.max(1).min(available_slots);
+    let mut last_error = None;
+    let mut last_addr = None;
+
+    for offset in 0..attempt_count {
+        let port = options.preferred_port + offset as u16;
+        let addr = SocketAddr::new(options.ip, port);
+        last_addr = Some(addr);
+
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => return Ok((listener, addr)),
+            Err(error) => {
+                last_error = Some(error.to_string());
+            }
+        }
+    }
+
+    let end_port = options.preferred_port + (attempt_count.saturating_sub(1)) as u16;
+    let last_addr = last_addr.unwrap_or_else(|| SocketAddr::new(options.ip, options.preferred_port));
+    let last_error = last_error.unwrap_or_else(|| "unknown bind error".to_string());
+
+    Err(format!(
+        "bind failed for {}:{}-{} after {attempt_count} attempts; last error on {last_addr}: {last_error}",
+        options.ip, options.preferred_port, end_port
+    ))
 }
 
 fn resolve_frontend_dist_dir() -> Option<PathBuf> {
@@ -2595,6 +2689,10 @@ async fn serve_embedded_frontend(uri: Uri) -> Response {
 }
 
 pub async fn run_web_server() -> Result<(), String> {
+    run_web_server_with_options(WebServerOptions::from_env()).await
+}
+
+pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<(), String> {
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
     match db.init_default_skill_repos() {
         Ok(count) if count > 0 => {
@@ -2614,7 +2712,7 @@ pub async fn run_web_server() -> Result<(), String> {
         copilot_auth_state: app_state.copilot_auth_state.clone(),
         app_state,
     };
-    let bind_addr = resolve_bind_addr()?;
+    let bind_options = resolve_bind_options(&options)?;
 
     let mut app = Router::new()
         .route("/api", get(root))
@@ -2998,11 +3096,15 @@ pub async fn run_web_server() -> Result<(), String> {
         app = app.route("/", get(root));
     }
 
+    let (listener, bind_addr) = bind_listener(&bind_options).await?;
+    if bind_addr.port() != bind_options.preferred_port {
+        println!(
+            "preferred cc-switch web port {} unavailable, switched to {}",
+            bind_options.preferred_port,
+            bind_addr.port()
+        );
+    }
     println!("cc-switch web service listening on http://{bind_addr}");
-
-    let listener = tokio::net::TcpListener::bind(bind_addr)
-        .await
-        .map_err(|e| format!("bind failed on {bind_addr}: {e}"))?;
 
     axum::serve(listener, app)
         .await

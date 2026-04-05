@@ -577,7 +577,7 @@ const EndpointSpeedTest: React.FC<EndpointSpeedTestProps> = ({
                     <div
                       className={`h-1.5 w-1.5 flex-shrink-0 rounded-full transition ${
                         isSelected
-                          ? "bg-blue-500 dark:bg-blue-400"
+                          ? "bg-[hsl(var(--primary))]"
                           : "bg-gray-300 dark:bg-gray-700"
                       }`}
                     />
@@ -597,11 +597,11 @@ const EndpointSpeedTest: React.FC<EndpointSpeedTestProps> = ({
                         <div
                           className={`font-mono text-sm font-medium ${
                             latency < 300
-                              ? "text-emerald-600 dark:text-emerald-400"
+                              ? "theme-success-text"
                               : latency < 500
                                 ? "text-yellow-600 dark:text-yellow-400"
                                 : latency < 800
-                                  ? "text-orange-600 dark:text-orange-400"
+                                  ? "theme-warning-text"
                                   : "text-red-600 dark:text-red-400"
                           }`}
                         >

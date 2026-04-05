@@ -18,7 +18,7 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.1.1`.
+The current repository version is `0.1.2`.
 
 This repository now treats `0.1.0` as its initial Web release baseline. Previous inherited release history has been removed from this repository and should be considered part of the upstream project history.
 
@@ -75,8 +75,21 @@ If you are looking for the original CC Switch project or upstream release inform
    .\scripts\dev.ps1 w
    ```
 
-3. Open [http://localhost:3000](http://localhost:3000). The frontend connects to the local Rust service at `http://127.0.0.1:8788`.
-   In local development, open the frontend dev URL instead of `8788`. Port `8788` is primarily for the local API, and `pnpm dev` now disables backend static frontend hosting by default to avoid accidentally serving an old `dist` bundle.
+   To pin ports explicitly, you can run:
+
+   ```bash
+   pnpm dev -- --frontend-port 3300 --backend-port 8890
+   pnpm dev -- w -f 3300 -b 8890 --host 127.0.0.1
+   ```
+
+   On Windows:
+
+   ```powershell
+   .\scripts\dev.ps1 w -f 3300 -b 8890
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000). The frontend connects to the local Rust service at `http://127.0.0.1:8890`.
+   In local development, open the frontend dev URL instead of the backend port. `pnpm dev` disables backend static frontend hosting by default, and when a preferred port is unavailable it automatically scans forward and wires the final backend address into Vite.
 
 4. `pnpm dev` enables local request debug logs by default:
    - Browser DevTools show frontend request/response logs
@@ -108,7 +121,19 @@ If you are looking for the original CC Switch project or upstream release inform
    - Windows: `backend\target\release\cc-switch-web.exe`
    - Linux/macOS: `backend/target/release/cc-switch-web`
 
-3. Run the binary directly, then open [http://localhost:8788](http://localhost:8788).
+3. Run the binary directly, then open the final address printed in the terminal. The frontend static assets and Web API share the same service port. The default preferred port is `8890`:
+
+   ```bash
+   ./backend/target/release/cc-switch-web --backend-port 8890
+   ```
+
+   Windows:
+
+   ```powershell
+   .\backend\target\release\cc-switch-web.exe -b 8890
+   ```
+
+   If the preferred port is already in use, excluded by the OS, or denied by local policy, the service automatically scans forward and prints the actual port it bound to.
 
 4. In local Web service mode, CC Switch Web stores its own data under the default CC Switch local config root:
 
@@ -144,6 +169,18 @@ If you are looking for the original CC Switch project or upstream release inform
    .\scripts\dev.ps1 d
    ```
 
+   To override the exposed service port:
+
+   ```bash
+   CC_SWITCH_WEB_PORT=8895 pnpm dev -- d
+   ```
+
+   PowerShell:
+
+   ```powershell
+   $env:CC_SWITCH_WEB_PORT=8895; .\scripts\dev.ps1 d
+   ```
+
 3. If you want background mode after the image is built, use Docker directly:
 
    ```bash
@@ -152,7 +189,7 @@ If you are looking for the original CC Switch project or upstream release inform
    docker compose down
    ```
 
-4. Open [http://localhost:8788](http://localhost:8788). Persistent data is stored in the `cc-switch-web-data` volume.
+4. Open [http://localhost:8890](http://localhost:8890) or your overridden port. The container serves the embedded frontend and API on the same port. Docker mode keeps `CC_SWITCH_WEB_PORT_SCAN_COUNT=1` by default so that published port mappings stay stable. Persistent data is stored in the `cc-switch-web-data` volume.
 
 5. If you want the containerized service to manage host-side CLI config directories directly, first copy the example file:
 

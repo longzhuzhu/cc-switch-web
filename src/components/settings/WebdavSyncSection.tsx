@@ -729,13 +729,13 @@ export function WebdavSyncSection({
 
           {/* Save status indicator */}
           {dirty && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-amber-500 dark:text-amber-400 animate-in fade-in duration-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400" />
+            <span className="inline-flex items-center gap-1.5 text-xs theme-warning-text animate-in fade-in duration-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--warning))]" />
               {t("settings.webdavSync.unsaved")}
             </span>
           )}
           {!dirty && justSaved && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+            <span className="inline-flex items-center gap-1.5 text-xs theme-success-text animate-in fade-in duration-200">
               <Check className="h-3 w-3" />
               {t("settings.webdavSync.saved")}
             </span>

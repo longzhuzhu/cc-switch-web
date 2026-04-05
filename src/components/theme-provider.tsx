@@ -1,22 +1,33 @@
 import React, {
+  useCallback,
   createContext,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import {
+  DEFAULT_THEME_SCHEME,
+  isThemeScheme,
+  type ThemeScheme,
+} from "@/config/themeSchemes";
 
 type Theme = "light" | "dark" | "system";
+type ResolvedTheme = "light" | "dark";
 
 interface ThemeProviderProps {
   children: React.ReactNode;
   defaultTheme?: Theme;
+  defaultScheme?: ThemeScheme;
   storageKey?: string;
 }
 
 interface ThemeContextValue {
   theme: Theme;
+  resolvedTheme: ResolvedTheme;
+  scheme: ThemeScheme;
   setTheme: (theme: Theme, event?: React.MouseEvent) => void;
+  setScheme: (scheme: ThemeScheme, event?: React.MouseEvent) => void;
 }
 
 const ThemeProviderContext = createContext<ThemeContextValue | undefined>(
@@ -26,6 +37,7 @@ const ThemeProviderContext = createContext<ThemeContextValue | undefined>(
 export function ThemeProvider({
   children,
   defaultTheme = "system",
+  defaultScheme = DEFAULT_THEME_SCHEME,
   storageKey = "cc-switch-theme",
 }: ThemeProviderProps) {
   const getInitialTheme = () => {
@@ -41,7 +53,30 @@ export function ThemeProvider({
     return defaultTheme;
   };
 
+  const getInitialSystemTheme = (): ResolvedTheme => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return "light";
+    }
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  };
+
+  const getInitialScheme = () => {
+    if (typeof window === "undefined") {
+      return defaultScheme;
+    }
+
+    const stored = window.localStorage.getItem(`${storageKey}-scheme`);
+    return isThemeScheme(stored) ? stored : defaultScheme;
+  };
+
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+  const [scheme, setSchemeState] = useState<ThemeScheme>(getInitialScheme);
+  const [systemTheme, setSystemTheme] =
+    useState<ResolvedTheme>(getInitialSystemTheme);
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -58,17 +93,9 @@ export function ThemeProvider({
 
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
-
-    if (theme === "system") {
-      const isDark =
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.classList.add(isDark ? "dark" : "light");
-      return;
-    }
-
-    root.classList.add(theme);
-  }, [theme]);
+    root.classList.add(resolvedTheme);
+    root.dataset.themeScheme = scheme;
+  }, [resolvedTheme, scheme]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -77,53 +104,63 @@ export function ThemeProvider({
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      if (theme !== "system") {
-        return;
-      }
-
-      const root = window.document.documentElement;
-      root.classList.toggle("dark", mediaQuery.matches);
-      root.classList.toggle("light", !mediaQuery.matches);
+      setSystemTheme(mediaQuery.matches ? "dark" : "light");
     };
 
-    if (theme === "system") {
-      handleChange();
-    }
+    handleChange();
 
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [theme]);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(`${storageKey}-scheme`, scheme);
+  }, [scheme, storageKey]);
+
+  const applyVisualTransition = useCallback(
+    (updater: () => void, event?: React.MouseEvent) => {
+      const x = event?.clientX ?? window.innerWidth / 2;
+      const y = event?.clientY ?? window.innerHeight / 2;
+      document.documentElement.style.setProperty(
+        "--theme-transition-x",
+        `${x}px`,
+      );
+      document.documentElement.style.setProperty(
+        "--theme-transition-y",
+        `${y}px`,
+      );
+
+      if (document.startViewTransition) {
+        document.startViewTransition(() => {
+          updater();
+        });
+        return;
+      }
+
+      updater();
+    },
+    [],
+  );
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
+      resolvedTheme,
+      scheme,
       setTheme: (nextTheme: Theme, event?: React.MouseEvent) => {
-        // Skip if same theme
         if (nextTheme === theme) return;
-
-        // Set transition origin coordinates from click event
-        const x = event?.clientX ?? window.innerWidth / 2;
-        const y = event?.clientY ?? window.innerHeight / 2;
-        document.documentElement.style.setProperty(
-          "--theme-transition-x",
-          `${x}px`,
-        );
-        document.documentElement.style.setProperty(
-          "--theme-transition-y",
-          `${y}px`,
-        );
-
-        // Use View Transitions API if available, otherwise fall back to instant change
-        if (document.startViewTransition) {
-          document.startViewTransition(() => {
-            setThemeState(nextTheme);
-          });
-        } else {
-          setThemeState(nextTheme);
-        }
+        applyVisualTransition(() => setThemeState(nextTheme), event);
+      },
+      setScheme: (nextScheme: ThemeScheme, event?: React.MouseEvent) => {
+        if (nextScheme === scheme) return;
+        applyVisualTransition(() => setSchemeState(nextScheme), event);
       },
     }),
-    [theme],
+    [applyVisualTransition, resolvedTheme, scheme, theme],
   );
 
   return (

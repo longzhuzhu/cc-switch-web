@@ -53,7 +53,8 @@ WORKDIR /app
 
 ENV HOME=/data \
     CC_SWITCH_WEB_HOST=0.0.0.0 \
-    CC_SWITCH_WEB_PORT=8788
+    CC_SWITCH_WEB_PORT=8890 \
+    CC_SWITCH_WEB_PORT_SCAN_COUNT=1
 
 RUN apk add --no-cache ca-certificates
 
@@ -61,6 +62,6 @@ COPY --from=service-builder /app/backend/target/x86_64-unknown-linux-musl/releas
 
 VOLUME ["/data"]
 
-EXPOSE 8788
+EXPOSE 8890
 
 CMD ["cc-switch-web"]

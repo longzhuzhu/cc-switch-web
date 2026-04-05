@@ -11,16 +11,16 @@ interface HealthStatusIndicatorProps {
 
 const statusConfig = {
   operational: {
-    color: "bg-emerald-500",
+    color: "bg-[hsl(var(--success))]",
     labelKey: "health.operational",
     labelFallback: "正常",
-    textColor: "text-emerald-600 dark:text-emerald-400",
+    textColor: "theme-success-text",
   },
   degraded: {
-    color: "bg-yellow-500",
+    color: "bg-[hsl(var(--warning))]",
     labelKey: "health.degraded",
     labelFallback: "降级",
-    textColor: "text-yellow-600 dark:text-yellow-400",
+    textColor: "theme-warning-text",
   },
   failed: {
     color: "bg-red-500",

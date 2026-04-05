@@ -4,103 +4,444 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --palette-primary: 330 38% 53%;
+    --palette-primary-hover: 330 40% 46%;
+    --palette-primary-soft: 330 45% 91%;
+    --palette-primary-soft-foreground: 330 25% 32%;
 
-    --primary: 210 100% 56%;
-    --primary-foreground: 0 0% 100%;
+    --palette-secondary: 342 30% 47%;
+    --palette-secondary-hover: 342 32% 41%;
+    --palette-secondary-soft: 342 36% 90%;
+    --palette-secondary-soft-foreground: 342 23% 34%;
 
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    --palette-tertiary: 14 26% 57%;
+    --palette-tertiary-hover: 14 29% 50%;
+    --palette-tertiary-soft: 18 40% 91%;
+    --palette-tertiary-soft-foreground: 16 26% 34%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --palette-ring: 330 42% 60%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --background: 32 38% 97%;
+    --foreground: 284 16% 18%;
+    --card: 30 28% 96%;
+    --card-foreground: 284 16% 18%;
+    --popover: 30 28% 96%;
+    --popover-foreground: 284 16% 18%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 210 100% 56%;
+    --primary: var(--palette-primary);
+    --primary-hover: var(--palette-primary-hover);
+    --primary-foreground: 36 100% 98%;
+    --primary-soft: var(--palette-primary-soft);
+    --primary-soft-foreground: var(--palette-primary-soft-foreground);
+
+    --secondary: var(--palette-secondary);
+    --secondary-hover: var(--palette-secondary-hover);
+    --secondary-foreground: 36 100% 98%;
+    --secondary-soft: var(--palette-secondary-soft);
+    --secondary-soft-foreground: var(--palette-secondary-soft-foreground);
+
+    --tertiary: var(--palette-tertiary);
+    --tertiary-hover: var(--palette-tertiary-hover);
+    --tertiary-foreground: 36 100% 98%;
+    --tertiary-soft: var(--palette-tertiary-soft);
+    --tertiary-soft-foreground: var(--palette-tertiary-soft-foreground);
+
+    --success: 148 26% 41%;
+    --success-hover: 148 28% 35%;
+    --success-foreground: 36 100% 98%;
+    --success-soft: 148 26% 89%;
+    --success-soft-foreground: 148 24% 31%;
+
+    --warning: 34 58% 50%;
+    --warning-hover: 34 60% 44%;
+    --warning-foreground: 26 34% 16%;
+    --warning-soft: 38 58% 89%;
+    --warning-soft-foreground: 28 32% 33%;
+
+    --neutral-soft: 24 20% 92%;
+    --neutral-soft-foreground: 282 12% 32%;
+
+    --muted: 28 20% 91%;
+    --muted-foreground: 282 10% 43%;
+    --accent: var(--palette-primary-soft);
+    --accent-foreground: var(--palette-primary-soft-foreground);
+
+    --destructive: 2 66% 55%;
+    --destructive-foreground: 36 100% 98%;
+
+    --border: 24 16% 83%;
+    --input: 24 16% 83%;
+    --ring: var(--palette-ring);
+
+    --surface-raised: 32 30% 98%;
+    --surface-overlay: 35 24% 96%;
 
     --radius: 0.5rem;
   }
 
+  :root[data-theme-scheme="default"] {
+    --palette-primary: 222 12% 46%;
+    --palette-primary-hover: 222 14% 38%;
+    --palette-primary-soft: 220 22% 89%;
+    --palette-primary-soft-foreground: 222 18% 30%;
+    --palette-secondary: 216 12% 55%;
+    --palette-secondary-hover: 216 14% 47%;
+    --palette-secondary-soft: 216 18% 91%;
+    --palette-secondary-soft-foreground: 216 16% 33%;
+    --palette-tertiary: 205 34% 46%;
+    --palette-tertiary-hover: 205 36% 40%;
+    --palette-tertiary-soft: 205 42% 90%;
+    --palette-tertiary-soft-foreground: 205 30% 31%;
+    --palette-ring: 222 18% 56%;
+  }
+
+  :root[data-theme-scheme="sakura-pink"] {
+    --palette-primary: 330 38% 53%;
+    --palette-primary-hover: 330 40% 46%;
+    --palette-primary-soft: 330 45% 91%;
+    --palette-primary-soft-foreground: 330 25% 32%;
+    --palette-secondary: 342 30% 47%;
+    --palette-secondary-hover: 342 32% 41%;
+    --palette-secondary-soft: 342 36% 90%;
+    --palette-secondary-soft-foreground: 342 23% 34%;
+    --palette-tertiary: 14 26% 57%;
+    --palette-tertiary-hover: 14 29% 50%;
+    --palette-tertiary-soft: 18 40% 91%;
+    --palette-tertiary-soft-foreground: 16 26% 34%;
+    --palette-ring: 330 42% 60%;
+  }
+
+  :root[data-theme-scheme="ocean-blue"] {
+    --palette-primary: 208 54% 51%;
+    --palette-primary-hover: 208 56% 44%;
+    --palette-primary-soft: 208 52% 90%;
+    --palette-primary-soft-foreground: 208 35% 31%;
+    --palette-secondary: 202 48% 42%;
+    --palette-secondary-hover: 202 50% 36%;
+    --palette-secondary-soft: 202 42% 89%;
+    --palette-secondary-soft-foreground: 202 30% 31%;
+    --palette-tertiary: 188 30% 47%;
+    --palette-tertiary-hover: 188 32% 40%;
+    --palette-tertiary-soft: 188 34% 89%;
+    --palette-tertiary-soft-foreground: 188 28% 30%;
+    --palette-ring: 208 56% 58%;
+  }
+
+  :root[data-theme-scheme="forest-green"] {
+    --palette-primary: 134 29% 44%;
+    --palette-primary-hover: 134 30% 38%;
+    --palette-primary-soft: 134 24% 89%;
+    --palette-primary-soft-foreground: 134 22% 30%;
+    --palette-secondary: 150 24% 52%;
+    --palette-secondary-hover: 150 26% 45%;
+    --palette-secondary-soft: 150 22% 89%;
+    --palette-secondary-soft-foreground: 150 22% 31%;
+    --palette-tertiary: 102 22% 46%;
+    --palette-tertiary-hover: 102 24% 39%;
+    --palette-tertiary-soft: 102 22% 89%;
+    --palette-tertiary-soft-foreground: 102 20% 30%;
+    --palette-ring: 134 34% 52%;
+  }
+
+  :root[data-theme-scheme="twilight-violet"] {
+    --palette-primary: 257 42% 56%;
+    --palette-primary-hover: 257 44% 49%;
+    --palette-primary-soft: 257 46% 91%;
+    --palette-primary-soft-foreground: 257 24% 33%;
+    --palette-secondary: 268 34% 49%;
+    --palette-secondary-hover: 268 36% 43%;
+    --palette-secondary-soft: 268 34% 90%;
+    --palette-secondary-soft-foreground: 268 22% 34%;
+    --palette-tertiary: 235 28% 50%;
+    --palette-tertiary-hover: 235 30% 44%;
+    --palette-tertiary-soft: 235 30% 90%;
+    --palette-tertiary-soft-foreground: 235 22% 32%;
+    --palette-ring: 257 44% 63%;
+  }
+
+  :root[data-theme-scheme="amber-orange"] {
+    --palette-primary: 36 76% 45%;
+    --palette-primary-hover: 36 78% 39%;
+    --palette-primary-soft: 36 74% 89%;
+    --palette-primary-soft-foreground: 32 34% 31%;
+    --palette-secondary: 22 62% 52%;
+    --palette-secondary-hover: 22 64% 46%;
+    --palette-secondary-soft: 22 58% 89%;
+    --palette-secondary-soft-foreground: 18 28% 32%;
+    --palette-tertiary: 48 42% 47%;
+    --palette-tertiary-hover: 48 44% 40%;
+    --palette-tertiary-soft: 48 42% 90%;
+    --palette-tertiary-soft-foreground: 42 24% 30%;
+    --palette-ring: 36 76% 52%;
+  }
+
+  :root[data-theme-scheme="mint-aqua"] {
+    --palette-primary: 170 42% 43%;
+    --palette-primary-hover: 170 44% 37%;
+    --palette-primary-soft: 170 38% 89%;
+    --palette-primary-soft-foreground: 170 30% 29%;
+    --palette-secondary: 156 36% 47%;
+    --palette-secondary-hover: 156 38% 40%;
+    --palette-secondary-soft: 156 30% 89%;
+    --palette-secondary-soft-foreground: 156 26% 30%;
+    --palette-tertiary: 189 30% 46%;
+    --palette-tertiary-hover: 189 32% 39%;
+    --palette-tertiary-soft: 189 30% 89%;
+    --palette-tertiary-soft-foreground: 189 24% 30%;
+    --palette-ring: 170 46% 52%;
+  }
+
+  :root[data-theme-scheme="rosewood-red"] {
+    --palette-primary: 347 40% 54%;
+    --palette-primary-hover: 347 42% 47%;
+    --palette-primary-soft: 347 42% 91%;
+    --palette-primary-soft-foreground: 347 24% 33%;
+    --palette-secondary: 358 32% 46%;
+    --palette-secondary-hover: 358 34% 40%;
+    --palette-secondary-soft: 358 34% 90%;
+    --palette-secondary-soft-foreground: 358 24% 33%;
+    --palette-tertiary: 26 24% 52%;
+    --palette-tertiary-hover: 26 26% 45%;
+    --palette-tertiary-soft: 26 28% 90%;
+    --palette-tertiary-soft-foreground: 26 20% 31%;
+    --palette-ring: 347 42% 60%;
+  }
+
   .dark {
-    --background: 240 5% 12%;
-    --foreground: 0 0% 98%;
-    --card: 240 5% 16%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 5% 16%;
-    --popover-foreground: 0 0% 98%;
+    --background: 281 18% 12%;
+    --foreground: 34 34% 94%;
+    --card: 280 15% 15%;
+    --card-foreground: 34 34% 94%;
+    --popover: 280 15% 16%;
+    --popover-foreground: 34 34% 94%;
 
-    --primary: 210 100% 54%;
-    --primary-foreground: 0 0% 100%;
+    --primary: var(--palette-primary);
+    --primary-hover: var(--palette-primary-hover);
+    --primary-foreground: 280 22% 16%;
+    --primary-soft: var(--palette-primary-soft);
+    --primary-soft-foreground: var(--palette-primary-soft-foreground);
 
-    --secondary: 240 5% 18%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: var(--palette-secondary);
+    --secondary-hover: var(--palette-secondary-hover);
+    --secondary-foreground: 20 28% 16%;
+    --secondary-soft: var(--palette-secondary-soft);
+    --secondary-soft-foreground: var(--palette-secondary-soft-foreground);
 
-    --muted: 240 5% 18%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 5% 18%;
-    --accent-foreground: 0 0% 98%;
+    --tertiary: var(--palette-tertiary);
+    --tertiary-hover: var(--palette-tertiary-hover);
+    --tertiary-foreground: 200 30% 15%;
+    --tertiary-soft: var(--palette-tertiary-soft);
+    --tertiary-soft-foreground: var(--palette-tertiary-soft-foreground);
 
-    --destructive: 0 62.8% 30.6%;
+    --success: 148 30% 67%;
+    --success-hover: 148 28% 61%;
+    --success-foreground: 148 28% 15%;
+    --success-soft: 148 18% 24%;
+    --success-soft-foreground: 148 30% 80%;
+
+    --warning: 36 62% 68%;
+    --warning-hover: 36 58% 62%;
+    --warning-foreground: 30 34% 14%;
+    --warning-soft: 36 24% 24%;
+    --warning-soft-foreground: 36 46% 82%;
+
+    --neutral-soft: 280 10% 22%;
+    --neutral-soft-foreground: 34 18% 82%;
+
+    --muted: 280 10% 22%;
+    --muted-foreground: 30 14% 68%;
+    --accent: var(--palette-primary-soft);
+    --accent-foreground: var(--palette-primary-soft-foreground);
+
+    --destructive: 2 52% 46%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 5% 24%;
-    --input: 240 5% 24%;
-    --ring: 210 100% 54%;
+    --border: 280 10% 28%;
+    --input: 280 10% 28%;
+    --ring: var(--palette-ring);
+
+    --surface-raised: 278 16% 17%;
+    --surface-overlay: 282 17% 14%;
+  }
+
+  .dark[data-theme-scheme="default"] {
+    --palette-primary: 218 18% 72%;
+    --palette-primary-hover: 218 16% 66%;
+    --palette-primary-soft: 218 12% 24%;
+    --palette-primary-soft-foreground: 218 28% 88%;
+    --palette-secondary: 215 14% 65%;
+    --palette-secondary-hover: 215 12% 59%;
+    --palette-secondary-soft: 215 10% 24%;
+    --palette-secondary-soft-foreground: 215 20% 84%;
+    --palette-tertiary: 202 34% 71%;
+    --palette-tertiary-hover: 202 30% 65%;
+    --palette-tertiary-soft: 202 24% 24%;
+    --palette-tertiary-soft-foreground: 202 38% 84%;
+    --palette-ring: 218 28% 74%;
+  }
+
+  .dark[data-theme-scheme="sakura-pink"] {
+    --palette-primary: 330 46% 74%;
+    --palette-primary-hover: 330 42% 68%;
+    --palette-primary-soft: 330 22% 25%;
+    --palette-primary-soft-foreground: 330 46% 87%;
+    --palette-secondary: 342 34% 66%;
+    --palette-secondary-hover: 342 30% 60%;
+    --palette-secondary-soft: 342 18% 24%;
+    --palette-secondary-soft-foreground: 342 34% 82%;
+    --palette-tertiary: 18 36% 72%;
+    --palette-tertiary-hover: 18 32% 66%;
+    --palette-tertiary-soft: 18 18% 24%;
+    --palette-tertiary-soft-foreground: 18 36% 84%;
+    --palette-ring: 330 50% 72%;
+  }
+
+  .dark[data-theme-scheme="ocean-blue"] {
+    --palette-primary: 208 62% 72%;
+    --palette-primary-hover: 208 58% 66%;
+    --palette-primary-soft: 208 24% 24%;
+    --palette-primary-soft-foreground: 208 54% 86%;
+    --palette-secondary: 198 46% 65%;
+    --palette-secondary-hover: 198 42% 59%;
+    --palette-secondary-soft: 198 18% 24%;
+    --palette-secondary-soft-foreground: 198 34% 82%;
+    --palette-tertiary: 186 34% 67%;
+    --palette-tertiary-hover: 186 30% 61%;
+    --palette-tertiary-soft: 186 18% 24%;
+    --palette-tertiary-soft-foreground: 186 34% 82%;
+    --palette-ring: 208 62% 74%;
+  }
+
+  .dark[data-theme-scheme="forest-green"] {
+    --palette-primary: 136 32% 68%;
+    --palette-primary-hover: 136 30% 62%;
+    --palette-primary-soft: 136 18% 24%;
+    --palette-primary-soft-foreground: 136 34% 82%;
+    --palette-secondary: 152 28% 63%;
+    --palette-secondary-hover: 152 26% 57%;
+    --palette-secondary-soft: 152 16% 24%;
+    --palette-secondary-soft-foreground: 152 30% 80%;
+    --palette-tertiary: 104 24% 65%;
+    --palette-tertiary-hover: 104 22% 59%;
+    --palette-tertiary-soft: 104 16% 24%;
+    --palette-tertiary-soft-foreground: 104 28% 80%;
+    --palette-ring: 136 40% 70%;
+  }
+
+  .dark[data-theme-scheme="twilight-violet"] {
+    --palette-primary: 257 56% 75%;
+    --palette-primary-hover: 257 50% 69%;
+    --palette-primary-soft: 257 24% 26%;
+    --palette-primary-soft-foreground: 257 52% 88%;
+    --palette-secondary: 270 38% 68%;
+    --palette-secondary-hover: 270 34% 62%;
+    --palette-secondary-soft: 270 18% 24%;
+    --palette-secondary-soft-foreground: 270 38% 83%;
+    --palette-tertiary: 236 32% 67%;
+    --palette-tertiary-hover: 236 28% 61%;
+    --palette-tertiary-soft: 236 18% 24%;
+    --palette-tertiary-soft-foreground: 236 34% 82%;
+    --palette-ring: 257 58% 76%;
+  }
+
+  .dark[data-theme-scheme="amber-orange"] {
+    --palette-primary: 36 80% 66%;
+    --palette-primary-hover: 36 74% 60%;
+    --palette-primary-soft: 36 24% 25%;
+    --palette-primary-soft-foreground: 36 76% 86%;
+    --palette-secondary: 22 58% 60%;
+    --palette-secondary-hover: 22 52% 54%;
+    --palette-secondary-soft: 22 18% 24%;
+    --palette-secondary-soft-foreground: 22 52% 82%;
+    --palette-tertiary: 48 40% 62%;
+    --palette-tertiary-hover: 48 34% 56%;
+    --palette-tertiary-soft: 48 18% 24%;
+    --palette-tertiary-soft-foreground: 48 42% 82%;
+    --palette-ring: 36 82% 70%;
+  }
+
+  .dark[data-theme-scheme="mint-aqua"] {
+    --palette-primary: 170 46% 66%;
+    --palette-primary-hover: 170 40% 60%;
+    --palette-primary-soft: 170 20% 24%;
+    --palette-primary-soft-foreground: 170 42% 84%;
+    --palette-secondary: 156 34% 62%;
+    --palette-secondary-hover: 156 30% 56%;
+    --palette-secondary-soft: 156 18% 24%;
+    --palette-secondary-soft-foreground: 156 34% 80%;
+    --palette-tertiary: 188 30% 64%;
+    --palette-tertiary-hover: 188 26% 58%;
+    --palette-tertiary-soft: 188 18% 24%;
+    --palette-tertiary-soft-foreground: 188 30% 80%;
+    --palette-ring: 170 50% 70%;
+  }
+
+  .dark[data-theme-scheme="rosewood-red"] {
+    --palette-primary: 347 48% 72%;
+    --palette-primary-hover: 347 42% 66%;
+    --palette-primary-soft: 347 22% 25%;
+    --palette-primary-soft-foreground: 347 46% 86%;
+    --palette-secondary: 358 36% 64%;
+    --palette-secondary-hover: 358 32% 58%;
+    --palette-secondary-soft: 358 18% 24%;
+    --palette-secondary-soft-foreground: 358 36% 82%;
+    --palette-tertiary: 24 26% 66%;
+    --palette-tertiary-hover: 24 22% 60%;
+    --palette-tertiary-soft: 24 16% 24%;
+    --palette-tertiary-soft-foreground: 24 28% 82%;
+    --palette-ring: 347 54% 74%;
   }
 }
 
 .glass {
-  background: rgba(255, 255, 255, 0.7);
+  background: hsl(var(--card) / 0.74);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid hsl(var(--border) / 0.7);
+  box-shadow: 0 10px 28px hsl(var(--primary) / 0.08);
 }
 
 .dark .glass {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: hsl(var(--card) / 0.7);
+  border: 1px solid hsl(var(--border) / 0.72);
+  box-shadow: 0 12px 32px hsl(var(--background) / 0.48);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.8);
+  background: linear-gradient(
+    160deg,
+    hsl(var(--surface-raised) / 0.94) 0%,
+    hsl(var(--surface-overlay) / 0.88) 100%
+  );
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid hsl(var(--border) / 0.72);
+  box-shadow: 0 16px 40px hsl(var(--primary) / 0.08);
 }
 
 .dark .glass-card {
   background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(255, 255, 255, 0.01) 100%
+    160deg,
+    hsl(var(--surface-raised) / 0.94) 0%,
+    hsl(var(--surface-overlay) / 0.92) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border: 1px solid hsl(var(--border) / 0.58);
+  box-shadow: 0 18px 42px hsl(var(--background) / 0.54);
 }
 
 .glass-card-active {
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.4);
+  background: hsl(var(--primary) / 0.12);
+  border: 1px solid hsl(var(--primary) / 0.28);
+  box-shadow: 0 16px 32px hsl(var(--primary) / 0.12);
 }
 
 .dark .glass-card-active {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: hsl(var(--primary) / 0.16);
+  border: 1px solid hsl(var(--primary) / 0.24);
 }
 
 .glass-header {
-  background: hsl(var(--background));
+  background: hsl(var(--surface-raised) / 0.88);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   border: none;
@@ -130,6 +471,23 @@ body {
   @apply m-0 p-0 text-sm;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  background-image:
+    radial-gradient(
+      circle at top left,
+      hsl(var(--primary) / 0.14) 0%,
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at top right,
+      hsl(var(--tertiary) / 0.12) 0%,
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      hsl(var(--surface-overlay)) 0%,
+      hsl(var(--background)) 100%
+    );
+  background-attachment: fixed;
 }
 
 html.dark {
@@ -141,10 +499,30 @@ html.dark {
 }
 
 *:focus-visible {
-  @apply outline-2 outline-blue-500 outline-offset-2;
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 @layer utilities {
+  .app-shell {
+    background-image:
+      radial-gradient(
+        circle at 0% 0%,
+        hsl(var(--primary) / 0.12) 0%,
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 100% 0%,
+        hsl(var(--tertiary) / 0.1) 0%,
+        transparent 24%
+      ),
+      linear-gradient(
+        180deg,
+        hsl(var(--surface-overlay)) 0%,
+        hsl(var(--background)) 100%
+      );
+  }
+
   .scroll-overlay {
     scrollbar-gutter: stable both-edges;
     padding-right: 0.5rem;
@@ -175,6 +553,183 @@ html.dark {
 
   .border-border-dragging {
     border-color: hsl(var(--primary) / 0.6);
+  }
+
+  .theme-primary-text {
+    color: hsl(var(--primary));
+  }
+
+  .theme-tertiary-text {
+    color: hsl(var(--tertiary));
+  }
+
+  .theme-success-text {
+    color: hsl(var(--success));
+  }
+
+  .theme-warning-text {
+    color: hsl(var(--warning));
+  }
+
+  .theme-primary-link {
+    color: hsl(var(--primary));
+    transition: color 0.2s ease;
+  }
+
+  .theme-primary-link:hover {
+    color: hsl(var(--primary-hover));
+  }
+
+  .theme-success-link {
+    color: hsl(var(--success));
+    transition: color 0.2s ease;
+  }
+
+  .theme-success-link:hover {
+    color: hsl(var(--success-hover));
+  }
+
+  .theme-tertiary-solid {
+    background-color: hsl(var(--tertiary));
+    color: hsl(var(--tertiary-foreground));
+  }
+
+  .theme-tertiary-solid:hover {
+    background-color: hsl(var(--tertiary-hover));
+  }
+
+  .theme-primary-solid {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .theme-primary-solid:hover {
+    background-color: hsl(var(--primary-hover));
+  }
+
+  .theme-success-solid {
+    background-color: hsl(var(--success));
+    color: hsl(var(--success-foreground));
+  }
+
+  .theme-success-solid:hover {
+    background-color: hsl(var(--success-hover));
+  }
+
+  .theme-chip-primary {
+    background-color: hsl(var(--primary-soft));
+    color: hsl(var(--primary-soft-foreground));
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.16);
+  }
+
+  .theme-chip-primary:hover {
+    background-color: hsl(var(--primary) / 0.16);
+  }
+
+  .theme-chip-warm {
+    background-color: hsl(var(--secondary-soft));
+    color: hsl(var(--secondary-soft-foreground));
+    box-shadow: inset 0 0 0 1px hsl(var(--secondary) / 0.16);
+  }
+
+  .theme-chip-warm:hover {
+    background-color: hsl(var(--secondary) / 0.16);
+  }
+
+  .theme-chip-tertiary {
+    background-color: hsl(var(--tertiary-soft));
+    color: hsl(var(--tertiary-soft-foreground));
+    box-shadow: inset 0 0 0 1px hsl(var(--tertiary) / 0.16);
+  }
+
+  .theme-chip-tertiary:hover {
+    background-color: hsl(var(--tertiary) / 0.16);
+  }
+
+  .theme-chip-success {
+    background-color: hsl(var(--success-soft));
+    color: hsl(var(--success-soft-foreground));
+    box-shadow: inset 0 0 0 1px hsl(var(--success) / 0.16);
+  }
+
+  .theme-chip-success:hover {
+    background-color: hsl(var(--success) / 0.16);
+  }
+
+  .theme-chip-warning {
+    background-color: hsl(var(--warning-soft));
+    color: hsl(var(--warning-soft-foreground));
+    box-shadow: inset 0 0 0 1px hsl(var(--warning) / 0.16);
+  }
+
+  .theme-chip-warning:hover {
+    background-color: hsl(var(--warning) / 0.18);
+  }
+
+  .theme-chip-neutral {
+    background-color: hsl(var(--neutral-soft));
+    color: hsl(var(--neutral-soft-foreground));
+    box-shadow: inset 0 0 0 1px hsl(var(--border));
+  }
+
+  .theme-chip-neutral:hover {
+    background-color: hsl(var(--muted));
+  }
+
+  .theme-panel-info {
+    background-color: hsl(var(--tertiary) / 0.1);
+    border-color: hsl(var(--tertiary) / 0.22);
+    color: hsl(var(--tertiary-soft-foreground));
+  }
+
+  .theme-panel-success {
+    background-color: hsl(var(--success) / 0.1);
+    border-color: hsl(var(--success) / 0.22);
+    color: hsl(var(--success-soft-foreground));
+  }
+
+  .theme-panel-warning {
+    background-color: hsl(var(--warning) / 0.12);
+    border-color: hsl(var(--warning) / 0.22);
+    color: hsl(var(--warning-soft-foreground));
+  }
+
+  .theme-floating-action {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary)) 0%,
+      hsl(var(--secondary)) 100%
+    );
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 16px 36px hsl(var(--primary) / 0.26);
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease,
+      filter 0.2s ease;
+  }
+
+  .theme-floating-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 40px hsl(var(--primary) / 0.32);
+    filter: saturate(1.05);
+  }
+
+  .provider-card-active-primary {
+    border-color: hsl(var(--primary) / 0.56);
+    box-shadow: 0 14px 30px hsl(var(--primary) / 0.12);
+  }
+
+  .provider-card-active-success {
+    border-color: hsl(var(--success) / 0.56);
+    box-shadow: 0 14px 30px hsl(var(--success) / 0.12);
+  }
+
+  .provider-card-overlay-primary {
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.12), transparent);
+  }
+
+  .provider-card-overlay-success {
+    background: linear-gradient(90deg, hsl(var(--success) / 0.12), transparent);
   }
 }
 

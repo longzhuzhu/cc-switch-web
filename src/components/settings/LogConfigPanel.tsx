@@ -97,15 +97,15 @@ export function LogConfigPanel() {
             {t("settings.advanced.logConfig.levelDesc.error")}
           </p>
           <p>
-            <span className="font-mono text-orange-500">warn</span> -{" "}
+            <span className="font-mono theme-warning-text">warn</span> -{" "}
             {t("settings.advanced.logConfig.levelDesc.warn")}
           </p>
           <p>
-            <span className="font-mono text-blue-500">info</span> -{" "}
+            <span className="font-mono theme-tertiary-text">info</span> -{" "}
             {t("settings.advanced.logConfig.levelDesc.info")}
           </p>
           <p>
-            <span className="font-mono text-green-500">debug</span> -{" "}
+            <span className="font-mono theme-success-text">debug</span> -{" "}
             {t("settings.advanced.logConfig.levelDesc.debug")}
           </p>
           <p>

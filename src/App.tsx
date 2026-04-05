@@ -194,8 +194,7 @@ function App() {
   const mcpPanelRef = useRef<any>(null);
   const skillsPageRef = useRef<any>(null);
   const unifiedSkillsPanelRef = useRef<any>(null);
-  const addActionButtonClass =
-    "bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 dark:shadow-orange-500/40 rounded-full w-8 h-8";
+  const addActionButtonClass = "theme-floating-action rounded-full w-8 h-8";
 
   const {
     isRunning: isProxyRunning,
@@ -589,7 +588,7 @@ function App() {
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden bg-background text-foreground selection:bg-primary/30"
+      className="app-shell flex flex-col h-screen overflow-hidden bg-background text-foreground selection:bg-primary/30"
       style={{ overflowX: "hidden", paddingTop: CONTENT_TOP_OFFSET }}
     >
       <div
@@ -655,8 +654,8 @@ function App() {
                     className={cn(
                       "text-xl font-semibold transition-colors",
                       isProxyRunning && isCurrentAppTakeoverActive
-                        ? "text-emerald-500 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
-                        : "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300",
+                        ? "theme-success-link"
+                        : "theme-primary-link",
                     )}
                   >
                     CC Switch Web

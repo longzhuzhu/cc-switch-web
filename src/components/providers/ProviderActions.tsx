@@ -103,8 +103,7 @@ export function ProviderActions({
         return {
           disabled: false,
           variant: "secondary" as const,
-          className:
-            "bg-gray-200 text-muted-foreground hover:bg-gray-200 hover:text-muted-foreground dark:bg-gray-700 dark:hover:bg-gray-700",
+          className: "theme-chip-neutral hover:text-inherit",
           icon: <Check className="h-4 w-4" />,
           text: t("provider.inUse"),
         };
@@ -125,7 +124,7 @@ export function ProviderActions({
           disabled: isDefaultModel === true,
           variant: "secondary" as const,
           className: cn(
-            "bg-orange-100 text-orange-600 hover:bg-orange-200 dark:bg-orange-900/50 dark:text-orange-400 dark:hover:bg-orange-900/70",
+            "theme-chip-warm hover:text-inherit",
             isDefaultModel && "opacity-40 cursor-not-allowed",
           ),
           icon: <Minus className="h-4 w-4" />,
@@ -135,8 +134,7 @@ export function ProviderActions({
       return {
         disabled: false,
         variant: "default" as const,
-        className:
-          "bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700",
+        className: "theme-success-solid",
         icon: <Plus className="h-4 w-4" />,
         text: t("provider.addToConfig", { defaultValue: "添加" }),
       };
@@ -147,8 +145,7 @@ export function ProviderActions({
         return {
           disabled: false,
           variant: "secondary" as const,
-          className:
-            "bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-900/70",
+          className: "theme-chip-primary hover:text-inherit",
           icon: <Check className="h-4 w-4" />,
           text: t("failover.inQueue", { defaultValue: "已加入" }),
         };
@@ -156,8 +153,7 @@ export function ProviderActions({
       return {
         disabled: false,
         variant: "default" as const,
-        className:
-          "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700",
+        className: "theme-primary-solid",
         icon: <Plus className="h-4 w-4" />,
         text: t("failover.addQueue", { defaultValue: "加入" }),
       };
@@ -167,8 +163,7 @@ export function ProviderActions({
       return {
         disabled: true,
         variant: "secondary" as const,
-        className:
-          "bg-gray-200 text-muted-foreground hover:bg-gray-200 hover:text-muted-foreground dark:bg-gray-700 dark:hover:bg-gray-700",
+        className: "theme-chip-neutral hover:text-inherit",
         icon: <Check className="h-4 w-4" />,
         text: t("provider.inUse"),
       };
@@ -177,9 +172,7 @@ export function ProviderActions({
     return {
       disabled: false,
       variant: "default" as const,
-      className: isProxyTakeover
-        ? "bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-        : "",
+      className: isProxyTakeover ? "theme-success-solid" : "",
       icon: <Play className="h-4 w-4" />,
       text: t("provider.enable"),
     };
@@ -200,8 +193,8 @@ export function ProviderActions({
           className={cn(
             "w-fit px-2.5",
             isDefaultModel
-              ? "bg-gray-200 text-muted-foreground dark:bg-gray-700 opacity-60 cursor-not-allowed"
-              : "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700",
+              ? "theme-chip-neutral opacity-60 cursor-not-allowed"
+              : "theme-primary-solid",
           )}
         >
           <Zap className="h-4 w-4" />

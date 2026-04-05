@@ -83,7 +83,7 @@ interface ProvidersResponse {
   currentProviderId: string;
 }
 
-const DEFAULT_WEB_API_BASE = "http://127.0.0.1:8788";
+const DEFAULT_WEB_API_BASE = "http://127.0.0.1:8890";
 
 export const getWebApiBase = (): string => {
   const configured = import.meta.env.VITE_LOCAL_API_BASE?.trim();

@@ -166,7 +166,7 @@ export function CommonConfigEditor({
                 id="useCommonConfig"
                 checked={useCommonConfig}
                 onChange={(e) => onCommonConfigToggle(e.target.checked)}
-                className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 border-border-default rounded focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-2"
+                className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
               />
               <span>
                 {t("claudeConfig.writeCommonConfig", {
@@ -180,7 +180,7 @@ export function CommonConfigEditor({
           <button
             type="button"
             onClick={onEditClick}
-            className="text-xs text-blue-400 dark:text-blue-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+            className="text-xs text-primary hover:text-primary/80 transition-colors"
           >
             {t("claudeConfig.editCommonConfig", {
               defaultValue: "编辑通用配置",
@@ -200,7 +200,7 @@ export function CommonConfigEditor({
               onChange={(e) =>
                 handleToggle("hideAttribution", e.target.checked)
               }
-              className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 border-border-default rounded focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-2"
+              className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
             />
             <span>{t("claudeConfig.hideAttribution")}</span>
           </label>
@@ -209,7 +209,7 @@ export function CommonConfigEditor({
               type="checkbox"
               checked={toggleStates.teammates}
               onChange={(e) => handleToggle("teammates", e.target.checked)}
-              className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 border-border-default rounded focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-2"
+              className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
             />
             <span>{t("claudeConfig.enableTeammates")}</span>
           </label>
@@ -220,7 +220,7 @@ export function CommonConfigEditor({
               onChange={(e) =>
                 handleToggle("enableToolSearch", e.target.checked)
               }
-              className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 border-border-default rounded focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-2"
+              className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
             />
             <span>{t("claudeConfig.enableToolSearch")}</span>
           </label>
@@ -229,7 +229,7 @@ export function CommonConfigEditor({
               type="checkbox"
               checked={toggleStates.effortHigh}
               onChange={(e) => handleToggle("effortHigh", e.target.checked)}
-              className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 border-border-default rounded focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-2"
+              className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
             />
             <span>{t("claudeConfig.effortHigh")}</span>
           </label>
@@ -240,7 +240,7 @@ export function CommonConfigEditor({
               onChange={(e) =>
                 handleToggle("disableAutoUpgrade", e.target.checked)
               }
-              className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 border-border-default rounded focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-2"
+              className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
             />
             <span>{t("claudeConfig.disableAutoUpgrade")}</span>
           </label>

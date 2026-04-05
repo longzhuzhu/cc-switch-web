@@ -23,4 +23,4 @@ mod usage_script;
 mod web_server;
 
 pub(crate) use commands::*;
-pub use web_server::run_web_server;
+pub use web_server::{run_web_server, run_web_server_with_options, WebServerOptions};
