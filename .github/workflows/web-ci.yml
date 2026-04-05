@@ -124,6 +124,8 @@ jobs:
   docker-smoke:
     name: Docker Smoke
     runs-on: ubuntu-latest
+    env:
+      CC_SWITCH_WEB_SMOKE_PORT: 8890
 
     steps:
       - name: Checkout
@@ -133,7 +135,7 @@ jobs:
         run: docker build -t cc-switch-web:test .
 
       - name: Run Docker container
-        run: docker run -d --name cc-switch-web-smoke -p 8788:8788 cc-switch-web:test
+        run: docker run -d --name cc-switch-web-smoke -p ${CC_SWITCH_WEB_SMOKE_PORT}:${CC_SWITCH_WEB_SMOKE_PORT} cc-switch-web:test
 
       - name: Install curl
         run: |
@@ -145,7 +147,7 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8788/api/health >/dev/null; then
+            if curl --fail --silent http://127.0.0.1:${CC_SWITCH_WEB_SMOKE_PORT}/api/health >/dev/null; then
               exit 0
             fi
             sleep 2
