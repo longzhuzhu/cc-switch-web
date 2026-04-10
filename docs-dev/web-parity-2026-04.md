@@ -37,6 +37,10 @@
   - Web 设置新增 Skill 存储位置切换入口，支持 `~/.cc-switch/skills` 与 `~/.agents/skills` 双目录
   - Web 后端新增 Skill 存储迁移接口，迁移完成后自动刷新各应用目录同步
   - 设置数据链路补齐 `skillStorageLocation` 字段，并同步三语文案
+- 首次使用提示补齐
+  - Web 设置持久化补齐 `firstRunNoticeConfirmed` / `commonConfigConfirmed` 字段
+  - 主页面补上首次运行欢迎提示弹窗
+  - 供应商表单补上“通用配置”首次说明确认弹窗，并同步三语文案
 
 实现约束：
 

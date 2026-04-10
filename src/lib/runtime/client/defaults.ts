@@ -22,7 +22,9 @@ export const getDefaultSettings = (): Settings => ({
   streamCheckConfirmed: false,
   enableFailoverToggle: false,
   failoverConfirmed: false,
+  firstRunNoticeConfirmed: false,
   autoSyncConfirmed: false,
+  commonConfigConfirmed: false,
   language: "zh",
   visibleApps,
 });

@@ -11,6 +11,14 @@ export const settingsSchema = z.object({
   // 设备级 UI 设置
   enableLocalProxy: z.boolean().optional(),
   language: z.enum(["en", "zh", "ja"]).optional(),
+  proxyConfirmed: z.boolean().optional(),
+  usageConfirmed: z.boolean().optional(),
+  streamCheckConfirmed: z.boolean().optional(),
+  enableFailoverToggle: z.boolean().optional(),
+  failoverConfirmed: z.boolean().optional(),
+  firstRunNoticeConfirmed: z.boolean().optional(),
+  autoSyncConfirmed: z.boolean().optional(),
+  commonConfigConfirmed: z.boolean().optional(),
 
   // 设备级目录覆盖
   claudeConfigDir: directorySchema.nullable().optional(),

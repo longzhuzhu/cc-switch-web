@@ -42,6 +42,12 @@
     "enabled": "Enabled",
     "notSet": "Not Set"
   },
+  "firstRunNotice": {
+    "title": "Welcome to CC Switch",
+    "bodyDefault": "CC Switch lets you switch between multiple Claude Code / Codex / Gemini CLI providers with a single click. If you already had these tools configured, CC Switch has saved your existing setup as a provider named “default” so none of your previous configuration is lost.",
+    "bodyOfficial": "An “Official” preset is also included in the list, so you can switch back to the official default at any time. Before switching, CC Switch automatically backs up your current config to “default”, so you can move back and forth safely.",
+    "confirm": "Got it"
+  },
   "apiKeyInput": {
     "placeholder": "Enter API Key",
     "show": "Show API Key",
@@ -211,6 +217,11 @@
       "title": "Enable Auto Sync",
       "message": "When auto sync is enabled, every database change will be automatically uploaded to the WebDAV server.\n\nThis may result in significant network traffic. Please ensure your network and WebDAV service can handle frequent data transfers.",
       "confirm": "I understand, enable"
+    },
+    "commonConfig": {
+      "title": "About Common Config",
+      "message": "The \"Common Config Snippet\" lets you share plugins, environment variables, and other settings across different providers so they won't be lost when you switch.\n\nHow to use:\n① Edit a provider and click \"Edit Common Config\" → \"Extract from Editor\"\n② When creating a new provider, check \"Write Common Config\" (enabled by default)\n\nIf you've newly installed plugins or hooks, re-extract the common config to keep them in sync.",
+      "confirm": "Got it"
     }
   },
   "settings": {

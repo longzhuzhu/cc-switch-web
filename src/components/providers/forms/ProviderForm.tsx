@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Form, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { providerSchema, type ProviderFormData } from "@/lib/schemas/provider";
-import type { AppId } from "@/lib/api";
+import { settingsApi, type AppId } from "@/lib/api";
+import { useSettingsQuery } from "@/lib/query";
 import type {
   ProviderCategory,
   ProviderMeta,
@@ -138,6 +141,22 @@ export function ProviderForm({
 }: ProviderFormProps) {
   const { t } = useTranslation();
   const isEditMode = Boolean(initialData);
+  const queryClient = useQueryClient();
+  const { data: settingsData } = useSettingsQuery();
+  const showCommonConfigNotice =
+    settingsData != null && settingsData.commonConfigConfirmed !== true;
+
+  const handleCommonConfigConfirm = async () => {
+    try {
+      if (settingsData) {
+        const { webdavSync: _ignoredWebdavSync, ...rest } = settingsData;
+        await settingsApi.save({ ...rest, commonConfigConfirmed: true });
+        await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      }
+    } catch (error) {
+      console.error("Failed to save commonConfigConfirmed:", error);
+    }
+  };
 
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
     initialData ? null : "custom",
@@ -1208,12 +1227,13 @@ export function ProviderForm({
   );
 
   return (
-    <Form {...form}>
-      <form
-        id="provider-form"
-        onSubmit={form.handleSubmit(handleSubmit)}
-        className="space-y-6 glass rounded-xl p-6 border border-white/10"
-      >
+    <>
+      <Form {...form}>
+        <form
+          id="provider-form"
+          onSubmit={form.handleSubmit(handleSubmit)}
+          className="space-y-6 glass rounded-xl p-6 border border-white/10"
+        >
         {!initialData && (
           <ProviderPresetSelector
             selectedPresetId={selectedPresetId}
@@ -1668,18 +1688,29 @@ export function ProviderForm({
           />
         )}
 
-        {showButtons && (
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" type="button" onClick={onCancel}>
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {submitLabel}
-            </Button>
-          </div>
-        )}
-      </form>
-    </Form>
+          {showButtons && (
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" type="button" onClick={onCancel}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {submitLabel}
+              </Button>
+            </div>
+          )}
+        </form>
+      </Form>
+
+      <ConfirmDialog
+        isOpen={showCommonConfigNotice}
+        variant="info"
+        title={t("confirm.commonConfig.title")}
+        message={t("confirm.commonConfig.message")}
+        confirmText={t("confirm.commonConfig.confirm")}
+        onConfirm={() => void handleCommonConfigConfirm()}
+        onCancel={() => void handleCommonConfigConfirm()}
+      />
+    </>
   );
 }
 
