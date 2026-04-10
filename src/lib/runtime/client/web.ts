@@ -39,6 +39,7 @@ import type {
   InstalledSkill,
   SkillBackupEntry,
   SkillRepo,
+  SkillsShSearchResult,
   SkillUninstallResult,
   SkillUpdateInfo,
   UnmanagedSkill,
@@ -1542,6 +1543,21 @@ export async function installWebSkillUnified(
 
 export async function updateWebSkill(id: string): Promise<InstalledSkill> {
   return requestWithBody<InstalledSkill>("/api/skills/update", "POST", { id });
+}
+
+export async function searchWebSkillsSh(
+  query: string,
+  limit: number,
+  offset: number,
+): Promise<SkillsShSearchResult> {
+  const params = new URLSearchParams({
+    query,
+    limit: String(limit),
+    offset: String(offset),
+  });
+  return requestJson<SkillsShSearchResult>(
+    `/api/skills/skillssh/search?${params.toString()}`,
+  );
 }
 
 export async function deleteWebSkillBackup(backupId: string): Promise<boolean> {

@@ -1563,7 +1563,19 @@
       "skillCount": "识别到 {{count}} 个技能"
     },
     "search": "搜索技能",
+    "searchSource": {
+      "repos": "仓库",
+      "skillssh": "skills.sh"
+    },
     "searchPlaceholder": "搜索技能名称或仓库名称...",
+    "skillssh": {
+      "searchPlaceholder": "搜索 skills.sh（至少 2 个字符）...",
+      "noResults": "未找到与“{{query}}”相关的技能",
+      "loadMore": "加载更多",
+      "loading": "正在搜索 skills.sh...",
+      "error": "搜索 skills.sh 失败",
+      "poweredBy": "由 skills.sh 提供"
+    },
     "filter": {
       "placeholder": "状态筛选",
       "all": "全部",

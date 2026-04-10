@@ -1563,7 +1563,19 @@
       "skillCount": "{{count}} 件のスキルを検出"
     },
     "search": "スキルを検索",
+    "searchSource": {
+      "repos": "リポジトリ",
+      "skillssh": "skills.sh"
+    },
     "searchPlaceholder": "スキル名またはリポジトリで検索...",
+    "skillssh": {
+      "searchPlaceholder": "skills.sh を検索（2文字以上）...",
+      "noResults": "「{{query}}」に一致するスキルが見つかりませんでした",
+      "loadMore": "さらに読み込む",
+      "loading": "skills.sh を検索中...",
+      "error": "skills.sh の検索に失敗しました",
+      "poweredBy": "Powered by skills.sh"
+    },
     "filter": {
       "placeholder": "状態で絞り込み",
       "all": "すべて",

@@ -53,6 +53,23 @@ export interface SkillUpdateInfo {
   remoteHash: string;
 }
 
+export interface SkillsShDiscoverableSkill {
+  key: string;
+  name: string;
+  directory: string;
+  repoOwner: string;
+  repoName: string;
+  repoBranch: string;
+  installs: number;
+  readmeUrl?: string;
+}
+
+export interface SkillsShSearchResult {
+  skills: SkillsShDiscoverableSkill[];
+  totalCount: number;
+  query: string;
+}
+
 /** 可发现的 Skill（来自仓库） */
 export interface DiscoverableSkill {
   key: string;
@@ -159,6 +176,15 @@ export const skillsApi = {
   /** 更新单个 Skill */
   async updateSkill(id: string): Promise<InstalledSkill> {
     return await invoke("update_skill", { id });
+  },
+
+  /** 搜索 skills.sh 公共目录 */
+  async searchSkillsSh(
+    query: string,
+    limit: number,
+    offset: number,
+  ): Promise<SkillsShSearchResult> {
+    return await invoke("search_skills_sh", { query, limit, offset });
   },
 
   // ========== 仓库管理 ==========

@@ -33,7 +33,7 @@ use crate::services::omo::OmoLocalFileData;
 use crate::services::provider::{ProviderSortUpdate, SwitchResult};
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillUninstallResult,
-    SkillUpdateInfo,
+    SkillUpdateInfo, SkillsShSearchResult,
 };
 use crate::services::speedtest::EndpointLatency;
 use crate::settings::WebDavSyncSettings;
@@ -202,6 +202,14 @@ struct InstallSkillRequest {
 #[serde(rename_all = "camelCase")]
 struct CurrentAppRequest {
     current_app: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchSkillsShQuery {
+    query: String,
+    limit: Option<usize>,
+    offset: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -939,6 +947,19 @@ async fn update_skill(
         .await
         .map_err(|e| ApiError::internal(format!("failed to update skill: {e}")))?;
     Ok(Json(updated))
+}
+
+async fn search_skills_sh(
+    Query(query): Query<SearchSkillsShQuery>,
+) -> Result<Json<SkillsShSearchResult>, ApiError> {
+    let result = crate::commands::search_skills_sh_internal(
+        query.query,
+        query.limit.unwrap_or(20),
+        query.offset.unwrap_or(0),
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to search skills.sh: {e}")))?;
+    Ok(Json(result))
 }
 
 async fn delete_skill_backup(Path(backup_id): Path<String>) -> Result<Json<bool>, ApiError> {
@@ -3024,6 +3045,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/skills/updates", get(check_skill_updates))
         .route("/api/skills/install", post(install_skill_unified))
         .route("/api/skills/install-archives", post(install_skill_archives))
+        .route("/api/skills/skillssh/search", get(search_skills_sh))
         .route("/api/skills/update", post(update_skill))
         .route("/api/skills/uninstall", post(uninstall_skill_unified_by_body))
         .route("/api/skills/apps/toggle", put(toggle_skill_app_by_body))

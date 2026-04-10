@@ -143,6 +143,53 @@ pub struct SkillUpdateInfo {
     pub remote_hash: String,
 }
 
+/// skills.sh API 原始响应
+#[derive(Debug, Clone, Deserialize)]
+struct SkillsShApiResponse {
+    pub query: String,
+    #[serde(rename = "searchType")]
+    #[allow(dead_code)]
+    pub search_type: String,
+    pub skills: Vec<SkillsShApiSkill>,
+    pub count: usize,
+    #[allow(dead_code)]
+    pub duration_ms: u64,
+}
+
+/// skills.sh API 原始技能条目
+#[derive(Debug, Clone, Deserialize)]
+struct SkillsShApiSkill {
+    pub id: String,
+    #[serde(rename = "skillId")]
+    pub skill_id: String,
+    pub name: String,
+    pub installs: u64,
+    pub source: String,
+}
+
+/// skills.sh 搜索结果（返回给前端）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillsShSearchResult {
+    pub skills: Vec<SkillsShDiscoverableSkill>,
+    pub total_count: usize,
+    pub query: String,
+}
+
+/// skills.sh 可安装技能（返回给前端）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillsShDiscoverableSkill {
+    pub key: String,
+    pub name: String,
+    pub directory: String,
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub repo_branch: String,
+    pub installs: u64,
+    pub readme_url: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillBackupEntry {
@@ -2190,6 +2237,66 @@ impl SkillService {
         let _ = fs::remove_dir_all(&temp_dir);
 
         Ok(installed)
+    }
+
+    /// 搜索 skills.sh 公共目录
+    pub async fn search_skills_sh(
+        query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<SkillsShSearchResult> {
+        let client = crate::proxy::http_client::get();
+
+        let url = url::Url::parse_with_params(
+            "https://skills.sh/api/search",
+            &[
+                ("q", query),
+                ("limit", &limit.to_string()),
+                ("offset", &offset.to_string()),
+            ],
+        )?;
+
+        let resp = client
+            .get(url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<SkillsShApiResponse>()
+            .await?;
+
+        let skills = resp
+            .skills
+            .into_iter()
+            .filter_map(|skill| {
+                let parts: Vec<&str> = skill.source.splitn(2, '/').collect();
+                if parts.len() != 2 {
+                    return None;
+                }
+
+                let (owner, repo) = (parts[0].to_string(), parts[1].to_string());
+                if owner.contains('.') || repo.contains('.') {
+                    return None;
+                }
+
+                Some(SkillsShDiscoverableSkill {
+                    key: skill.id,
+                    name: skill.name,
+                    directory: skill.skill_id,
+                    repo_owner: owner.clone(),
+                    repo_name: repo.clone(),
+                    repo_branch: "main".to_string(),
+                    installs: skill.installs,
+                    readme_url: Some(format!("https://github.com/{}/{}", owner, repo)),
+                })
+            })
+            .collect();
+
+        Ok(SkillsShSearchResult {
+            skills,
+            total_count: resp.count,
+            query: resp.query,
+        })
     }
 
     /// 解压本地 ZIP 文件到临时目录

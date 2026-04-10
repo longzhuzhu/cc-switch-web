@@ -120,6 +120,7 @@ import {
   upsertWebMcpServer,
   upsertWebPrompt,
   restoreWebSkillBackup,
+  searchWebSkillsSh,
   uninstallWebSkillUnified,
   updateWebCircuitBreakerConfig,
   updateWebGlobalProxyConfig,
@@ -541,6 +542,12 @@ export async function invoke<T>(
       )) as T;
     case "update_skill":
       return (await updateWebSkill(args?.id as string)) as T;
+    case "search_skills_sh":
+      return (await searchWebSkillsSh(
+        args?.query as string,
+        args?.limit as number,
+        args?.offset as number,
+      )) as T;
     case "restore_skill_backup":
       return (await restoreWebSkillBackup(
         args?.backupId as string,

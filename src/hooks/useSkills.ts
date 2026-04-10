@@ -11,6 +11,7 @@ import {
   type DiscoverableSkill,
   type ImportSkillSelection,
   type InstalledSkill,
+  type SkillsShSearchResult,
   type SkillUpdateInfo,
 } from "@/lib/api/skills";
 import type { AppId } from "@/lib/api/types";
@@ -339,6 +340,23 @@ export function useUpdateSkill() {
   });
 }
 
+/**
+ * 搜索 skills.sh 公共目录
+ */
+export function useSearchSkillsSh(
+  query: string,
+  limit: number,
+  offset: number,
+) {
+  return useQuery({
+    queryKey: ["skills", "skillssh", query, limit, offset],
+    queryFn: () => skillsApi.searchSkillsSh(query, limit, offset),
+    enabled: query.length >= 2,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  });
+}
+
 // ========== 辅助类型 ==========
 
 export type {
@@ -348,5 +366,6 @@ export type {
   SkillBackupEntry,
   SkillArchiveInstallResult,
   SkillUpdateInfo,
+  SkillsShSearchResult,
   AppId,
 };
