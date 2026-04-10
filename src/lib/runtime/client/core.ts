@@ -37,6 +37,7 @@ import {
   getWebLogConfig,
   getWebConfigDir,
   getWebToolVersions,
+  getWebLatestReleaseInfo,
   getWebUniversalProvider,
   getWebUniversalProviders,
   getWebOpenClawAgentsDefaults,
@@ -445,6 +446,10 @@ export async function invoke<T>(
               { wslShell?: string | null; wslShellFlag?: string | null }
             >
           | undefined,
+      )) as T;
+    case "get_latest_release_info":
+      return (await getWebLatestReleaseInfo(
+        args?.currentVersion as string | undefined,
       )) as T;
     case "auth_start_login":
       return (await startWebManagedAuthLogin(args?.authProvider as string)) as T;

@@ -66,6 +66,7 @@ import EnvPanel from "@/components/openclaw/EnvPanel";
 import ToolsPanel from "@/components/openclaw/ToolsPanel";
 import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
+import { UpdateBadge } from "@/components/UpdateBadge";
 
 type View =
   | "providers"
@@ -799,6 +800,12 @@ function App() {
                 >
                   <Settings className="w-4 h-4" />
                 </Button>
+                <UpdateBadge
+                  onClick={() => {
+                    setSettingsDefaultTab("about");
+                    setCurrentView("settings");
+                  }}
+                />
                 {isCurrentAppTakeoverActive && (
                   <Button
                     variant="ghost"

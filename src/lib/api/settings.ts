@@ -24,6 +24,16 @@ export interface WebDavSyncResult {
   status: string;
 }
 
+export interface LatestReleaseInfo {
+  currentVersion: string | null;
+  latestVersion: string;
+  tagName: string;
+  htmlUrl: string;
+  notes?: string | null;
+  publishedAt?: string | null;
+  hasUpdate: boolean;
+}
+
 export const settingsApi = {
   async get(): Promise<Settings> {
     return await invoke("get_settings");
@@ -143,6 +153,12 @@ export const settingsApi = {
     }>
   > {
     return await invoke("get_tool_versions", { tools, wslShellByTool });
+  },
+
+  async getLatestReleaseInfo(
+    currentVersion?: string,
+  ): Promise<LatestReleaseInfo> {
+    return await invoke("get_latest_release_info", { currentVersion });
   },
 
   async getRectifierConfig(): Promise<RectifierConfig> {

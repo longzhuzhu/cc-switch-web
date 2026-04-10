@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import appIcon from "@/assets/icons/app-icon.png";
 import { isWindows } from "@/lib/platform";
+import { useUpdate } from "@/contexts/UpdateContext";
 
 interface ToolVersion {
   name: string;
@@ -87,6 +88,8 @@ export function AboutSection() {
   const [isLoadingVersion, setIsLoadingVersion] = useState(true);
   const [toolVersions, setToolVersions] = useState<ToolVersion[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(true);
+  const { hasUpdate, latestRelease, updateInfo, isChecking, checkUpdate } =
+    useUpdate();
 
   const [wslShellByTool, setWslShellByTool] = useState<
     Record<string, WslShellPreference>
@@ -211,6 +214,11 @@ export function AboutSection() {
 
   const handleOpenReleaseNotes = useCallback(async () => {
     try {
+      if (hasUpdate && latestRelease?.htmlUrl) {
+        await settingsApi.openExternal(latestRelease.htmlUrl);
+        return;
+      }
+
       const targetVersion = version ?? "";
       const displayVersion = targetVersion.startsWith("v")
         ? targetVersion
@@ -230,7 +238,7 @@ export function AboutSection() {
       console.error("[AboutSection] Failed to open release notes", error);
       toast.error(t("settings.openReleaseNotesFailed"));
     }
-  }, [t, version]);
+  }, [hasUpdate, latestRelease?.htmlUrl, t, version]);
 
   const handleOpenRepository = useCallback(async () => {
     try {
@@ -243,12 +251,15 @@ export function AboutSection() {
 
   const handleCheckLatestRelease = useCallback(async () => {
     try {
-      await settingsApi.openExternal(`${WEB_REPOSITORY_URL}/releases/latest`);
+      const available = await checkUpdate();
+      if (!available) {
+        toast.success(t("settings.upToDate"), { closeButton: true });
+      }
     } catch (error) {
-      console.error("[AboutSection] Failed to open latest release", error);
+      console.error("[AboutSection] Failed to check latest release", error);
       toast.error(t("settings.checkUpdateFailed"));
     }
-  }, [t]);
+  }, [checkUpdate, t]);
 
   const handleOpenAuthorContact = useCallback(async () => {
     try {
@@ -310,6 +321,18 @@ export function AboutSection() {
                   <span className="font-medium">{`v${displayVersion}`}</span>
                 )}
               </Badge>
+              {latestRelease && (
+                <Badge
+                  variant={hasUpdate ? "secondary" : "outline"}
+                  className="gap-1.5 bg-background/80"
+                >
+                  {hasUpdate
+                    ? t("settings.updateAvailable", {
+                        version: latestRelease.latestVersion,
+                      })
+                    : t("settings.upToDate")}
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -319,10 +342,13 @@ export function AboutSection() {
               variant="outline"
               size="sm"
               onClick={handleCheckLatestRelease}
+              disabled={isChecking}
               className="h-8 gap-1.5 text-xs"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              {t("settings.checkLatestRelease")}
+              <RefreshCw
+                className={isChecking ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"}
+              />
+              {isChecking ? t("settings.checking") : t("settings.checkLatestRelease")}
             </Button>
             <Button
               type="button"
@@ -356,6 +382,25 @@ export function AboutSection() {
             </Button>
           </div>
         </div>
+
+        {hasUpdate && updateInfo && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm"
+          >
+            <p className="mb-1 font-medium text-primary">
+              {t("settings.updateAvailable", {
+                version: updateInfo.latestVersion,
+              })}
+            </p>
+            {updateInfo.notes && (
+              <p className="line-clamp-4 leading-relaxed text-muted-foreground">
+                {updateInfo.notes}
+              </p>
+            )}
+          </motion.div>
+        )}
       </motion.div>
 
       {!isWindows() && (

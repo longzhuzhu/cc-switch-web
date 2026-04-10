@@ -51,6 +51,11 @@
   - Web 后端补齐 Coding Plan 额度查询服务（Kimi / 智谱 GLM / MiniMax）
   - `UsageScriptModal` 补上 `Token Plan` / `官方余额` 模板、自动识别、原生测试链路和卡片展示分流
   - 三语文案补齐 `usageScript.templateTokenPlan` / `usageScript.templateBalance` / `usageScript.tokenPlanHint` / `usageScript.balanceHint`
+- 更新检查 / 版本提示
+  - Web 后端新增 `GET /api/settings/latest-release`，统一查询 GitHub 最新 release 信息
+  - Web 前端新增更新状态上下文，启动后自动轻量检查最新版本，并复用到 About 页与顶栏入口
+  - About 页补齐“检查新版本”状态闭环：当前版本展示、最新版本检测、有更新时展示 release notes 摘要
+  - 主界面标题栏补上更新提醒 badge，点击可直达设置页 About 标签
 
 实现约束：
 

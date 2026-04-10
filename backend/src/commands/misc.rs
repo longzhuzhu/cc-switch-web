@@ -9,6 +9,7 @@ use crate::store::AppState;
 use once_cell::sync::Lazy;
 #[cfg(any(test, not(target_os = "windows")))]
 use regex::Regex;
+use semver::Version;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -29,6 +30,30 @@ pub struct ToolVersion {
     /// 当 env_type 为 "wsl" 时，返回该工具绑定的 WSL distro（用于按 distro 探测 shells）
     wsl_distro: Option<String>,
 }
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LatestReleaseInfo {
+    current_version: Option<String>,
+    latest_version: String,
+    tag_name: String,
+    html_url: String,
+    notes: Option<String>,
+    published_at: Option<String>,
+    has_update: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubLatestReleaseResponse {
+    tag_name: String,
+    html_url: String,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    published_at: Option<String>,
+}
+
+const WEB_GITHUB_REPO: &str = "zuoliangyu/zuoliangyu-cc-switch-web";
 
 #[cfg(not(target_os = "windows"))]
 const VALID_TOOLS: [&str; 4] = ["claude", "codex", "gemini", "opencode"];
@@ -188,6 +213,75 @@ async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Op
             }
         }
         Err(_) => None,
+    }
+}
+
+pub async fn get_latest_release_info(
+    current_version: Option<String>,
+) -> Result<LatestReleaseInfo, String> {
+    let client = crate::proxy::http_client::get();
+    let url = format!("https://api.github.com/repos/{WEB_GITHUB_REPO}/releases/latest");
+
+    let response = client
+        .get(&url)
+        .header("User-Agent", "cc-switch-web")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("请求 GitHub Releases 失败: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "请求 GitHub Releases 失败: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let release = response
+        .json::<GithubLatestReleaseResponse>()
+        .await
+        .map_err(|e| format!("解析 GitHub Releases 响应失败: {e}"))?;
+
+    let latest_version = normalize_version_value(&release.tag_name);
+    let normalized_current_version = current_version
+        .as_deref()
+        .map(normalize_version_value)
+        .filter(|value| !value.is_empty());
+    let has_update = normalized_current_version
+        .as_deref()
+        .map(|current| is_newer_version(current, &latest_version))
+        .unwrap_or(false);
+
+    Ok(LatestReleaseInfo {
+        current_version: normalized_current_version,
+        latest_version,
+        tag_name: release.tag_name,
+        html_url: release.html_url,
+        notes: release
+            .body
+            .map(|body| body.trim().to_string())
+            .filter(|body| !body.is_empty()),
+        published_at: release
+            .published_at
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        has_update,
+    })
+}
+
+fn normalize_version_value(value: &str) -> String {
+    value
+        .trim()
+        .trim_start_matches('v')
+        .trim_start_matches('V')
+        .trim()
+        .to_string()
+}
+
+fn is_newer_version(current: &str, latest: &str) -> bool {
+    match (Version::parse(current), Version::parse(latest)) {
+        (Ok(current_version), Ok(latest_version)) => latest_version > current_version,
+        _ => normalize_version_value(current) != normalize_version_value(latest),
     }
 }
 
@@ -1092,5 +1186,18 @@ mod tests {
             command,
             "pushd \"\\\\server\\share\\100%%^&^(test^)\" || exit /b 1\r\n"
         );
+    }
+
+    #[test]
+    fn normalize_version_value_strips_v_prefix_and_whitespace() {
+        assert_eq!(normalize_version_value(" v1.2.3 "), "1.2.3");
+        assert_eq!(normalize_version_value("V0.1.3"), "0.1.3");
+    }
+
+    #[test]
+    fn is_newer_version_recognizes_semver_order() {
+        assert!(is_newer_version("0.1.3", "0.2.0"));
+        assert!(!is_newer_version("0.1.3", "0.1.3"));
+        assert!(!is_newer_version("0.2.0", "0.1.3"));
     }
 }

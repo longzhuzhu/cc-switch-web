@@ -423,6 +423,19 @@ export async function getWebToolVersions(
   });
 }
 
+export async function getWebLatestReleaseInfo(
+  currentVersion?: string,
+): Promise<import("@/lib/api/settings").LatestReleaseInfo> {
+  const params = new URLSearchParams();
+  if (currentVersion?.trim()) {
+    params.set("currentVersion", currentVersion.trim());
+  }
+  const query = params.toString();
+  return requestJson<import("@/lib/api/settings").LatestReleaseInfo>(
+    `/api/settings/latest-release${query ? `?${query}` : ""}`,
+  );
+}
+
 export async function getWebOmoLocalFile(): Promise<OmoLocalFileData> {
   return requestJson<OmoLocalFileData>("/api/omo/local-file");
 }

@@ -349,6 +349,12 @@ struct ToolVersionsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct LatestReleaseQuery {
+    current_version: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AuthStartLoginRequest {
     auth_provider: String,
 }
@@ -1850,6 +1856,15 @@ async fn get_tool_versions(
     Ok(Json(versions))
 }
 
+async fn get_latest_release(
+    Query(query): Query<LatestReleaseQuery>,
+) -> Result<Json<crate::commands::LatestReleaseInfo>, ApiError> {
+    let release = crate::commands::get_latest_release_info(query.current_version)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to load latest release info: {e}")))?;
+    Ok(Json(release))
+}
+
 async fn auth_start_login(
     State(state): State<WebApiState>,
     Json(payload): Json<AuthStartLoginRequest>,
@@ -2976,6 +2991,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_stream_check_config).put(set_stream_check_config),
         )
         .route("/api/settings/tool-versions", post(get_tool_versions))
+        .route("/api/settings/latest-release", get(get_latest_release))
         .route("/api/settings/config-dir/:app", get(get_config_dir))
         .route("/api/omo/local-file", get(get_omo_local_file))
         .route(
