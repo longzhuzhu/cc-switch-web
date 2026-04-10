@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import { AppVisibilitySettings } from "@/components/settings/AppVisibilitySettings";
+import { SkillStorageLocationSettings } from "@/components/settings/SkillStorageLocationSettings";
 import { SkillSyncMethodSettings } from "@/components/settings/SkillSyncMethodSettings";
 import { DirectorySettings } from "@/components/settings/DirectorySettings";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
@@ -42,6 +43,7 @@ import { UsageDashboard } from "@/components/usage/UsageDashboard";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { useSettings } from "@/hooks/useSettings";
+import { useInstalledSkills } from "@/hooks/useSkills";
 import { useImportExport } from "@/hooks/useImportExport";
 import { isWebRuntime } from "@/lib/runtime/client/env";
 import { useTranslation } from "react-i18next";
@@ -94,6 +96,7 @@ export function SettingsPage({
     clearSelection,
     resetStatus,
   } = useImportExport({ onImportSuccess });
+  const { data: installedSkills } = useInstalledSkills();
 
   const [activeTab, setActiveTab] = useState<string>("general");
   const [showRestartPrompt, setShowRestartPrompt] = useState(false);
@@ -218,6 +221,13 @@ export function SettingsPage({
                     <AppVisibilitySettings
                       settings={settings}
                       onChange={handleAutoSave}
+                    />
+                    <SkillStorageLocationSettings
+                      value={settings.skillStorageLocation ?? "cc_switch"}
+                      installedCount={installedSkills?.length ?? 0}
+                      onMigrated={(location) =>
+                        updateSettings({ skillStorageLocation: location })
+                      }
                     />
                     <SkillSyncMethodSettings
                       value={settings.skillSyncMethod ?? "auto"}

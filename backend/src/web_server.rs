@@ -32,8 +32,8 @@ use crate::proxy::types::{
 use crate::services::omo::OmoLocalFileData;
 use crate::services::provider::{ProviderSortUpdate, SwitchResult};
 use crate::services::skill::{
-    DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillUninstallResult,
-    SkillUpdateInfo, SkillsShSearchResult,
+    DiscoverableSkill, ImportSkillSelection, MigrationResult, SkillBackupEntry, SkillRepo,
+    SkillStorageLocation, SkillUninstallResult, SkillUpdateInfo, SkillsShSearchResult,
 };
 use crate::services::speedtest::EndpointLatency;
 use crate::settings::WebDavSyncSettings;
@@ -181,6 +181,12 @@ struct ToggleSkillAppRequest {
 #[serde(rename_all = "camelCase")]
 struct SkillIdRequest {
     id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MigrateSkillStorageRequest {
+    target: SkillStorageLocation,
 }
 
 #[derive(Debug, Deserialize)]
@@ -947,6 +953,16 @@ async fn update_skill(
         .await
         .map_err(|e| ApiError::internal(format!("failed to update skill: {e}")))?;
     Ok(Json(updated))
+}
+
+async fn migrate_skill_storage(
+    State(state): State<WebApiState>,
+    Json(payload): Json<MigrateSkillStorageRequest>,
+) -> Result<Json<MigrationResult>, ApiError> {
+    let result =
+        crate::commands::migrate_skill_storage_internal(state.app_state.as_ref(), payload.target)
+            .map_err(|e| ApiError::internal(format!("failed to migrate skill storage: {e}")))?;
+    Ok(Json(result))
 }
 
 async fn search_skills_sh(
@@ -3047,6 +3063,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/skills/install-archives", post(install_skill_archives))
         .route("/api/skills/skillssh/search", get(search_skills_sh))
         .route("/api/skills/update", post(update_skill))
+        .route("/api/skills/storage/migrate", post(migrate_skill_storage))
         .route("/api/skills/uninstall", post(uninstall_skill_unified_by_body))
         .route("/api/skills/apps/toggle", put(toggle_skill_app_by_body))
         .route(

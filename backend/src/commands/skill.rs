@@ -6,8 +6,9 @@
 
 use crate::app_config::{AppType, InstalledSkill, UnmanagedSkill};
 use crate::services::skill::{
-    DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillService,
-    SkillUninstallResult, SkillUpdateInfo, SkillsShSearchResult,
+    DiscoverableSkill, ImportSkillSelection, MigrationResult, SkillBackupEntry, SkillRepo,
+    SkillService, SkillStorageLocation, SkillUninstallResult, SkillUpdateInfo,
+    SkillsShSearchResult,
 };
 use crate::store::AppState;
 use std::path::Path;
@@ -130,6 +131,13 @@ pub(crate) async fn update_skill_internal(
         .update_skill(&app_state.db, &id)
         .await
         .map_err(|e| e.to_string())
+}
+
+pub(crate) fn migrate_skill_storage_internal(
+    app_state: &AppState,
+    target: SkillStorageLocation,
+) -> Result<MigrationResult, String> {
+    SkillService::migrate_storage(&app_state.db, target).map_err(|e| e.to_string())
 }
 
 pub(crate) async fn search_skills_sh_internal(

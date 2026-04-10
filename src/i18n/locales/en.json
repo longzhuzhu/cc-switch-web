@@ -219,6 +219,18 @@
     "tabGeneral": "General",
     "tabAdvanced": "Advanced",
     "tabProxy": "Proxy",
+    "skillStorage": {
+      "title": "Skill Storage Location",
+      "description": "Switch the shared Skill source directory between the CC Switch managed path and ~/.agents/skills.",
+      "ccSwitch": "CC Switch",
+      "unified": "Unified",
+      "ccSwitchHint": "Use the default CC Switch directory at ~/.cc-switch/skills.",
+      "unifiedHint": "Share the ~/.agents/skills directory with external agent tools.",
+      "confirmTitle": "Migrate Skill Storage",
+      "confirmMessage": "{{count}} installed Skills will be moved to the new storage location.",
+      "migrationSuccess": "Storage migration finished. Migrated {{count}} Skills.",
+      "migrationPartial": "Migration finished with {{migrated}} Skills moved, but {{errors}} items still need manual handling."
+    },
     "advanced": {
       "configDir": {
         "title": "Configuration Directory",

@@ -34,6 +34,7 @@ import type { DeleteSessionOptions, DeleteSessionResult } from "@/lib/api/sessio
 import type { ProviderSortUpdate } from "@/lib/api/providers";
 import type {
   DiscoverableSkill,
+  MigrationResult,
   SkillArchiveInstallResult,
   ImportSkillSelection,
   InstalledSkill,
@@ -1543,6 +1544,16 @@ export async function installWebSkillUnified(
 
 export async function updateWebSkill(id: string): Promise<InstalledSkill> {
   return requestWithBody<InstalledSkill>("/api/skills/update", "POST", { id });
+}
+
+export async function migrateWebSkillStorage(
+  target: import("@/types").SkillStorageLocation,
+): Promise<MigrationResult> {
+  return requestWithBody<MigrationResult>(
+    "/api/skills/storage/migrate",
+    "POST",
+    { target },
+  );
 }
 
 export async function searchWebSkillsSh(

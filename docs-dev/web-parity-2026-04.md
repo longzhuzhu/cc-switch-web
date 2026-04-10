@@ -33,6 +33,10 @@
   - Web 后端新增 `skills.sh` 搜索接口，并过滤非 GitHub 来源条目
   - Skills 发现页新增仓库 / `skills.sh` 双搜索源切换
   - 支持分页加载更多，并复用现有安装链路直接安装搜索结果
+- Skill 存储位置切换
+  - Web 设置新增 Skill 存储位置切换入口，支持 `~/.cc-switch/skills` 与 `~/.agents/skills` 双目录
+  - Web 后端新增 Skill 存储迁移接口，迁移完成后自动刷新各应用目录同步
+  - 设置数据链路补齐 `skillStorageLocation` 字段，并同步三语文案
 
 实现约束：
 

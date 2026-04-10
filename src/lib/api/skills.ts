@@ -1,6 +1,7 @@
 import { invoke } from "@/lib/runtime/client/core";
 
 import type { AppId } from "@/lib/api/types";
+import type { SkillStorageLocation } from "@/types";
 
 export type AppType = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
 
@@ -51,6 +52,12 @@ export interface SkillUpdateInfo {
   name: string;
   currentHash?: string;
   remoteHash: string;
+}
+
+export interface MigrationResult {
+  migratedCount: number;
+  skippedCount: number;
+  errors: string[];
 }
 
 export interface SkillsShDiscoverableSkill {
@@ -176,6 +183,13 @@ export const skillsApi = {
   /** 更新单个 Skill */
   async updateSkill(id: string): Promise<InstalledSkill> {
     return await invoke("update_skill", { id });
+  },
+
+  /** 迁移 Skill 存储位置 */
+  async migrateStorage(
+    target: SkillStorageLocation,
+  ): Promise<MigrationResult> {
+    return await invoke("migrate_skill_storage", { target });
   },
 
   /** 搜索 skills.sh 公共目录 */

@@ -116,6 +116,7 @@ import {
   importWebPromptFromFile,
   importWebSkillsFromApps,
   installWebSkillUnified,
+  migrateWebSkillStorage,
   updateWebSkill,
   upsertWebMcpServer,
   upsertWebPrompt,
@@ -542,6 +543,8 @@ export async function invoke<T>(
       )) as T;
     case "update_skill":
       return (await updateWebSkill(args?.id as string)) as T;
+    case "migrate_skill_storage":
+      return (await migrateWebSkillStorage(args?.target as any)) as T;
     case "search_skills_sh":
       return (await searchWebSkillsSh(
         args?.query as string,

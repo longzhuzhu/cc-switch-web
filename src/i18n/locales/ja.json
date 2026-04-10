@@ -219,6 +219,18 @@
     "tabGeneral": "一般",
     "tabAdvanced": "詳細",
     "tabProxy": "プロキシ",
+    "skillStorage": {
+      "title": "Skill 保存先",
+      "description": "共有 Skill ソースディレクトリを CC Switch 管理パスと ~/.agents/skills の間で切り替えます。",
+      "ccSwitch": "CC Switch",
+      "unified": "統合ディレクトリ",
+      "ccSwitchHint": "CC Switch の既定ディレクトリ ~/.cc-switch/skills を使用します。",
+      "unifiedHint": "外部 Agent ツールと ~/.agents/skills ディレクトリを共有します。",
+      "confirmTitle": "Skill 保存先を移行",
+      "confirmMessage": "現在インストール済みの Skill は {{count}} 件です。切り替えると新しい保存先へ移行します。",
+      "migrationSuccess": "保存先の移行が完了しました。{{count}} 件の Skill を移行しました。",
+      "migrationPartial": "{{migrated}} 件の Skill を移行しましたが、{{errors}} 件は手動対応が必要です。"
+    },
     "advanced": {
       "configDir": {
         "title": "設定ディレクトリ",
