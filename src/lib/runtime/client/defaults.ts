@@ -25,6 +25,7 @@ export const getDefaultSettings = (): Settings => ({
   firstRunNoticeConfirmed: false,
   autoSyncConfirmed: false,
   commonConfigConfirmed: false,
+  enableClaudePluginIntegration: false,
   skipClaudeOnboarding: false,
   language: "zh",
   visibleApps,

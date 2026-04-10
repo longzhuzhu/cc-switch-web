@@ -62,6 +62,14 @@ pub fn set_app_config_dir_override_internal(path: Option<String>) -> Result<bool
     Ok(true)
 }
 
+pub fn apply_claude_plugin_config_internal(official: bool) -> Result<bool, String> {
+    if official {
+        crate::claude_plugin::clear_claude_config().map_err(|e| e.to_string())
+    } else {
+        crate::claude_plugin::write_claude_config().map_err(|e| e.to_string())
+    }
+}
+
 pub fn apply_claude_onboarding_skip_internal() -> Result<bool, String> {
     crate::claude_mcp::set_has_completed_onboarding().map_err(|e| e.to_string())
 }

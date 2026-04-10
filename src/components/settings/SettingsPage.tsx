@@ -242,6 +242,14 @@ export function SettingsPage({
                       }
                     />
                     <ClaudeCodeSettings
+                      pluginIntegrationEnabled={
+                        settings.enableClaudePluginIntegration ?? false
+                      }
+                      onPluginIntegrationChange={(value) =>
+                        handleAutoSave({
+                          enableClaudePluginIntegration: value,
+                        })
+                      }
                       skipOnboarding={settings.skipClaudeOnboarding ?? false}
                       onSkipOnboardingChange={(value) =>
                         handleAutoSave({ skipClaudeOnboarding: value })

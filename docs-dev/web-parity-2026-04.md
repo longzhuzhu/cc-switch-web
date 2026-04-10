@@ -73,6 +73,10 @@
   - Web 设置页新增 Claude Code 区块，可即时切换“跳过 Claude Code 初次安装确认”
   - Web 后端新增 `POST/DELETE /api/settings/claude-onboarding-skip`，负责写入或删除 `~/.claude.json` 中的 `hasCompletedOnboarding`
   - 设置持久化模型补齐 `skipClaudeOnboarding` 字段，并同步三语提示文案与失败提示
+- Claude Code 插件自动同步
+  - Web 设置页新增“应用到 Claude Code 插件”开关，开启后切换 Claude 供应商时自动同步 VS Code Claude Code 插件配置
+  - Web 后端新增 `POST /api/settings/claude-plugin`，按桌面版规则仅写入或清理 `~/.claude/config.json` 的 `primaryApiKey`
+  - 设置持久化模型补齐 `enableClaudePluginIntegration` 字段，供应商切换链路补齐失败提示
 
 实现约束：
 

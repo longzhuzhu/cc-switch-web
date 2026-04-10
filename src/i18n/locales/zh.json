@@ -185,6 +185,7 @@
     "openLinkFailed": "链接打开失败",
     "terminalOpened": "终端已打开",
     "terminalOpenFailed": "打开终端失败",
+    "syncClaudePluginFailed": "同步 Claude 插件失败",
     "skipClaudeOnboardingFailed": "跳过 Claude Code 初次安装确认失败",
     "clearClaudeOnboardingSkipFailed": "恢复 Claude Code 初次安装确认失败",
     "openclawModelsRegistered": "模型已注册到 /model 列表",
@@ -277,7 +278,9 @@
       }
     },
     "claudeCode": "Claude Code",
-    "claudeCodeHint": "管理 Claude Code 本地首次安装确认相关行为",
+    "claudeCodeHint": "管理 Claude Code 插件同步与首次安装确认相关行为",
+    "enableClaudePluginIntegration": "应用到 Claude Code 插件",
+    "enableClaudePluginIntegrationDescription": "开启后切换 Claude 供应商时会同步 VS Code Claude Code 插件",
     "skipClaudeOnboarding": "跳过 Claude Code 初次安装确认",
     "skipClaudeOnboardingDescription": "开启后会向 ~/.claude.json 写入 hasCompletedOnboarding=true",
     "advanced": {

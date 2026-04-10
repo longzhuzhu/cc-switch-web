@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { providersApi, openclawApi, type AppId } from "@/lib/api";
+import { providersApi, settingsApi, openclawApi, type AppId } from "@/lib/api";
 import type {
   Provider,
   UsageScript,
@@ -31,6 +31,30 @@ export function useProviderActions(activeApp: AppId, isProxyRunning?: boolean) {
   const updateProviderMutation = useUpdateProviderMutation(activeApp);
   const deleteProviderMutation = useDeleteProviderMutation(activeApp);
   const switchProviderMutation = useSwitchProviderMutation(activeApp);
+
+  const syncClaudePlugin = useCallback(
+    async (provider: Provider) => {
+      if (activeApp !== "claude") return;
+
+      try {
+        const settings = await settingsApi.get();
+        if (!settings?.enableClaudePluginIntegration) {
+          return;
+        }
+
+        const isOfficial = provider.category === "official";
+        await settingsApi.applyClaudePluginConfig({ official: isOfficial });
+      } catch (error) {
+        const detail =
+          extractErrorMessage(error) ||
+          t("notifications.syncClaudePluginFailed", {
+            defaultValue: "同步 Claude 插件失败",
+          });
+        toast.error(detail, { duration: 4200 });
+      }
+    },
+    [activeApp, t],
+  );
 
   // 添加供应商
   const addProvider = useCallback(
@@ -150,6 +174,7 @@ export function useProviderActions(activeApp: AppId, isProxyRunning?: boolean) {
 
       try {
         const result = await switchProviderMutation.mutateAsync(provider.id);
+        await syncClaudePlugin(provider);
 
         // Show backfill warning if present
         if (result?.warnings?.length) {
@@ -200,7 +225,7 @@ export function useProviderActions(activeApp: AppId, isProxyRunning?: boolean) {
         // 错误提示由 mutation 处理
       }
     },
-    [switchProviderMutation, activeApp, isProxyRunning, t],
+    [switchProviderMutation, syncClaudePlugin, activeApp, isProxyRunning, t],
   );
 
   // 删除供应商

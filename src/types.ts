@@ -252,6 +252,8 @@ export interface Settings {
   autoSyncConfirmed?: boolean;
   // User has confirmed the common config first-run notice
   commonConfigConfirmed?: boolean;
+  // Sync Claude Code plugin config when switching providers
+  enableClaudePluginIntegration?: boolean;
   // Skip Claude Code first-run confirmation
   skipClaudeOnboarding?: boolean;
   // 首选语言（可选，默认中文）

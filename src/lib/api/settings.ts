@@ -161,6 +161,14 @@ export const settingsApi = {
     return await invoke("get_latest_release_info", { currentVersion });
   },
 
+  async applyClaudePluginConfig(options: {
+    official: boolean;
+  }): Promise<boolean> {
+    return await invoke("apply_claude_plugin_config", {
+      official: options.official,
+    });
+  },
+
   async applyClaudeOnboardingSkip(): Promise<boolean> {
     return await invoke("apply_claude_onboarding_skip");
   },

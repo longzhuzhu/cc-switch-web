@@ -147,6 +147,30 @@ export function useSettings(): UseSettingsResult {
         // 保存到配置文件
         await saveMutation.mutateAsync(payload);
 
+        const nextEnableClaudePluginIntegration =
+          updates.enableClaudePluginIntegration;
+        if (
+          nextEnableClaudePluginIntegration !== undefined &&
+          nextEnableClaudePluginIntegration !==
+            (data?.enableClaudePluginIntegration ?? false)
+        ) {
+          try {
+            await settingsApi.applyClaudePluginConfig({
+              official: !nextEnableClaudePluginIntegration,
+            });
+          } catch (error) {
+            console.warn(
+              "[useSettings] Failed to sync Claude plugin config",
+              error,
+            );
+            toast.error(
+              t("notifications.syncClaudePluginFailed", {
+                defaultValue: "同步 Claude 插件失败",
+              }),
+            );
+          }
+        }
+
         const nextSkipClaudeOnboarding = updates.skipClaudeOnboarding;
         if (
           nextSkipClaudeOnboarding !== undefined &&
@@ -239,6 +263,31 @@ export function useSettings(): UseSettingsResult {
         await saveMutation.mutateAsync(payload);
 
         await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+
+        const prevEnableClaudePluginIntegration =
+          data?.enableClaudePluginIntegration ?? false;
+        const nextEnableClaudePluginIntegration =
+          payload.enableClaudePluginIntegration ?? false;
+        if (
+          nextEnableClaudePluginIntegration !==
+          prevEnableClaudePluginIntegration
+        ) {
+          try {
+            await settingsApi.applyClaudePluginConfig({
+              official: !nextEnableClaudePluginIntegration,
+            });
+          } catch (error) {
+            console.warn(
+              "[useSettings] Failed to sync Claude plugin config",
+              error,
+            );
+            toast.error(
+              t("notifications.syncClaudePluginFailed", {
+                defaultValue: "同步 Claude 插件失败",
+              }),
+            );
+          }
+        }
 
         const prevSkipClaudeOnboarding = data?.skipClaudeOnboarding ?? false;
         const nextSkipClaudeOnboarding = payload.skipClaudeOnboarding ?? false;

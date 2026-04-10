@@ -3,11 +3,15 @@ import { useTranslation } from "react-i18next";
 import { ToggleRow } from "@/components/ui/toggle-row";
 
 interface ClaudeCodeSettingsProps {
+  pluginIntegrationEnabled: boolean;
+  onPluginIntegrationChange: (value: boolean) => void;
   skipOnboarding: boolean;
   onSkipOnboardingChange: (value: boolean) => void;
 }
 
 export function ClaudeCodeSettings({
+  pluginIntegrationEnabled,
+  onPluginIntegrationChange,
   skipOnboarding,
   onSkipOnboardingChange,
 }: ClaudeCodeSettingsProps) {
@@ -24,6 +28,14 @@ export function ClaudeCodeSettings({
           </p>
         </div>
       </div>
+
+      <ToggleRow
+        icon={<ShieldCheck className="h-4 w-4 text-sky-500" />}
+        title={t("settings.enableClaudePluginIntegration")}
+        description={t("settings.enableClaudePluginIntegrationDescription")}
+        checked={pluginIntegrationEnabled}
+        onCheckedChange={onPluginIntegrationChange}
+      />
 
       <ToggleRow
         icon={<ShieldCheck className="h-4 w-4 text-emerald-500" />}

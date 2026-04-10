@@ -104,6 +104,12 @@ struct OptionalPathRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct OfficialRequest {
+    official: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SnippetRequest {
     snippet: String,
 }
@@ -1697,6 +1703,14 @@ async fn save_settings(
         .map_err(|e| ApiError::internal(format!("failed to save settings: {e}")))
 }
 
+async fn apply_claude_plugin_config(
+    Json(payload): Json<OfficialRequest>,
+) -> Result<Json<bool>, ApiError> {
+    crate::commands::apply_claude_plugin_config_internal(payload.official)
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to apply claude plugin config: {e}")))
+}
+
 async fn apply_claude_onboarding_skip() -> Result<Json<bool>, ApiError> {
     crate::commands::apply_claude_onboarding_skip_internal()
         .map(Json)
@@ -2976,6 +2990,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
+        .route(
+            "/api/settings/claude-plugin",
+            post(apply_claude_plugin_config),
+        )
         .route(
             "/api/settings/claude-onboarding-skip",
             post(apply_claude_onboarding_skip).delete(clear_claude_onboarding_skip),

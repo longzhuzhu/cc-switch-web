@@ -185,6 +185,7 @@
     "openLinkFailed": "Failed to open link",
     "terminalOpened": "Terminal opened",
     "terminalOpenFailed": "Failed to open terminal",
+    "syncClaudePluginFailed": "Failed to sync Claude plugin",
     "skipClaudeOnboardingFailed": "Failed to skip Claude Code first-run confirmation",
     "clearClaudeOnboardingSkipFailed": "Failed to restore Claude Code first-run confirmation",
     "openclawModelsRegistered": "Models have been registered to /model list",
@@ -277,7 +278,9 @@
       }
     },
     "claudeCode": "Claude Code",
-    "claudeCodeHint": "Manage local first-run confirmation behavior for Claude Code",
+    "claudeCodeHint": "Manage Claude Code extension sync and local first-run confirmation behavior",
+    "enableClaudePluginIntegration": "Apply to Claude Code extension",
+    "enableClaudePluginIntegrationDescription": "When enabled, switching Claude providers also syncs the VS Code Claude Code extension",
     "skipClaudeOnboarding": "Skip Claude Code first-run confirmation",
     "skipClaudeOnboardingDescription": "When enabled, write hasCompletedOnboarding=true to ~/.claude.json",
     "advanced": {

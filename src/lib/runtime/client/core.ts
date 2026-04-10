@@ -38,6 +38,7 @@ import {
   getWebConfigDir,
   getWebToolVersions,
   getWebLatestReleaseInfo,
+  applyWebClaudePluginConfig,
   applyWebClaudeOnboardingSkip,
   clearWebClaudeOnboardingSkip,
   getWebUniversalProvider,
@@ -455,6 +456,8 @@ export async function invoke<T>(
       return (await getWebLatestReleaseInfo(
         args?.currentVersion as string | undefined,
       )) as T;
+    case "apply_claude_plugin_config":
+      return (await applyWebClaudePluginConfig(Boolean(args?.official))) as T;
     case "apply_claude_onboarding_skip":
       return (await applyWebClaudeOnboardingSkip()) as T;
     case "clear_claude_onboarding_skip":

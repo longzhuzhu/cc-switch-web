@@ -79,6 +79,8 @@ export function useSettingsForm(): UseSettingsFormResult {
 
     const normalized: SettingsFormState = {
       ...data,
+      enableClaudePluginIntegration:
+        data.enableClaudePluginIntegration ?? false,
       skipClaudeOnboarding: data.skipClaudeOnboarding ?? false,
       claudeConfigDir: sanitizeDir(data.claudeConfigDir),
       codexConfigDir: sanitizeDir(data.codexConfigDir),
@@ -98,6 +100,7 @@ export function useSettingsForm(): UseSettingsFormResult {
         const base =
           prev ??
           ({
+            enableClaudePluginIntegration: false,
             skipClaudeOnboarding: false,
             language: readPersistedLanguage(),
           } as SettingsFormState);
@@ -129,6 +132,8 @@ export function useSettingsForm(): UseSettingsFormResult {
 
       const normalized: SettingsFormState = {
         ...serverData,
+        enableClaudePluginIntegration:
+          serverData.enableClaudePluginIntegration ?? false,
         skipClaudeOnboarding: serverData.skipClaudeOnboarding ?? false,
         claudeConfigDir: sanitizeDir(serverData.claudeConfigDir),
         codexConfigDir: sanitizeDir(serverData.codexConfigDir),

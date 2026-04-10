@@ -1,6 +1,7 @@
 mod app_config;
 mod app_store;
 mod claude_mcp;
+mod claude_plugin;
 mod codex_config;
 mod commands;
 mod config;

@@ -446,6 +446,14 @@ export async function getWebLatestReleaseInfo(
   );
 }
 
+export async function applyWebClaudePluginConfig(
+  official: boolean,
+): Promise<boolean> {
+  return requestWithBody<boolean>("/api/settings/claude-plugin", "POST", {
+    official,
+  });
+}
+
 export async function applyWebClaudeOnboardingSkip(): Promise<boolean> {
   return requestWithBody<boolean>(
     "/api/settings/claude-onboarding-skip",
