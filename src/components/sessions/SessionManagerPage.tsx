@@ -763,6 +763,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               session={session}
                               isSelected={isSelected}
                               selectionMode={selectionMode}
+                              searchQuery={search}
                               isChecked={selectedSessionKeys.has(
                                 getSessionKey(session),
                               )}
@@ -999,6 +1000,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                   message={message}
                                   index={index}
                                   isActive={activeMessageIndex === index}
+                                  searchQuery={search}
                                   setRef={(el) => {
                                     if (el) messageRefs.current.set(index, el);
                                   }}
