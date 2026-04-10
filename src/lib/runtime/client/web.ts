@@ -1326,6 +1326,18 @@ export async function switchWebProvider(
   );
 }
 
+export async function openWebProviderTerminal(
+  appId: AppId,
+  providerId: string,
+  cwd?: string,
+): Promise<boolean> {
+  return requestWithBody<boolean>(
+    `/api/providers/${appId}/${encodeURIComponent(providerId)}/open-terminal`,
+    "POST",
+    { cwd },
+  );
+}
+
 export async function getWebMcpServers(): Promise<McpServersMap> {
   try {
     return await requestJson<McpServersMap>("/api/mcp/servers");

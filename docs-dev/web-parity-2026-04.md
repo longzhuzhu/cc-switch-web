@@ -41,6 +41,11 @@
   - Web 设置持久化补齐 `firstRunNoticeConfirmed` / `commonConfigConfirmed` 字段
   - 主页面补上首次运行欢迎提示弹窗
   - 供应商表单补上“通用配置”首次说明确认弹窗，并同步三语文案
+- 按供应商打开终端
+  - Web 后端新增 `POST /api/providers/:app/:id/open-terminal`，支持按供应商配置启动专属 Claude 终端
+  - Provider 列表补上“打开终端”动作按钮，当前在 Claude 供应商视图中可用
+  - 保留可选 `cwd` 参数链路，当前 Web 版前端默认直接打开终端，不额外接目录选择器
+  - 三语文案补齐 `provider.openTerminal` / `provider.terminalOpened` / `provider.terminalOpenFailed`
 
 实现约束：
 

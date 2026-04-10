@@ -106,6 +106,7 @@ import {
   setWebProxyTakeoverForApp,
   startWebProxyServer,
   stopWebProxyWithRestore,
+  openWebProviderTerminal,
   switchWebProvider,
   switchWebProxyProvider,
   importWebMcpFromApps,
@@ -377,6 +378,12 @@ export async function invoke<T>(
       return (await switchWebProvider(
         args?.app as AppId,
         args?.id as string,
+      )) as T;
+    case "open_provider_terminal":
+      return (await openWebProviderTerminal(
+        args?.app as AppId,
+        args?.providerId as string,
+        args?.cwd as string | undefined,
       )) as T;
     case "get_universal_providers":
       return (await getWebUniversalProviders()) as T;

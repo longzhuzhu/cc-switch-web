@@ -167,6 +167,12 @@ struct CustomEndpointUrlRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct OpenProviderTerminalRequest {
+    cwd: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ToggleMcpAppRequest {
     enabled: bool,
 }
@@ -2239,6 +2245,21 @@ async fn switch_provider(
     Ok(Json(result))
 }
 
+async fn open_provider_terminal(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(payload): Json<OpenProviderTerminalRequest>,
+) -> Result<Json<bool>, ApiError> {
+    let opened = crate::commands::open_provider_terminal_internal(
+        state.app_state.as_ref(),
+        app,
+        id,
+        payload.cwd,
+    )
+    .map_err(|e| ApiError::internal(format!("failed to open provider terminal: {e}")))?;
+    Ok(Json(opened))
+}
+
 async fn get_proxy_status(State(state): State<WebApiState>) -> Result<Json<ProxyStatus>, ApiError> {
     let status = crate::commands::get_proxy_status_internal(state.app_state.as_ref())
         .await
@@ -3169,6 +3190,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             put(update_provider).delete(delete_provider),
         )
         .route("/api/providers/:app/:id/switch", post(switch_provider))
+        .route(
+            "/api/providers/:app/:id/open-terminal",
+            post(open_provider_terminal),
+        )
         .route("/api/proxy/status", get(get_proxy_status))
         .route("/api/proxy/takeover-status", get(get_proxy_takeover_status))
         .route(
