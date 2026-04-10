@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { ProviderActions } from "@/components/providers/ProviderActions";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import UsageFooter from "@/components/UsageFooter";
+import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
 import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
@@ -174,6 +175,9 @@ export function ProviderCard({
 
   const usageEnabled = provider.meta?.usage_script?.enabled ?? false;
   const isOfficial = isOfficialProvider(provider, appId);
+  const isCopilot =
+    provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT ||
+    provider.meta?.usage_script?.templateType === "github_copilot";
   const isCodexOauth =
     provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH;
 
@@ -354,7 +358,13 @@ export function ProviderCard({
         >
           <div className="ml-auto">
             <div className="flex items-center gap-1 transition-transform duration-200 group-hover:-translate-x-[var(--actions-width)] group-focus-within:-translate-x-[var(--actions-width)]">
-              {isCodexOauth ? (
+              {isCopilot ? (
+                <CopilotQuotaFooter
+                  meta={provider.meta}
+                  inline={true}
+                  isCurrent={isCurrent}
+                />
+              ) : isCodexOauth ? (
                 <CodexOauthQuotaFooter
                   meta={provider.meta}
                   inline={true}

@@ -2336,6 +2336,7 @@
     "geminiPro": "Pro",
     "geminiFlash": "Flash",
     "geminiFlashLite": "Flash Lite",
+    "copilotPremium": "プレミアム",
     "weeklyLimit": "週間",
     "utilization": "{{value}}%",
     "resetsIn": "{{time}}後にリセット",

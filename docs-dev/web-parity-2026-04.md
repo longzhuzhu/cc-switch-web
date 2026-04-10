@@ -89,6 +89,10 @@
   - Web 会话列表与消息详情补齐 `searchQuery` 透传，搜索结果会直接高亮匹配词
   - 对齐桌面版 `highlightText` 渲染逻辑，保持标题与消息正文的匹配反馈一致
   - 不改现有搜索索引与过滤逻辑，仅补齐缺失的可视化反馈
+- GitHub Copilot 额度展示
+  - Web 端补齐 `CopilotQuotaFooter` 与查询 hook，支持按绑定账号读取 GitHub Copilot Premium 配额
+  - Provider 卡片重新区分 `github_copilot / codex_oauth / 官方 CLI` 三类额度 footer
+  - 补齐三语 `subscription.copilotPremium` 文案，保持额度标签与桌面版一致
 
 实现约束：
 
