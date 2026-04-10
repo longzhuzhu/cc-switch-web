@@ -245,6 +245,35 @@
       "migrationSuccess": "存储位置迁移完成，共迁移 {{count}} 个 Skill",
       "migrationPartial": "迁移已完成 {{migrated}} 个 Skill，但仍有 {{errors}} 个条目需要手动处理"
     },
+    "terminal": {
+      "title": "首选终端",
+      "description": "选择点击终端按钮时使用的终端应用",
+      "fallbackHint": "如果选择的终端不可用，将自动使用系统默认终端",
+      "options": {
+        "macos": {
+          "terminal": "Terminal.app",
+          "iterm2": "iTerm2",
+          "alacritty": "Alacritty",
+          "kitty": "Kitty",
+          "ghostty": "Ghostty",
+          "wezterm": "WezTerm",
+          "kaku": "Kaku"
+        },
+        "windows": {
+          "cmd": "命令提示符",
+          "powershell": "PowerShell",
+          "wt": "Windows Terminal"
+        },
+        "linux": {
+          "gnomeTerminal": "GNOME Terminal",
+          "konsole": "Konsole",
+          "xfce4Terminal": "Xfce4 Terminal",
+          "alacritty": "Alacritty",
+          "kitty": "Kitty",
+          "ghostty": "Ghostty"
+        }
+      }
+    },
     "advanced": {
       "configDir": {
         "title": "配置文件目录",

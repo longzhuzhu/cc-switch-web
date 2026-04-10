@@ -293,6 +293,10 @@ export interface Settings {
   // Maximum backup files to retain (default 10)
   backupRetainCount?: number;
 
+  // ===== 终端设置 =====
+  // 首选终端应用
+  preferredTerminal?: string;
+
 }
 
 export interface SessionMeta {

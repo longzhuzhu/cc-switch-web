@@ -245,6 +245,35 @@
       "migrationSuccess": "Storage migration finished. Migrated {{count}} Skills.",
       "migrationPartial": "Migration finished with {{migrated}} Skills moved, but {{errors}} items still need manual handling."
     },
+    "terminal": {
+      "title": "Preferred Terminal",
+      "description": "Choose which terminal app to use when clicking the terminal button",
+      "fallbackHint": "If the selected terminal is unavailable, the system default will be used",
+      "options": {
+        "macos": {
+          "terminal": "Terminal.app",
+          "iterm2": "iTerm2",
+          "alacritty": "Alacritty",
+          "kitty": "Kitty",
+          "ghostty": "Ghostty",
+          "wezterm": "WezTerm",
+          "kaku": "Kaku"
+        },
+        "windows": {
+          "cmd": "Command Prompt",
+          "powershell": "PowerShell",
+          "wt": "Windows Terminal"
+        },
+        "linux": {
+          "gnomeTerminal": "GNOME Terminal",
+          "konsole": "Konsole",
+          "xfce4Terminal": "Xfce4 Terminal",
+          "alacritty": "Alacritty",
+          "kitty": "Kitty",
+          "ghostty": "Ghostty"
+        }
+      }
+    },
     "advanced": {
       "configDir": {
         "title": "Configuration Directory",

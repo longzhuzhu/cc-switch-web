@@ -244,6 +244,14 @@ pub struct AppSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backup_retain_count: Option<u32>,
 
+    // ===== 终端设置 =====
+    /// 首选终端应用（可选，默认使用系统默认终端）
+    /// - macOS: "terminal" | "iterm2" | "alacritty" | "kitty" | "ghostty" | "wezterm" | "kaku"
+    /// - Windows: "cmd" | "powershell" | "wt" (Windows Terminal)
+    /// - Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preferred_terminal: Option<String>,
+
 }
 
 impl Default for AppSettings {
@@ -275,6 +283,7 @@ impl Default for AppSettings {
             webdav_backup: None,
             backup_interval_hours: None,
             backup_retain_count: None,
+            preferred_terminal: None,
         }
     }
 }
@@ -330,6 +339,13 @@ impl AppSettings {
             .as_ref()
             .map(|s| s.trim())
             .filter(|s| matches!(*s, "en" | "zh" | "ja"))
+            .map(|s| s.to_string());
+
+        self.preferred_terminal = self
+            .preferred_terminal
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
             .map(|s| s.to_string());
 
         if let Some(sync) = &mut self.webdav_sync {
@@ -644,6 +660,20 @@ pub fn effective_backup_retain_count() -> usize {
         .backup_retain_count
         .map(|n| (n as usize).max(1))
         .unwrap_or(10)
+}
+
+// ===== 终端设置管理函数 =====
+
+/// 获取首选终端应用
+pub fn get_preferred_terminal() -> Option<String> {
+    settings_store()
+        .read()
+        .unwrap_or_else(|e| {
+            log::warn!("设置锁已毒化，使用恢复值: {e}");
+            e.into_inner()
+        })
+        .preferred_terminal
+        .clone()
 }
 
 // ===== WebDAV 同步设置管理函数 =====

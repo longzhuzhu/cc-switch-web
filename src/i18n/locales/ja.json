@@ -245,6 +245,35 @@
       "migrationSuccess": "保存先の移行が完了しました。{{count}} 件の Skill を移行しました。",
       "migrationPartial": "{{migrated}} 件の Skill を移行しましたが、{{errors}} 件は手動対応が必要です。"
     },
+    "terminal": {
+      "title": "優先ターミナル",
+      "description": "ターミナルボタンをクリックした時に使用するターミナルアプリを選択",
+      "fallbackHint": "選択したターミナルが利用できない場合、システムのデフォルトが使用されます",
+      "options": {
+        "macos": {
+          "terminal": "Terminal.app",
+          "iterm2": "iTerm2",
+          "alacritty": "Alacritty",
+          "kitty": "Kitty",
+          "ghostty": "Ghostty",
+          "wezterm": "WezTerm",
+          "kaku": "Kaku"
+        },
+        "windows": {
+          "cmd": "コマンドプロンプト",
+          "powershell": "PowerShell",
+          "wt": "Windows Terminal"
+        },
+        "linux": {
+          "gnomeTerminal": "GNOME Terminal",
+          "konsole": "Konsole",
+          "xfce4Terminal": "Xfce4 Terminal",
+          "alacritty": "Alacritty",
+          "kitty": "Kitty",
+          "ghostty": "Ghostty"
+        }
+      }
+    },
     "advanced": {
       "configDir": {
         "title": "設定ディレクトリ",
