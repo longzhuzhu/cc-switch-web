@@ -8,4 +8,16 @@ export const subscriptionApi = {
   getCodexOauthQuota(accountId: string | null): Promise<SubscriptionQuota> {
     return invoke("get_codex_oauth_quota", { accountId });
   },
+  getCodingPlanQuota(
+    baseUrl: string,
+    apiKey: string,
+  ): Promise<SubscriptionQuota> {
+    return invoke("get_coding_plan_quota", { baseUrl, apiKey });
+  },
+  getBalance(
+    baseUrl: string,
+    apiKey: string,
+  ): Promise<import("@/types").UsageResult> {
+    return invoke("get_balance", { baseUrl, apiKey });
+  },
 };

@@ -11,6 +11,8 @@ use tokio::sync::RwLock;
 
 // 常量定义
 const TEMPLATE_TYPE_GITHUB_COPILOT: &str = "github_copilot";
+const TEMPLATE_TYPE_TOKEN_PLAN: &str = "token_plan";
+const TEMPLATE_TYPE_BALANCE: &str = "balance";
 const COPILOT_UNIT_PREMIUM: &str = "requests";
 
 pub(crate) fn get_providers_internal(
@@ -124,8 +126,12 @@ pub(crate) async fn query_provider_usage_internal(
     app_type: AppType,
     provider_id: &str,
 ) -> Result<crate::provider::UsageResult, AppError> {
-    // 检查是否为 GitHub Copilot 模板类型，并解析绑定账号
-    let (is_copilot_template, copilot_account_id) = {
+    let (
+        is_copilot_template,
+        copilot_account_id,
+        template_type,
+        settings_config,
+    ) = {
         let providers = state.db.get_all_providers(app_type.as_str())?;
 
         let provider = providers.get(provider_id);
@@ -135,11 +141,19 @@ pub(crate) async fn query_provider_usage_internal(
             .and_then(|s| s.template_type.as_ref())
             .map(|t| t == TEMPLATE_TYPE_GITHUB_COPILOT)
             .unwrap_or(false);
+        let template_type = provider
+            .and_then(|p| p.meta.as_ref())
+            .and_then(|m| m.usage_script.as_ref())
+            .and_then(|s| s.template_type.clone())
+            .unwrap_or_default();
         let account_id = provider
             .and_then(|p| p.meta.as_ref())
             .and_then(|m| m.managed_account_id_for(TEMPLATE_TYPE_GITHUB_COPILOT));
+        let settings_config = provider
+            .map(|p| p.settings_config.clone())
+            .unwrap_or_default();
 
-        (is_copilot, account_id)
+        (is_copilot, account_id, template_type, settings_config)
     };
 
     if is_copilot_template {
@@ -172,6 +186,75 @@ pub(crate) async fn query_provider_usage_internal(
             }]),
             error: None,
         });
+    }
+
+    if template_type == TEMPLATE_TYPE_TOKEN_PLAN {
+        let env = settings_config.get("env");
+        let base_url = env
+            .and_then(|value| value.get("ANTHROPIC_BASE_URL"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        let api_key = env
+            .and_then(|value| {
+                value
+                    .get("ANTHROPIC_AUTH_TOKEN")
+                    .or_else(|| value.get("ANTHROPIC_API_KEY"))
+            })
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+
+        let quota = crate::services::coding_plan::get_coding_plan_quota(base_url, api_key)
+            .await
+            .map_err(|e| AppError::Message(format!("Failed to query coding plan: {e}")))?;
+
+        if !quota.success {
+            return Ok(crate::provider::UsageResult {
+                success: false,
+                data: None,
+                error: quota.error,
+            });
+        }
+
+        let data: Vec<crate::provider::UsageData> = quota
+            .tiers
+            .iter()
+            .map(|tier| crate::provider::UsageData {
+                plan_name: Some(tier.name.clone()),
+                remaining: Some(100.0 - tier.utilization),
+                total: Some(100.0),
+                used: Some(tier.utilization),
+                unit: Some("%".to_string()),
+                is_valid: Some(true),
+                invalid_message: None,
+                extra: tier.resets_at.clone(),
+            })
+            .collect();
+
+        return Ok(crate::provider::UsageResult {
+            success: true,
+            data: if data.is_empty() { None } else { Some(data) },
+            error: None,
+        });
+    }
+
+    if template_type == TEMPLATE_TYPE_BALANCE {
+        let env = settings_config.get("env");
+        let base_url = env
+            .and_then(|value| value.get("ANTHROPIC_BASE_URL"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        let api_key = env
+            .and_then(|value| {
+                value
+                    .get("ANTHROPIC_AUTH_TOKEN")
+                    .or_else(|| value.get("ANTHROPIC_API_KEY"))
+            })
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+
+        return crate::services::balance::get_balance(base_url, api_key)
+            .await
+            .map_err(|e| AppError::Message(format!("Failed to query balance: {e}")));
     }
 
     ProviderService::query_usage(state, app_type, provider_id).await

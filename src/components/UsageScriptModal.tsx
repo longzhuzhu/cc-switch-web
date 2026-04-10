@@ -95,6 +95,12 @@ const generatePresetTemplates = (
 
   // GitHub Copilot 模板不需要脚本，使用专用 API
   [TEMPLATE_TYPES.GITHUB_COPILOT]: "",
+
+  // Coding Plan 模板不需要脚本，使用专用 Rust 查询
+  [TEMPLATE_TYPES.TOKEN_PLAN]: "",
+
+  // 官方余额查询模板不需要脚本，使用专用 Rust 查询
+  [TEMPLATE_TYPES.BALANCE]: "",
 });
 
 // 模板名称国际化键映射
@@ -103,7 +109,48 @@ const TEMPLATE_NAME_KEYS: Record<string, string> = {
   [TEMPLATE_TYPES.GENERAL]: "usageScript.templateGeneral",
   [TEMPLATE_TYPES.NEW_API]: "usageScript.templateNewAPI",
   [TEMPLATE_TYPES.GITHUB_COPILOT]: "usageScript.templateCopilot",
+  [TEMPLATE_TYPES.TOKEN_PLAN]: "usageScript.templateTokenPlan",
+  [TEMPLATE_TYPES.BALANCE]: "usageScript.templateBalance",
 };
+
+const TOKEN_PLAN_PROVIDERS = [
+  { id: "kimi", label: "Kimi For Coding", pattern: /api\.kimi\.com\/coding/i },
+  {
+    id: "zhipu",
+    label: "Zhipu GLM (智谱)",
+    pattern: /bigmodel\.cn|api\.z\.ai/i,
+  },
+  {
+    id: "minimax",
+    label: "MiniMax",
+    pattern: /api\.minimaxi?\.com|api\.minimax\.io/i,
+  },
+] as const;
+
+const BALANCE_PROVIDERS = [
+  { id: "deepseek", label: "DeepSeek", pattern: /api\.deepseek\.com/i },
+  { id: "stepfun", label: "StepFun", pattern: /api\.stepfun\.(ai|com)/i },
+  {
+    id: "siliconflow",
+    label: "SiliconFlow",
+    pattern: /api\.siliconflow\.(cn|com)/i,
+  },
+  { id: "openrouter", label: "OpenRouter", pattern: /openrouter\.ai/i },
+  { id: "novita", label: "Novita AI", pattern: /api\.novita\.ai/i },
+] as const;
+
+function detectBalanceProvider(baseUrl: string | undefined): boolean {
+  if (!baseUrl) return false;
+  return BALANCE_PROVIDERS.some((provider) => provider.pattern.test(baseUrl));
+}
+
+function detectTokenPlanProvider(baseUrl: string | undefined): string | null {
+  if (!baseUrl) return null;
+  for (const provider of TOKEN_PLAN_PROVIDERS) {
+    if (provider.pattern.test(baseUrl)) return provider.id;
+  }
+  return null;
+}
 
 const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   provider,
@@ -164,18 +211,49 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
 
   const [script, setScript] = useState<UsageScript>(() => {
     const savedScript = provider.meta?.usage_script;
-    const defaultScript = {
+    if (savedScript) {
+      if (
+        savedScript.templateType === TEMPLATE_TYPES.TOKEN_PLAN &&
+        !savedScript.codingPlanProvider
+      ) {
+        return {
+          ...savedScript,
+          codingPlanProvider:
+            detectTokenPlanProvider(providerCredentials.baseUrl) || "kimi",
+        };
+      }
+      return savedScript;
+    }
+
+    const autoDetected = detectTokenPlanProvider(providerCredentials.baseUrl);
+    if (autoDetected) {
+      return {
+        enabled: false,
+        language: "javascript" as const,
+        code: "",
+        timeout: 10,
+        autoQueryInterval: 5,
+        codingPlanProvider: autoDetected,
+      };
+    }
+
+    if (detectBalanceProvider(providerCredentials.baseUrl)) {
+      return {
+        enabled: false,
+        language: "javascript" as const,
+        code: "",
+        timeout: 10,
+        autoQueryInterval: 5,
+      };
+    }
+
+    return {
       enabled: false,
       language: "javascript" as const,
       code: PRESET_TEMPLATES[TEMPLATE_TYPES.GENERAL],
       timeout: 10,
+      autoQueryInterval: 5,
     };
-
-    if (!savedScript) {
-      return defaultScript;
-    }
-
-    return savedScript;
   });
 
   const [testing, setTesting] = useState(false);
@@ -236,7 +314,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       }
       // 优先使用保存的 templateType
       if (existingScript?.templateType) {
-        return existingScript.templateType;
+        return existingScript.templateType as string;
       }
       // 向后兼容：根据字段推断模板类型
       // 检测 NEW_API 模板（有 accessToken 或 userId）
@@ -247,7 +325,12 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       if (existingScript?.apiKey || existingScript?.baseUrl) {
         return TEMPLATE_TYPES.GENERAL;
       }
-      // 新配置或无凭证：默认使用 GENERAL（与默认代码模板一致）
+      if (detectTokenPlanProvider(providerCredentials.baseUrl)) {
+        return TEMPLATE_TYPES.TOKEN_PLAN;
+      }
+      if (detectBalanceProvider(providerCredentials.baseUrl)) {
+        return TEMPLATE_TYPES.BALANCE;
+      }
       return TEMPLATE_TYPES.GENERAL;
     },
   );
@@ -278,8 +361,11 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   };
 
   const handleSave = () => {
-    // Copilot 模板不需要脚本验证
-    if (selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT) {
+    if (
+      selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT &&
+      selectedTemplate !== TEMPLATE_TYPES.TOKEN_PLAN &&
+      selectedTemplate !== TEMPLATE_TYPES.BALANCE
+    ) {
       if (script.enabled && !script.code.trim()) {
         toast.error(t("usageScript.scriptEmpty"));
         return;
@@ -297,6 +383,8 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
         | "general"
         | "newapi"
         | "github_copilot"
+        | "token_plan"
+        | "balance"
         | undefined,
     };
     onSave(scriptWithTemplate);
@@ -306,6 +394,72 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   const handleTest = async () => {
     setTesting(true);
     try {
+      if (selectedTemplate === TEMPLATE_TYPES.BALANCE) {
+        const config = provider.settingsConfig as Record<string, any>;
+        const baseUrl: string = config?.env?.ANTHROPIC_BASE_URL ?? "";
+        const apiKey: string =
+          config?.env?.ANTHROPIC_AUTH_TOKEN ??
+          config?.env?.ANTHROPIC_API_KEY ??
+          "";
+        const { subscriptionApi } = await import("@/lib/api/subscription");
+        const result = await subscriptionApi.getBalance(baseUrl, apiKey);
+        if (result.success && result.data && result.data.length > 0) {
+          const summary = result.data
+            .map((item) => {
+              const name = item.planName ? `[${item.planName}] ` : "";
+              return `${name}${t("usage.remaining")} ${item.remaining?.toFixed(2)} ${item.unit || ""}`;
+            })
+            .join(", ");
+          toast.success(`${t("usageScript.testSuccess")}${summary}`, {
+            duration: 3000,
+            closeButton: true,
+          });
+          queryClient.setQueryData(["usage", provider.id, appId], result);
+        } else {
+          toast.error(
+            `${t("usageScript.testFailed")}: ${result.error || t("endpointTest.noResult")}`,
+            { duration: 5000 },
+          );
+        }
+        return;
+      }
+
+      if (selectedTemplate === TEMPLATE_TYPES.TOKEN_PLAN) {
+        const config = provider.settingsConfig as Record<string, any>;
+        const baseUrl: string = config?.env?.ANTHROPIC_BASE_URL ?? "";
+        const apiKey: string =
+          config?.env?.ANTHROPIC_AUTH_TOKEN ??
+          config?.env?.ANTHROPIC_API_KEY ??
+          "";
+        const { subscriptionApi } = await import("@/lib/api/subscription");
+        const quota = await subscriptionApi.getCodingPlanQuota(baseUrl, apiKey);
+        if (quota.success && quota.tiers.length > 0) {
+          const summary = quota.tiers
+            .map((tier) => `${tier.name}: ${Math.round(tier.utilization)}%`)
+            .join(", ");
+          toast.success(`${t("usageScript.testSuccess")}${summary}`, {
+            duration: 3000,
+            closeButton: true,
+          });
+          queryClient.setQueryData(["usage", provider.id, appId], {
+            success: true,
+            data: quota.tiers.map((tier) => ({
+              planName: tier.name,
+              remaining: 100 - tier.utilization,
+              total: 100,
+              used: tier.utilization,
+              unit: "%",
+            })),
+          });
+        } else {
+          toast.error(
+            `${t("usageScript.testFailed")}: ${quota.error || t("endpointTest.noResult")}`,
+            { duration: 5000 },
+          );
+        }
+        return;
+      }
+
       // Copilot 模板使用专用 API
       if (selectedTemplate === TEMPLATE_TYPES.GITHUB_COPILOT) {
         const accountId = resolveManagedAccountId(
@@ -410,7 +564,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
 
   const handleUsePreset = (presetName: string) => {
     const preset = PRESET_TEMPLATES[presetName];
-    if (preset) {
+    if (preset !== undefined) {
       if (presetName === TEMPLATE_TYPES.CUSTOM) {
         // 🔧 自定义模式：用户应该在脚本中直接写完整 URL 和凭证，而不是依赖变量替换
         // 这样可以避免同源检查导致的问题
@@ -439,6 +593,29 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
         });
       } else if (presetName === TEMPLATE_TYPES.GITHUB_COPILOT) {
         // Copilot 模板不需要脚本和凭证，使用专用 API
+        setScript({
+          ...script,
+          code: "",
+          apiKey: undefined,
+          baseUrl: undefined,
+          accessToken: undefined,
+          userId: undefined,
+        });
+      } else if (presetName === TEMPLATE_TYPES.TOKEN_PLAN) {
+        const autoDetected = detectTokenPlanProvider(
+          providerCredentials.baseUrl,
+        );
+        setScript({
+          ...script,
+          code: "",
+          apiKey: undefined,
+          baseUrl: undefined,
+          accessToken: undefined,
+          userId: undefined,
+          codingPlanProvider:
+            script.codingPlanProvider || autoDetected || "kimi",
+        });
+      } else if (presetName === TEMPLATE_TYPES.BALANCE) {
         setScript({
           ...script,
           code: "",
@@ -529,7 +706,6 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
                 .filter((name) => {
                   const isCopilotProvider =
                     provider.meta?.providerType === "github_copilot";
-                  // Copilot 供应商只显示 copilot 模板，其他供应商不显示 copilot 模板
                   if (isCopilotProvider) {
                     return name === TEMPLATE_TYPES.GITHUB_COPILOT;
                   }
@@ -631,6 +807,62 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
                 <p className="text-sm text-muted-foreground">
                   {t("usageScript.copilotAutoAuth")}
                 </p>
+              </div>
+            )}
+
+            {selectedTemplate === TEMPLATE_TYPES.BALANCE && (
+              <div className="space-y-3 border-t border-white/10 pt-3">
+                <p className="text-sm text-muted-foreground">
+                  {t("usageScript.balanceHint")}
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  {BALANCE_PROVIDERS.filter((provider) =>
+                    provider.pattern.test(providerCredentials.baseUrl || ""),
+                  ).map((provider) => (
+                    <span
+                      key={provider.id}
+                      className="inline-flex items-center px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium"
+                    >
+                      {provider.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedTemplate === TEMPLATE_TYPES.TOKEN_PLAN && (
+              <div className="space-y-3 border-t border-white/10 pt-3">
+                <p className="text-sm text-muted-foreground">
+                  {t("usageScript.tokenPlanHint")}
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  {TOKEN_PLAN_PROVIDERS.map((provider) => (
+                    <Button
+                      key={provider.id}
+                      type="button"
+                      variant={
+                        script.codingPlanProvider === provider.id
+                          ? "default"
+                          : "outline"
+                      }
+                      size="sm"
+                      className={cn(
+                        "rounded-lg border",
+                        script.codingPlanProvider === provider.id
+                          ? "shadow-sm"
+                          : "bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                      )}
+                      onClick={() =>
+                        setScript({
+                          ...script,
+                          codingPlanProvider: provider.id,
+                        })
+                      }
+                    >
+                      {provider.label}
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -860,7 +1092,9 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           </div>
 
           {/* 提取器代码 - Copilot 模板不需要 */}
-          {selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT && (
+          {selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT &&
+            selectedTemplate !== TEMPLATE_TYPES.TOKEN_PLAN &&
+            selectedTemplate !== TEMPLATE_TYPES.BALANCE && (
             <div className="space-y-4 glass rounded-xl border border-white/10 p-6">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-medium">
@@ -882,7 +1116,9 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           )}
 
           {/* 帮助信息 - Copilot 模板不需要 */}
-          {selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT && (
+          {selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT &&
+            selectedTemplate !== TEMPLATE_TYPES.TOKEN_PLAN &&
+            selectedTemplate !== TEMPLATE_TYPES.BALANCE && (
             <div className="glass rounded-xl border border-white/10 p-6 text-sm text-foreground/90">
               <h4 className="font-medium mb-2">
                 {t("usageScript.scriptHelp")}

@@ -9,8 +9,10 @@ import {
   getWebCopilotTokenForAccount,
   getWebCopilotUsage,
   getWebCopilotUsageForAccount,
+  getWebCodingPlanQuota,
   getWebCodexOauthQuota,
   getWebSubscriptionQuota,
+  getWebBalance,
   createWebDbBackup,
   deleteWebEnvVars,
   downloadWebConfigExport,
@@ -490,6 +492,16 @@ export async function invoke<T>(
     case "get_codex_oauth_quota":
       return (await getWebCodexOauthQuota(
         (args?.accountId as string | null | undefined) ?? null,
+      )) as T;
+    case "get_coding_plan_quota":
+      return (await getWebCodingPlanQuota(
+        args?.baseUrl as string,
+        args?.apiKey as string,
+      )) as T;
+    case "get_balance":
+      return (await getWebBalance(
+        args?.baseUrl as string,
+        args?.apiKey as string,
       )) as T;
     case "check_env_conflicts":
       return (await getWebEnvConflicts(args?.app as string)) as T;

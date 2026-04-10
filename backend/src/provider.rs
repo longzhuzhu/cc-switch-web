@@ -102,6 +102,10 @@ pub struct UsageScript {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "templateType")]
     pub template_type: Option<String>,
+    /// Coding Plan 供应商标识（前端 UI 使用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "codingPlanProvider")]
+    pub coding_plan_provider: Option<String>,
     /// 自动查询间隔（单位：分钟，0 表示禁用自动查询）
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "autoQueryInterval")]

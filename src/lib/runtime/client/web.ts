@@ -566,6 +566,28 @@ export async function getWebCodexOauthQuota(
   );
 }
 
+export async function getWebCodingPlanQuota(
+  baseUrl: string,
+  apiKey: string,
+): Promise<import("@/types/subscription").SubscriptionQuota> {
+  return requestWithBody<import("@/types/subscription").SubscriptionQuota>(
+    "/api/subscription/coding-plan",
+    "POST",
+    { baseUrl, apiKey },
+  );
+}
+
+export async function getWebBalance(
+  baseUrl: string,
+  apiKey: string,
+): Promise<import("@/types").UsageResult> {
+  return requestWithBody<import("@/types").UsageResult>(
+    "/api/subscription/balance",
+    "POST",
+    { baseUrl, apiKey },
+  );
+}
+
 export async function getWebEnvConflicts(
   app: string,
 ): Promise<import("@/types/env").EnvConflict[]> {

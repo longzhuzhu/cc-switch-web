@@ -1,3 +1,5 @@
+pub(crate) mod balance;
+pub(crate) mod coding_plan;
 pub(crate) mod env_checker;
 pub(crate) mod env_manager;
 pub(crate) mod mcp;

@@ -173,6 +173,13 @@ struct OpenProviderTerminalRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CredentialQueryRequest {
+    base_url: String,
+    api_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ToggleMcpAppRequest {
     enabled: bool,
 }
@@ -2045,6 +2052,25 @@ async fn get_codex_oauth_quota(
     Ok(Json(quota))
 }
 
+async fn get_coding_plan_quota(
+    Json(payload): Json<CredentialQueryRequest>,
+) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
+    let quota =
+        crate::commands::get_coding_plan_quota_internal(payload.base_url, payload.api_key)
+            .await
+            .map_err(|e| ApiError::internal(format!("failed to load coding plan quota: {e}")))?;
+    Ok(Json(quota))
+}
+
+async fn get_balance(
+    Json(payload): Json<CredentialQueryRequest>,
+) -> Result<Json<crate::provider::UsageResult>, ApiError> {
+    let result = crate::commands::get_balance_internal(payload.base_url, payload.api_key)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to load balance: {e}")))?;
+    Ok(Json(result))
+}
+
 async fn get_env_conflicts(
     Path(app): Path<String>,
 ) -> Result<Json<Vec<crate::services::env_checker::EnvConflict>>, ApiError> {
@@ -2989,6 +3015,8 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_copilot_usage_for_account),
         )
         .route("/api/subscription/codex-oauth", get(get_codex_oauth_quota))
+        .route("/api/subscription/coding-plan", post(get_coding_plan_quota))
+        .route("/api/subscription/balance", post(get_balance))
         .route("/api/subscription/:tool", get(get_subscription_quota))
         .route("/api/env/conflicts/:app", get(get_env_conflicts))
         .route("/api/env/delete", post(delete_env_conflicts))

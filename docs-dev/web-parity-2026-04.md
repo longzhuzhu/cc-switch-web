@@ -46,6 +46,11 @@
   - Provider 列表补上“打开终端”动作按钮，当前在 Claude 供应商视图中可用
   - 保留可选 `cwd` 参数链路，当前 Web 版前端默认直接打开终端，不额外接目录选择器
   - 三语文案补齐 `provider.openTerminal` / `provider.terminalOpened` / `provider.terminalOpenFailed`
+- 原生余额 / Token Plan 模板
+  - Web 后端补齐第三方余额查询服务（DeepSeek / StepFun / SiliconFlow / OpenRouter / Novita AI）
+  - Web 后端补齐 Coding Plan 额度查询服务（Kimi / 智谱 GLM / MiniMax）
+  - `UsageScriptModal` 补上 `Token Plan` / `官方余额` 模板、自动识别、原生测试链路和卡片展示分流
+  - 三语文案补齐 `usageScript.templateTokenPlan` / `usageScript.templateBalance` / `usageScript.tokenPlanHint` / `usageScript.balanceHint`
 
 实现约束：
 
