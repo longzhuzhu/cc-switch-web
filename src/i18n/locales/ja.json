@@ -1589,6 +1589,17 @@
     "backup": {
       "location": "バックアップ場所: {{path}}"
     },
+    "checkUpdates": "更新を確認",
+    "checkingUpdates": "確認中...",
+    "noUpdates": "すべての Skill は最新です",
+    "updatesFound": "{{count}} 件の Skill 更新があります",
+    "update": "更新",
+    "updateAvailable": "更新あり",
+    "updateSuccess": "Skill {{name}} を更新しました",
+    "updateFailed": "Skill の更新に失敗しました",
+    "updateAll": "すべて更新（{{count}}）",
+    "updatingAll": "更新中...",
+    "updateAllSuccess": "{{count}} 件の Skill を更新しました",
     "restoreFromBackup": {
       "button": "バックアップから復元",
       "title": "バックアップから復元",

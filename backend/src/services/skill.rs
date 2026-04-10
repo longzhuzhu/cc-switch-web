@@ -133,6 +133,16 @@ pub struct SkillUninstallResult {
     pub backup_path: Option<String>,
 }
 
+/// Skill 更新检测结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUpdateInfo {
+    pub id: String,
+    pub name: String,
+    pub current_hash: Option<String>,
+    pub remote_hash: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillBackupEntry {
@@ -594,6 +604,8 @@ impl SkillService {
             &doc_path,
         ));
 
+        let content_hash = Self::compute_dir_hash(&dest).ok();
+
         // 创建 InstalledSkill 记录
         let installed_skill = InstalledSkill {
             id: skill.key.clone(),
@@ -610,6 +622,8 @@ impl SkillService {
             readme_url,
             apps: SkillApps::only(current_app),
             installed_at: chrono::Utc::now().timestamp(),
+            content_hash,
+            updated_at: 0,
         };
 
         // 保存到数据库
@@ -667,6 +681,289 @@ impl SkillService {
         );
 
         Ok(SkillUninstallResult { backup_path })
+    }
+
+    /// 计算目录内容的 SHA-256 哈希
+    ///
+    /// 递归遍历目录下所有非隐藏文件，按相对路径字典序排列，
+    /// 将 "相对路径\0内容\0" 逐文件 feed 给同一个 hasher。
+    pub fn compute_dir_hash(dir: &Path) -> Result<String> {
+        use sha2::{Digest, Sha256};
+
+        let mut files: Vec<PathBuf> = Vec::new();
+        Self::collect_files_for_hash(dir, dir, &mut files)?;
+        files.sort();
+
+        let mut hasher = Sha256::new();
+        for file_path in &files {
+            let relative = file_path.strip_prefix(dir).unwrap_or(file_path);
+            let rel_str = relative.to_string_lossy().replace('\\', "/");
+            hasher.update(rel_str.as_bytes());
+            hasher.update(b"\0");
+            let content = fs::read(file_path)
+                .with_context(|| format!("读取文件失败: {}", file_path.display()))?;
+            hasher.update(&content);
+            hasher.update(b"\0");
+        }
+
+        Ok(format!("{:x}", hasher.finalize()))
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn collect_files_for_hash(base: &Path, current: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+        let _ = base;
+        let entries = fs::read_dir(current)
+            .with_context(|| format!("读取目录失败: {}", current.display()))?;
+        for entry in entries {
+            let entry = entry?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = entry.path();
+            if path.is_dir() {
+                Self::collect_files_for_hash(base, &path, files)?;
+            } else {
+                files.push(path);
+            }
+        }
+        Ok(())
+    }
+
+    /// 检查所有已安装 Skill 的更新
+    ///
+    /// 仅检查有 repo_owner 的 Skill（本地 Skill 跳过），
+    /// 按仓库分组下载，避免重复下载同一仓库。
+    pub async fn check_updates(&self, db: &Arc<Database>) -> Result<Vec<SkillUpdateInfo>> {
+        let skills = db.get_all_installed_skills()?;
+        let mut updates = Vec::new();
+
+        let mut repo_groups: HashMap<(String, String, String), Vec<InstalledSkill>> = HashMap::new();
+        for skill in skills.into_values() {
+            let (owner, name, branch) =
+                match (&skill.repo_owner, &skill.repo_name, &skill.repo_branch) {
+                    (Some(o), Some(n), Some(b)) => (o.clone(), n.clone(), b.clone()),
+                    (Some(o), Some(n), None) => (o.clone(), n.clone(), "main".to_string()),
+                    _ => continue,
+                };
+            repo_groups
+                .entry((owner, name, branch))
+                .or_default()
+                .push(skill);
+        }
+
+        let ssot_dir = Self::get_ssot_dir()?;
+
+        for ((owner, name, branch), group_skills) in &repo_groups {
+            let repo = SkillRepo {
+                owner: owner.clone(),
+                name: name.clone(),
+                branch: branch.clone(),
+                enabled: true,
+            };
+
+            let (temp_dir, _used_branch) = match timeout(
+                std::time::Duration::from_secs(60),
+                self.download_repo(&repo),
+            )
+            .await
+            {
+                Ok(Ok(result)) => result,
+                Ok(Err(err)) => {
+                    log::warn!("检查更新时下载 {}/{} 失败: {err}", owner, name);
+                    continue;
+                }
+                Err(_) => {
+                    log::warn!("检查更新时下载 {}/{} 超时", owner, name);
+                    continue;
+                }
+            };
+
+            let mut remote_skills = Vec::new();
+            let _ = self.scan_dir_recursive(&temp_dir, &temp_dir, &repo, &mut remote_skills);
+
+            for skill in group_skills {
+                let remote_match = remote_skills.iter().find(|remote_skill| {
+                    let remote_install_name = remote_skill
+                        .directory
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(&remote_skill.directory);
+                    remote_install_name.eq_ignore_ascii_case(&skill.directory)
+                });
+
+                let remote_skill_dir = match remote_match {
+                    Some(remote_skill) => temp_dir.join(&remote_skill.directory),
+                    None => continue,
+                };
+
+                if !remote_skill_dir.exists() {
+                    continue;
+                }
+
+                let remote_hash = match Self::compute_dir_hash(&remote_skill_dir) {
+                    Ok(hash) => hash,
+                    Err(err) => {
+                        log::warn!("计算远程 Skill 哈希失败 {}: {err}", skill.id);
+                        continue;
+                    }
+                };
+
+                let local_hash = match &skill.content_hash {
+                    Some(hash) => Some(hash.clone()),
+                    None => {
+                        let local_dir = ssot_dir.join(&skill.directory);
+                        if local_dir.exists() {
+                            match Self::compute_dir_hash(&local_dir) {
+                                Ok(hash) => {
+                                    let _ = db.update_skill_hash(&skill.id, &hash, 0);
+                                    Some(hash)
+                                }
+                                Err(_) => None,
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                };
+
+                if local_hash.as_deref() != Some(&remote_hash) {
+                    updates.push(SkillUpdateInfo {
+                        id: skill.id.clone(),
+                        name: skill.name.clone(),
+                        current_hash: local_hash,
+                        remote_hash,
+                    });
+                }
+            }
+
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+
+        Ok(updates)
+    }
+
+    /// 更新单个 Skill（重新下载并替换本地文件）
+    pub async fn update_skill(&self, db: &Arc<Database>, skill_id: &str) -> Result<InstalledSkill> {
+        let skill = db
+            .get_installed_skill(skill_id)?
+            .ok_or_else(|| anyhow!("Skill not found: {skill_id}"))?;
+
+        let (owner, name, branch) = match (&skill.repo_owner, &skill.repo_name) {
+            (Some(owner), Some(name)) => (
+                owner.clone(),
+                name.clone(),
+                skill
+                    .repo_branch
+                    .clone()
+                    .unwrap_or_else(|| "main".to_string()),
+            ),
+            _ => return Err(anyhow!("Cannot update local skill: {skill_id}")),
+        };
+
+        let repo = SkillRepo {
+            owner: owner.clone(),
+            name: name.clone(),
+            branch: branch.clone(),
+            enabled: true,
+        };
+
+        let ssot_dir = Self::get_ssot_dir()?;
+        let (temp_dir, used_branch) = timeout(
+            std::time::Duration::from_secs(60),
+            self.download_repo(&repo),
+        )
+        .await
+        .map_err(|_| {
+            anyhow!(format_skill_error(
+                "DOWNLOAD_TIMEOUT",
+                &[("owner", &owner), ("name", &name), ("timeout", "60")],
+                Some("checkNetwork"),
+            ))
+        })??;
+
+        let mut remote_skills = Vec::new();
+        let _ = self.scan_dir_recursive(&temp_dir, &temp_dir, &repo, &mut remote_skills);
+
+        let remote_match = remote_skills
+            .iter()
+            .find(|remote_skill| {
+                let remote_install_name = remote_skill
+                    .directory
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&remote_skill.directory);
+                remote_install_name.eq_ignore_ascii_case(&skill.directory)
+            })
+            .ok_or_else(|| {
+                let _ = fs::remove_dir_all(&temp_dir);
+                anyhow!(format_skill_error(
+                    "SKILL_DIR_NOT_FOUND",
+                    &[("path", &skill.directory)],
+                    Some("checkRepoUrl"),
+                ))
+            })?;
+
+        let source = temp_dir.join(&remote_match.directory);
+        if !source.exists() {
+            let _ = fs::remove_dir_all(&temp_dir);
+            return Err(anyhow!(format_skill_error(
+                "SKILL_DIR_NOT_FOUND",
+                &[("path", &source.display().to_string())],
+                Some("checkRepoUrl"),
+            )));
+        }
+
+        let _ = Self::create_uninstall_backup(&skill);
+
+        let dest = ssot_dir.join(&skill.directory);
+        if dest.exists() {
+            fs::remove_dir_all(&dest)?;
+        }
+        Self::copy_dir_recursive(&source, &dest)?;
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        let new_hash = Self::compute_dir_hash(&dest).ok();
+        let skill_md = dest.join("SKILL.md");
+        let (new_name, new_description) = Self::read_skill_name_desc(&skill_md, &skill.directory);
+
+        let doc_path = skill
+            .readme_url
+            .as_deref()
+            .and_then(Self::extract_doc_path_from_url)
+            .unwrap_or_else(|| format!("{}/SKILL.md", skill.directory.trim_end_matches('/')));
+        let readme_url = Some(Self::build_skill_doc_url(
+            &owner,
+            &name,
+            &used_branch,
+            &doc_path,
+        ));
+
+        let updated_skill = InstalledSkill {
+            id: skill.id.clone(),
+            name: new_name,
+            description: new_description,
+            directory: skill.directory.clone(),
+            repo_owner: skill.repo_owner.clone(),
+            repo_name: skill.repo_name.clone(),
+            repo_branch: Some(used_branch),
+            readme_url,
+            apps: skill.apps.clone(),
+            installed_at: skill.installed_at,
+            content_hash: new_hash,
+            updated_at: chrono::Utc::now().timestamp(),
+        };
+
+        db.save_skill(&updated_skill)?;
+
+        for app in updated_skill.apps.enabled_apps() {
+            if let Err(err) = Self::sync_to_app_dir(&updated_skill.directory, &app) {
+                log::warn!("同步更新后的 Skill 到 {:?} 失败: {err}", app);
+            }
+        }
+
+        log::info!("Skill {} 更新成功", updated_skill.name);
+        Ok(updated_skill)
     }
 
     pub fn list_backups() -> Result<Vec<SkillBackupEntry>> {
@@ -763,8 +1060,10 @@ impl SkillService {
         let mut restored_skill = metadata.skill;
         restored_skill.installed_at = Utc::now().timestamp();
         restored_skill.apps = SkillApps::only(current_app);
+        restored_skill.updated_at = 0;
 
         Self::copy_dir_recursive(&backup_skill_dir, &restore_path)?;
+        restored_skill.content_hash = Self::compute_dir_hash(&restore_path).ok();
 
         if let Err(err) = db.save_skill(&restored_skill) {
             let _ = fs::remove_dir_all(&restore_path);
@@ -966,6 +1265,8 @@ impl SkillService {
                 readme_url,
                 apps,
                 installed_at: chrono::Utc::now().timestamp(),
+                content_hash: Self::compute_dir_hash(&dest).ok(),
+                updated_at: 0,
             };
 
             // 保存到数据库
@@ -1867,6 +2168,8 @@ impl SkillService {
                 readme_url: None,
                 apps: SkillApps::only(current_app),
                 installed_at: chrono::Utc::now().timestamp(),
+                content_hash: Self::compute_dir_hash(&dest).ok(),
+                updated_at: 0,
             };
 
             // 保存到数据库
@@ -2160,6 +2463,8 @@ pub fn migrate_skills_to_ssot(db: &Arc<Database>) -> Result<usize> {
             readme_url,
             apps,
             installed_at: chrono::Utc::now().timestamp(),
+            content_hash: SkillService::compute_dir_hash(&ssot_path).ok(),
+            updated_at: 0,
         };
 
         db.save_skill(&skill)?;
@@ -2348,6 +2653,8 @@ mod tests {
                 opencode: false,
             },
             installed_at: 0,
+            content_hash: Some("disabled-hash".to_string()),
+            updated_at: 0,
         })
         .expect("save disabled skill");
 
@@ -2384,6 +2691,8 @@ mod tests {
                 opencode: false,
             },
             installed_at: 123,
+            content_hash: Some("backup-hash".to_string()),
+            updated_at: 0,
         })
         .expect("save skill");
 
@@ -2439,6 +2748,8 @@ mod tests {
                 opencode: false,
             },
             installed_at: 456,
+            content_hash: Some("restore-hash".to_string()),
+            updated_at: 0,
         })
         .expect("save skill");
 
@@ -2508,6 +2819,8 @@ mod tests {
                 opencode: false,
             },
             installed_at: 789,
+            content_hash: Some("delete-backup-hash".to_string()),
+            updated_at: 0,
         })
         .expect("save skill");
 

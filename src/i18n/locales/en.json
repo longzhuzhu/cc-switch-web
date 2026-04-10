@@ -1589,6 +1589,17 @@
     "backup": {
       "location": "Backup location: {{path}}"
     },
+    "checkUpdates": "Check updates",
+    "checkingUpdates": "Checking...",
+    "noUpdates": "All skills are up to date",
+    "updatesFound": "{{count}} skill updates found",
+    "update": "Update",
+    "updateAvailable": "Update available",
+    "updateSuccess": "Skill {{name}} updated",
+    "updateFailed": "Failed to update skill",
+    "updateAll": "Update all ({{count}})",
+    "updatingAll": "Updating...",
+    "updateAllSuccess": "Updated {{count}} skills",
     "restoreFromBackup": {
       "button": "Restore Backup",
       "title": "Restore From Backup",

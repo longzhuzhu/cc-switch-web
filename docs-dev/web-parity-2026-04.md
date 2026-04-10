@@ -24,6 +24,11 @@
   - Claude 供应商预设补齐 `Codex` OAuth 预设，并支持保存 `authBinding`
   - Claude 代理链路支持 `codex_oauth` 动态注入 access token 与 `ChatGPT-Account-Id`
   - Provider 卡片新增 Codex OAuth 账号绑定额度展示
+- Skills 更新能力
+  - `skills` 表补齐 `content_hash` / `updated_at` 字段，并新增 v7 schema 迁移
+  - Web 后端新增 Skills 更新检查与单项更新接口
+  - Skills 面板新增“检查更新 / 全部更新 / 单项更新”入口
+  - 更新后会重算哈希、刷新 Skill 元数据，并同步回启用中的应用目录
 
 实现约束：
 

@@ -25,6 +25,8 @@ export interface InstalledSkill {
   readmeUrl?: string;
   apps: SkillApps;
   installedAt: number;
+  contentHash?: string;
+  updatedAt: number;
 }
 
 export interface SkillUninstallResult {
@@ -42,6 +44,13 @@ export interface SkillArchiveInstallResult {
   fileName: string;
   installed: InstalledSkill[];
   error?: string;
+}
+
+export interface SkillUpdateInfo {
+  id: string;
+  name: string;
+  currentHash?: string;
+  remoteHash: string;
 }
 
 /** 可发现的 Skill（来自仓库） */
@@ -140,6 +149,16 @@ export const skillsApi = {
   /** 发现可安装的 Skills（从仓库获取） */
   async discoverAvailable(): Promise<DiscoverableSkill[]> {
     return await invoke("discover_available_skills");
+  },
+
+  /** 检查 Skills 更新 */
+  async checkUpdates(): Promise<SkillUpdateInfo[]> {
+    return await invoke("check_skill_updates");
+  },
+
+  /** 更新单个 Skill */
+  async updateSkill(id: string): Promise<InstalledSkill> {
+    return await invoke("update_skill", { id });
   },
 
   // ========== 仓库管理 ==========

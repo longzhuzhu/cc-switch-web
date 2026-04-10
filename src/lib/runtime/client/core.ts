@@ -65,6 +65,7 @@ import {
   getWebCurrentPromptFileContent,
   getWebCustomEndpoints,
   getWebInstalledSkills,
+  checkWebSkillUpdates,
   getWebLiveProviderSettings,
   getWebStreamCheckConfig,
   getWebSkillRepos,
@@ -115,6 +116,7 @@ import {
   importWebPromptFromFile,
   importWebSkillsFromApps,
   installWebSkillUnified,
+  updateWebSkill,
   upsertWebMcpServer,
   upsertWebPrompt,
   restoreWebSkillBackup,
@@ -530,11 +532,15 @@ export async function invoke<T>(
       return (await getWebSkillBackups()) as T;
     case "discover_available_skills":
       return (await discoverWebAvailableSkills()) as T;
+    case "check_skill_updates":
+      return (await checkWebSkillUpdates()) as T;
     case "install_skill_unified":
       return (await installWebSkillUnified(
         args?.skill as any,
         args?.currentApp as AppId,
       )) as T;
+    case "update_skill":
+      return (await updateWebSkill(args?.id as string)) as T;
     case "restore_skill_backup":
       return (await restoreWebSkillBackup(
         args?.backupId as string,

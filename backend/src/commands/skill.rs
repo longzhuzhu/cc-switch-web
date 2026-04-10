@@ -7,7 +7,7 @@
 use crate::app_config::{AppType, InstalledSkill, UnmanagedSkill};
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillService,
-    SkillUninstallResult,
+    SkillUninstallResult, SkillUpdateInfo,
 };
 use crate::store::AppState;
 use std::path::Path;
@@ -109,6 +109,25 @@ pub(crate) async fn discover_available_skills_internal(
     let repos = app_state.db.get_skill_repos().map_err(|e| e.to_string())?;
     SkillService::new()
         .discover_available(repos)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub(crate) async fn check_skill_updates_internal(
+    app_state: &AppState,
+) -> Result<Vec<SkillUpdateInfo>, String> {
+    SkillService::new()
+        .check_updates(&app_state.db)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub(crate) async fn update_skill_internal(
+    app_state: &AppState,
+    id: String,
+) -> Result<InstalledSkill, String> {
+    SkillService::new()
+        .update_skill(&app_state.db, &id)
         .await
         .map_err(|e| e.to_string())
 }

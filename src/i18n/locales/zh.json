@@ -1589,6 +1589,17 @@
     "backup": {
       "location": "备份位置: {{path}}"
     },
+    "checkUpdates": "检查更新",
+    "checkingUpdates": "检查中...",
+    "noUpdates": "所有技能都已是最新版本",
+    "updatesFound": "发现 {{count}} 个技能可更新",
+    "update": "更新",
+    "updateAvailable": "可更新",
+    "updateSuccess": "技能 {{name}} 更新成功",
+    "updateFailed": "更新技能失败",
+    "updateAll": "全部更新（{{count}}）",
+    "updatingAll": "更新中...",
+    "updateAllSuccess": "成功更新 {{count}} 个技能",
     "restoreFromBackup": {
       "button": "从备份中恢复",
       "title": "从备份中恢复",

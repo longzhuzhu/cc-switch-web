@@ -40,6 +40,7 @@ import type {
   SkillBackupEntry,
   SkillRepo,
   SkillUninstallResult,
+  SkillUpdateInfo,
   UnmanagedSkill,
 } from "@/lib/api/skills";
 import type { SwitchResult } from "@/lib/api/providers";
@@ -1517,6 +1518,18 @@ export async function discoverWebAvailableSkills(): Promise<
   }
 }
 
+export async function checkWebSkillUpdates(): Promise<SkillUpdateInfo[]> {
+  try {
+    return await requestJson<SkillUpdateInfo[]>("/api/skills/updates");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to check skill updates from local service",
+      error,
+    );
+    return [];
+  }
+}
+
 export async function installWebSkillUnified(
   skill: DiscoverableSkill,
   currentApp: AppId,
@@ -1525,6 +1538,10 @@ export async function installWebSkillUnified(
     skill,
     currentApp,
   });
+}
+
+export async function updateWebSkill(id: string): Promise<InstalledSkill> {
+  return requestWithBody<InstalledSkill>("/api/skills/update", "POST", { id });
 }
 
 export async function deleteWebSkillBackup(backupId: string): Promise<boolean> {

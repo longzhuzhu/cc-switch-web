@@ -33,6 +33,7 @@ use crate::services::omo::OmoLocalFileData;
 use crate::services::provider::{ProviderSortUpdate, SwitchResult};
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, SkillBackupEntry, SkillRepo, SkillUninstallResult,
+    SkillUpdateInfo,
 };
 use crate::services::speedtest::EndpointLatency;
 use crate::settings::WebDavSyncSettings;
@@ -907,6 +908,15 @@ async fn discover_available_skills(
     Ok(Json(skills))
 }
 
+async fn check_skill_updates(
+    State(state): State<WebApiState>,
+) -> Result<Json<Vec<SkillUpdateInfo>>, ApiError> {
+    let updates = crate::commands::check_skill_updates_internal(state.app_state.as_ref())
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to check skill updates: {e}")))?;
+    Ok(Json(updates))
+}
+
 async fn install_skill_unified(
     State(state): State<WebApiState>,
     Json(payload): Json<InstallSkillRequest>,
@@ -919,6 +929,16 @@ async fn install_skill_unified(
         .await
         .map_err(|e| ApiError::internal(format!("failed to install skill: {e}")))?;
     Ok(Json(installed))
+}
+
+async fn update_skill(
+    State(state): State<WebApiState>,
+    Json(payload): Json<SkillIdRequest>,
+) -> Result<Json<crate::app_config::InstalledSkill>, ApiError> {
+    let updated = crate::commands::update_skill_internal(state.app_state.as_ref(), payload.id)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to update skill: {e}")))?;
+    Ok(Json(updated))
 }
 
 async fn delete_skill_backup(Path(backup_id): Path<String>) -> Result<Json<bool>, ApiError> {
@@ -3001,8 +3021,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             axum::routing::delete(remove_skill_repo),
         )
         .route("/api/skills/discover", get(discover_available_skills))
+        .route("/api/skills/updates", get(check_skill_updates))
         .route("/api/skills/install", post(install_skill_unified))
         .route("/api/skills/install-archives", post(install_skill_archives))
+        .route("/api/skills/update", post(update_skill))
         .route("/api/skills/uninstall", post(uninstall_skill_unified_by_body))
         .route("/api/skills/apps/toggle", put(toggle_skill_app_by_body))
         .route(
