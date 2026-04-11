@@ -1492,7 +1492,7 @@ export const opencodeProviderPresets: OpenCodeProviderPreset[] = [
 
   {
     name: "Oh My OpenCode",
-    websiteUrl: "https://github.com/code-yeongyu/oh-my-opencode",
+    websiteUrl: "https://github.com/code-yeongyu/oh-my-openagent",
     settingsConfig: {
       npm: "",
       options: {},

@@ -205,6 +205,9 @@
 - E-FlowCode 预设默认密钥对齐
   - Web 端将 Claude / Codex / Gemini / OpenCode / OpenClaw 的 `E-FlowCode` 预设默认 API Key 改回空字符串
   - 避免新建预设时把示例前缀 `sk-` 误写入真实配置，保持与桌面端一致
+- Oh My OpenCode 预设仓库地址对齐
+  - Web 端将 `Oh My OpenCode` 预设官网地址改回桌面端同款 `oh-my-openagent` 仓库
+  - 避免从预设卡片跳转到与桌面端不一致的项目地址
 
 实现约束：
 
