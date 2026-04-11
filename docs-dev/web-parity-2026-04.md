@@ -160,6 +160,10 @@
   - Web 端复制 OpenCode / OpenClaw provider 时，会同时读取数据库与 live config 中的已占用 key，生成新的唯一 `providerKey`
   - 复制出的 provider 默认仅保存到数据库，不自动写入 live config，和桌面版“先复制、再决定是否加入配置”的行为保持一致
   - Web 后端新增 `addToLive` 入参，供累加模式新增链路精确控制是否立即写入 live
+- additive provider live 管理标记
+  - Web 端补齐 `liveConfigManaged` 元数据，区分“已写入 live config”与“仅存在数据库”的 additive provider
+  - `sync_current_providers_live` 对 OpenCode / OpenClaw 不再无差别把所有数据库 provider 写回 live，明确跳过 `DB-only` provider
+  - provider 从“加入配置 / 移出配置 / 仅落库新增 / 重命名”流转时会同步更新该标记，避免后续同步把不该进 live 的 provider 重新写回去
 
 实现约束：
 

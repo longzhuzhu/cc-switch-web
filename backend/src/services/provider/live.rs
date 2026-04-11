@@ -725,8 +725,18 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
 /// Used for OpenCode and other additive mode applications.
 fn sync_all_providers_to_live(state: &AppState, app_type: &AppType) -> Result<(), AppError> {
     let providers = state.db.get_all_providers(app_type.as_str())?;
+    let mut synced_count = 0usize;
 
     for provider in providers.values() {
+        if provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.live_config_managed)
+            == Some(false)
+        {
+            continue;
+        }
+
         if let Err(e) = write_live_with_common_config(state.db.as_ref(), app_type, provider) {
             log::warn!(
                 "Failed to sync {:?} provider '{}' to live: {e}",
@@ -734,14 +744,12 @@ fn sync_all_providers_to_live(state: &AppState, app_type: &AppType) -> Result<()
                 provider.id
             );
             // Continue syncing other providers, don't abort
+            continue;
         }
+        synced_count += 1;
     }
 
-    log::info!(
-        "Synced {} {:?} providers to live config",
-        providers.len(),
-        app_type
-    );
+    log::info!("Synced {synced_count} {app_type:?} providers to live config");
     Ok(())
 }
 

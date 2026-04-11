@@ -142,6 +142,32 @@ impl ProviderService {
         }
     }
 
+    fn check_live_config_exists(
+        app_type: &AppType,
+        provider_id: &str,
+        live_config_managed: Option<bool>,
+    ) -> Result<bool, AppError> {
+        if live_config_managed == Some(false) {
+            Ok(provider_exists_in_live_config(app_type, provider_id).unwrap_or(false))
+        } else {
+            provider_exists_in_live_config(app_type, provider_id)
+        }
+    }
+
+    fn provider_live_config_managed(provider: &Provider) -> Option<bool> {
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.live_config_managed)
+    }
+
+    fn set_provider_live_config_managed(provider: &mut Provider, managed: bool) {
+        provider
+            .meta
+            .get_or_insert_with(Default::default)
+            .live_config_managed = Some(managed);
+    }
+
     /// List all providers for an app type
     pub fn list(
         state: &AppState,
@@ -178,6 +204,9 @@ impl ProviderService {
         Self::normalize_provider_if_claude(&app_type, &mut provider);
         Self::validate_provider_settings(&app_type, &provider)?;
         normalize_provider_common_config_for_storage(state.db.as_ref(), &app_type, &mut provider)?;
+        if app_type.is_additive_mode() {
+            Self::set_provider_live_config_managed(&mut provider, add_to_live);
+        }
 
         // Save to database
         state.db.save_provider(app_type.as_str(), &provider)?;
@@ -256,18 +285,28 @@ impl ProviderService {
                 ));
             }
 
-            if provider_exists_in_live_config(&app_type, &original_id)? {
+            let original_in_live = Self::check_live_config_exists(
+                &app_type,
+                &original_id,
+                Self::provider_live_config_managed(&existing_provider),
+            )?;
+            if original_in_live {
                 return Err(AppError::Message(
                     "Provider key cannot be changed after the provider has been added to the app config"
                         .to_string(),
                 ));
             }
 
+            let next_id_in_live = Self::check_live_config_exists(
+                &app_type,
+                &provider.id,
+                Self::provider_live_config_managed(&existing_provider),
+            )?;
             if state
                 .db
                 .get_provider_by_id(&provider.id, app_type.as_str())?
                 .is_some()
-                || provider_exists_in_live_config(&app_type, &provider.id)?
+                || next_id_in_live
             {
                 return Err(AppError::Message(format!(
                     "Provider '{}' already exists in app '{}'",
@@ -276,6 +315,7 @@ impl ProviderService {
                 )));
             }
 
+            Self::set_provider_live_config_managed(&mut provider, false);
             state.db.save_provider(app_type.as_str(), &provider)?;
             state.db.delete_provider(app_type.as_str(), &original_id)?;
 
@@ -319,9 +359,15 @@ impl ProviderService {
                 }
                 return Ok(true);
             }
-            let exists_in_live = provider_exists_in_live_config(&app_type, &provider.id)?;
+            let live_config_managed = Self::check_live_config_exists(
+                &app_type,
+                &provider.id,
+                Self::provider_live_config_managed(&provider)
+                    .or_else(|| existing_provider.as_ref().and_then(Self::provider_live_config_managed)),
+            )?;
+            Self::set_provider_live_config_managed(&mut provider, live_config_managed);
             state.db.save_provider(app_type.as_str(), &provider)?;
-            if !exists_in_live {
+            if !live_config_managed {
                 return Ok(true);
             }
             write_live_with_common_config(state.db.as_ref(), &app_type, &provider)?;
@@ -372,11 +418,10 @@ impl ProviderService {
     pub fn delete(state: &AppState, app_type: AppType, id: &str) -> Result<(), AppError> {
         // Additive mode apps - no current provider concept
         if app_type.is_additive_mode() {
+            let existing = state.db.get_provider_by_id(id, app_type.as_str())?;
+
             if matches!(app_type, AppType::OpenCode) {
-                let provider_category = state
-                    .db
-                    .get_provider_by_id(id, app_type.as_str())?
-                    .and_then(|p| p.category);
+                let provider_category = existing.as_ref().and_then(|p| p.category.clone());
 
                 if provider_category.as_deref() == Some("omo") {
                     let was_current =
@@ -408,14 +453,17 @@ impl ProviderService {
                     return Ok(());
                 }
             }
-            // Remove from database
-            state.db.delete_provider(app_type.as_str(), id)?;
-            // Also remove from live config
-            match app_type {
-                AppType::OpenCode => remove_opencode_provider_from_live(id)?,
-                AppType::OpenClaw => remove_openclaw_provider_from_live(id)?,
-                _ => {} // Should not reach here
+            let live_managed = existing
+                .as_ref()
+                .and_then(Self::provider_live_config_managed);
+            if Self::check_live_config_exists(&app_type, id, live_managed)? {
+                match app_type {
+                    AppType::OpenCode => remove_opencode_provider_from_live(id)?,
+                    AppType::OpenClaw => remove_openclaw_provider_from_live(id)?,
+                    _ => {}
+                }
             }
+            state.db.delete_provider(app_type.as_str(), id)?;
             return Ok(());
         }
 
@@ -498,6 +546,11 @@ impl ProviderService {
                     app_type.as_str()
                 )));
             }
+        }
+
+        if let Some(mut provider) = state.db.get_provider_by_id(id, app_type.as_str())? {
+            Self::set_provider_live_config_managed(&mut provider, false);
+            state.db.save_provider(app_type.as_str(), &provider)?;
         }
         Ok(())
     }
@@ -675,6 +728,34 @@ impl ProviderService {
 
         // Sync to live (write_gemini_live handles security flag internally for Gemini)
         write_live_with_common_config(state.db.as_ref(), &app_type, provider)?;
+
+        if app_type.is_additive_mode() && Self::provider_live_config_managed(provider) != Some(true)
+        {
+            let mut updated = provider.clone();
+            Self::set_provider_live_config_managed(&mut updated, true);
+            if let Err(e) = state.db.save_provider(app_type.as_str(), &updated) {
+                let rollback_result = match app_type {
+                    AppType::OpenCode => remove_opencode_provider_from_live(&provider.id),
+                    AppType::OpenClaw => remove_openclaw_provider_from_live(&provider.id),
+                    _ => Ok(()),
+                };
+
+                match rollback_result {
+                    Ok(()) => {
+                        return Err(AppError::Message(format!(
+                            "Failed to persist live_config_managed for '{}' after writing live config; live changes were rolled back: {e}",
+                            provider.id
+                        )));
+                    }
+                    Err(rollback_err) => {
+                        return Err(AppError::Message(format!(
+                            "Failed to persist live_config_managed for '{}' after writing live config: {e}; additionally failed to roll back live config: {rollback_err}",
+                            provider.id
+                        )));
+                    }
+                }
+            }
+        }
 
         // Sync MCP
         McpService::sync_all_enabled(state)?;
