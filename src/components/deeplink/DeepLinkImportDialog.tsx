@@ -375,6 +375,52 @@ export function DeepLinkImportDialog() {
                       </pre>
                     </PreviewCard>
                   )}
+                  {(request.usageScript ||
+                    request.usageEnabled !== undefined ||
+                    request.usageApiKey ||
+                    request.usageBaseUrl ||
+                    request.usageAutoInterval !== undefined) && (
+                    <PreviewCard title={t("deeplink.usageScript")}>
+                      <div className="space-y-3">
+                        <InfoRow
+                          label={t("deeplink.usageScript")}
+                          value={
+                            request.usageEnabled !== false
+                              ? t("deeplink.usageScriptEnabled")
+                              : t("deeplink.usageScriptDisabled")
+                          }
+                        />
+                        {request.usageApiKey &&
+                          request.usageApiKey !== request.apiKey && (
+                            <InfoRow
+                              label={t("deeplink.usageApiKey")}
+                              value={maskValue(
+                                "usageApiKey",
+                                request.usageApiKey,
+                              )}
+                              mono
+                            />
+                          )}
+                        {request.usageBaseUrl &&
+                          request.usageBaseUrl !== request.endpoint && (
+                            <InfoRow
+                              label={t("deeplink.usageBaseUrl")}
+                              value={request.usageBaseUrl}
+                              mono
+                            />
+                          )}
+                        {request.usageAutoInterval &&
+                          request.usageAutoInterval > 0 && (
+                            <InfoRow
+                              label={t("deeplink.usageAutoInterval")}
+                              value={t("deeplink.usageAutoIntervalValue", {
+                                minutes: request.usageAutoInterval,
+                              })}
+                            />
+                          )}
+                      </div>
+                    </PreviewCard>
+                  )}
                 </div>
               )}
 

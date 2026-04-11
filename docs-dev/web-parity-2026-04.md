@@ -140,6 +140,9 @@
 - OMO 提示文案对齐
   - Web 端 Provider 预设选择器补齐 OMO 提示，明确兼容 `oh-my-openagent.jsonc / oh-my-opencode.jsonc`
   - 仅调整用户提示，不改现有 OMO 配置写入与模型分配行为
+- Deep Link 用量配置预览
+  - Web 端 Deep Link 导入弹窗补齐 provider 的用量查询配置预览，覆盖启用状态、独立 API Key、独立查询地址与自动查询间隔
+  - 仅补导入前确认视图，不改现有 deeplink 解析、配置合并与导入保存链路
 
 实现约束：
 
