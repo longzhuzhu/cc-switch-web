@@ -183,6 +183,10 @@
 - 请求日志来源列
   - Web 端请求日志表补齐桌面版同款“来源”列，当前会明确展示 `Proxy` 来源
   - Web 后端 `proxy_request_logs` 补齐 `data_source` 字段并透传到日志查询结果，为后续接入会话日志来源做基础准备
+- 会话用量同步与数据来源概览
+  - Web 后端补齐 `POST /api/usage/session-sync` 与 `GET /api/usage/data-sources`，支持手动导入 Claude / Codex / Gemini 会话日志并聚合数据来源分布
+  - 用量页恢复桌面版 `DataSourceBar`，展示 `Proxy / Session Log / Codex Session / Gemini Session` 来源计数，并提供手动同步入口
+  - 前端 runtime、usage API、三语文案与类型定义同步补齐，保持 Web 与桌面端的会话统计交互一致
 
 实现约束：
 

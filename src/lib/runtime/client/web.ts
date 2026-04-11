@@ -66,6 +66,7 @@ import type {
   DailyMemorySearchResult,
 } from "@/lib/api/workspace";
 import type {
+  DataSourceSummary,
   DailyStats,
   LogFilters,
   ModelPricing,
@@ -74,6 +75,7 @@ import type {
   ProviderLimitStatus,
   ProviderStats,
   RequestLog,
+  SessionSyncResult,
   UsageSummary,
 } from "@/types/usage";
 import {
@@ -2077,4 +2079,12 @@ export async function getWebProviderLimits(
   return requestJson<ProviderLimitStatus>(
     `/api/usage/provider-limits/${encodeURIComponent(appType)}/${encodeURIComponent(providerId)}`,
   );
+}
+
+export async function syncWebSessionUsage(): Promise<SessionSyncResult> {
+  return requestWithBody<SessionSyncResult>("/api/usage/session-sync", "POST");
+}
+
+export async function getWebUsageDataSources(): Promise<DataSourceSummary[]> {
+  return requestJson<DataSourceSummary[]>("/api/usage/data-sources");
 }

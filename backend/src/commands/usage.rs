@@ -1,6 +1,7 @@
 //! 使用统计相关命令
 
 use crate::error::AppError;
+use crate::services::session_usage::{DataSourceSummary, SessionSyncResult};
 use crate::services::usage_stats::*;
 use crate::store::AppState;
 
@@ -54,6 +55,42 @@ pub fn get_request_detail_internal(
     request_id: String,
 ) -> Result<Option<RequestLogDetail>, AppError> {
     state.db.get_request_detail(&request_id)
+}
+
+pub fn sync_session_usage_internal(state: &AppState) -> Result<SessionSyncResult, AppError> {
+    let mut result = crate::services::session_usage::sync_claude_session_logs(&state.db)?;
+
+    match crate::services::session_usage_codex::sync_codex_usage(&state.db) {
+        Ok(codex_result) => {
+            result.imported += codex_result.imported;
+            result.skipped += codex_result.skipped;
+            result.files_scanned += codex_result.files_scanned;
+            result.errors.extend(codex_result.errors);
+        }
+        Err(e) => {
+            result.errors.push(format!("Codex 同步失败: {e}"));
+        }
+    }
+
+    match crate::services::session_usage_gemini::sync_gemini_usage(&state.db) {
+        Ok(gemini_result) => {
+            result.imported += gemini_result.imported;
+            result.skipped += gemini_result.skipped;
+            result.files_scanned += gemini_result.files_scanned;
+            result.errors.extend(gemini_result.errors);
+        }
+        Err(e) => {
+            result.errors.push(format!("Gemini 同步失败: {e}"));
+        }
+    }
+
+    Ok(result)
+}
+
+pub fn get_usage_data_sources_internal(
+    state: &AppState,
+) -> Result<Vec<DataSourceSummary>, AppError> {
+    crate::services::session_usage::get_data_source_breakdown(&state.db)
 }
 
 pub fn get_model_pricing_internal(state: &AppState) -> Result<Vec<ModelPricingInfo>, AppError> {

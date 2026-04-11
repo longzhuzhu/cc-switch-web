@@ -6,6 +6,7 @@ import { UsageTrendChart } from "./UsageTrendChart";
 import { RequestLogTable } from "./RequestLogTable";
 import { ProviderStatsTable } from "./ProviderStatsTable";
 import { ModelStatsTable } from "./ModelStatsTable";
+import { DataSourceBar } from "./DataSourceBar";
 import type { AppTypeFilter, TimeRange } from "@/types/usage";
 import { useUsageSummary } from "@/lib/query/usage";
 import { motion } from "framer-motion";
@@ -145,6 +146,8 @@ export function UsageDashboard() {
           </span>
         </div>
       </div>
+
+      <DataSourceBar refreshIntervalMs={refreshIntervalMs} />
 
       <UsageSummaryCards
         days={days}

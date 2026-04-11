@@ -1046,12 +1046,21 @@
     "stream": "Stream",
     "nonStream": "Non-stream",
     "source": "Source",
+    "dataSources": "Data Sources",
     "dataSource": {
       "proxy": "Proxy",
       "session_log": "Session Log",
       "codex_db": "Codex DB",
       "codex_session": "Codex Session",
       "gemini_session": "Gemini Session"
+    },
+    "sessionSync": {
+      "trigger": "Sync session logs",
+      "import": "Import Sessions",
+      "resync": "Sync",
+      "imported": "Imported {{count}} records from session logs",
+      "upToDate": "Session logs are up to date",
+      "failed": "Session sync failed"
     },
     "totalRecords": "{{total}} records total",
     "modelPricing": "Model Pricing",

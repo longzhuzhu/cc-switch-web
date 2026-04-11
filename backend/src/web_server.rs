@@ -1353,6 +1353,22 @@ async fn get_usage_request_detail(
     Ok(Json(detail))
 }
 
+async fn sync_usage_session_logs(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::services::session_usage::SessionSyncResult>, ApiError> {
+    let result = crate::commands::sync_session_usage_internal(state.app_state.as_ref())
+        .map_err(|e| ApiError::internal(format!("failed to sync session usage: {e}")))?;
+    Ok(Json(result))
+}
+
+async fn get_usage_data_sources(
+    State(state): State<WebApiState>,
+) -> Result<Json<Vec<crate::services::session_usage::DataSourceSummary>>, ApiError> {
+    let sources = crate::commands::get_usage_data_sources_internal(state.app_state.as_ref())
+        .map_err(|e| ApiError::internal(format!("failed to load usage data sources: {e}")))?;
+    Ok(Json(sources))
+}
+
 async fn get_usage_model_pricing(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<UsageModelPricingInfo>>, ApiError> {
@@ -3318,6 +3334,8 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/usage/trends", get(get_usage_trends))
         .route("/api/usage/provider-stats", get(get_usage_provider_stats))
         .route("/api/usage/model-stats", get(get_usage_model_stats))
+        .route("/api/usage/session-sync", post(sync_usage_session_logs))
+        .route("/api/usage/data-sources", get(get_usage_data_sources))
         .route("/api/usage/request-logs", post(get_usage_request_logs))
         .route(
             "/api/usage/request-logs/:request_id",

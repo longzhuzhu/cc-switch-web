@@ -1046,12 +1046,21 @@
     "stream": "ストリーム",
     "nonStream": "非ストリーム",
     "source": "ソース",
+    "dataSources": "データソース",
     "dataSource": {
       "proxy": "プロキシ",
       "session_log": "セッションログ",
       "codex_db": "Codex DB",
       "codex_session": "Codex セッション",
       "gemini_session": "Gemini セッション"
+    },
+    "sessionSync": {
+      "trigger": "セッションログを同期",
+      "import": "セッションをインポート",
+      "resync": "同期",
+      "imported": "セッションログから {{count}} 件のレコードをインポートしました",
+      "upToDate": "セッションログは最新です",
+      "failed": "セッション同期に失敗しました"
     },
     "totalRecords": "全 {{total}} 件",
     "modelPricing": "モデル料金",

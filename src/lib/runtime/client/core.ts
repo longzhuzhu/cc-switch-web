@@ -150,6 +150,7 @@ import {
   getWebProviderStats,
   getWebRequestDetail,
   getWebRequestLogs,
+  getWebUsageDataSources,
   getWebUsageSummary,
   getWebUsageTrends,
   fetchWebdavRemoteInfo,
@@ -179,6 +180,7 @@ import {
   testWebdavConnection,
   testWebUsageScript,
   toggleWebSkillApp,
+  syncWebSessionUsage,
   uploadWebdavSync,
   updateWebModelPricing,
   updateWebProvider,
@@ -729,6 +731,10 @@ export async function invoke<T>(
         args?.providerId as string,
         args?.appType as string,
       )) as T;
+    case "sync_session_usage":
+      return (await syncWebSessionUsage()) as T;
+    case "get_usage_data_sources":
+      return (await getWebUsageDataSources()) as T;
     case "start_proxy_server":
       return (await startWebProxyServer()) as T;
     case "stop_proxy_with_restore":
