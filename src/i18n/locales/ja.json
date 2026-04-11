@@ -970,6 +970,27 @@
     "autoCompactLimit": "自動圧縮しきい値",
     "autoCompactLimitHint": "コンテキストトークン数がこのしきい値に達すると履歴を自動圧縮"
   },
+  "codexOauth": {
+    "loginWithChatGPT": "ChatGPT でログイン",
+    "authStatus": "認証状態",
+    "notAuthenticated": "未認証",
+    "loginRequired": "先に ChatGPT にログインしてください",
+    "loggedInAccounts": "ログイン済みアカウント",
+    "accountCount": "{{count}} アカウント",
+    "defaultAccount": "デフォルト",
+    "selected": "選択中",
+    "setAsDefault": "デフォルトに設定",
+    "removeAccount": "アカウントを削除",
+    "logoutAll": "すべてのアカウントをログアウト",
+    "addAnotherAccount": "別のアカウントを追加",
+    "useDefaultAccount": "デフォルトアカウントを使用",
+    "selectAccount": "アカウントを選択",
+    "selectAccountPlaceholder": "ChatGPT アカウントを選択",
+    "enterCode": "ブラウザで以下のコードを入力してください：",
+    "copyCode": "コードをコピー",
+    "waitingForAuth": "認証を待機中...",
+    "retry": "再試行"
+  },
   "geminiConfig": {
     "envFile": "環境変数 (.env)",
     "envFileHint": ".env 形式で Gemini の環境変数を設定",

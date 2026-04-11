@@ -970,6 +970,27 @@
     "autoCompactLimit": "Auto Compact Limit",
     "autoCompactLimitHint": "Auto-compacts history when context reaches this token limit"
   },
+  "codexOauth": {
+    "loginWithChatGPT": "Sign in with ChatGPT",
+    "authStatus": "Auth status",
+    "notAuthenticated": "Not authenticated",
+    "loginRequired": "Please sign in to ChatGPT first",
+    "loggedInAccounts": "Logged in accounts",
+    "accountCount": "{{count}} account(s)",
+    "defaultAccount": "Default",
+    "selected": "Selected",
+    "setAsDefault": "Set as default",
+    "removeAccount": "Remove account",
+    "logoutAll": "Logout all accounts",
+    "addAnotherAccount": "Add another account",
+    "useDefaultAccount": "Use default account",
+    "selectAccount": "Select account",
+    "selectAccountPlaceholder": "Choose a ChatGPT account",
+    "enterCode": "Enter the code in your browser:",
+    "copyCode": "Copy code",
+    "waitingForAuth": "Waiting for authorization...",
+    "retry": "Retry"
+  },
   "geminiConfig": {
     "envFile": "Environment Variables (.env)",
     "envFileHint": "Configure Gemini environment variables in .env format",

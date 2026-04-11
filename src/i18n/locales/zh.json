@@ -970,6 +970,27 @@
     "autoCompactLimit": "压缩阈值",
     "autoCompactLimitHint": "上下文 token 数达到此阈值时自动压缩历史"
   },
+  "codexOauth": {
+    "loginWithChatGPT": "使用 ChatGPT 登录",
+    "authStatus": "认证状态",
+    "notAuthenticated": "未认证",
+    "loginRequired": "请先登录 ChatGPT 账号",
+    "loggedInAccounts": "已登录账号",
+    "accountCount": "{{count}} 个账号",
+    "defaultAccount": "默认",
+    "selected": "已选中",
+    "setAsDefault": "设为默认",
+    "removeAccount": "移除账号",
+    "logoutAll": "注销所有账号",
+    "addAnotherAccount": "添加其他账号",
+    "useDefaultAccount": "使用默认账号",
+    "selectAccount": "选择账号",
+    "selectAccountPlaceholder": "选择一个 ChatGPT 账号",
+    "enterCode": "请在浏览器中输入以下验证码：",
+    "copyCode": "复制代码",
+    "waitingForAuth": "等待授权中...",
+    "retry": "重试"
+  },
   "geminiConfig": {
     "envFile": "环境变量 (.env)",
     "envFileHint": "使用 .env 格式配置 Gemini 环境变量",
