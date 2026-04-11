@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   Loader2,
@@ -6,6 +6,7 @@ import {
   FolderSearch,
   Database,
   Cloud,
+  Palette,
   ScrollText,
   HardDriveDownload,
   FlaskConical,
@@ -57,6 +58,39 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   onImportSuccess?: () => void | Promise<void>;
   defaultTab?: string;
+}
+
+function SettingsIntroCard({
+  eyebrow,
+  title,
+  description,
+  icon,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="glass-card rounded-[30px] border border-border-default p-5 sm:p-6">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-background/80 shadow-sm">
+          {icon}
+        </div>
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            {eyebrow}
+          </div>
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+            {title}
+          </h2>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function SettingsPage({
@@ -178,7 +212,7 @@ export function SettingsPage({
   const isBusy = useMemo(() => isLoading && !settings, [isLoading, settings]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden px-6">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden px-4 sm:px-6">
       {isBusy ? (
         <div className="flex flex-1 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -189,23 +223,51 @@ export function SettingsPage({
           onValueChange={setActiveTab}
           className="flex flex-col h-full"
         >
-          <TabsList className="grid w-full mb-6 glass rounded-lg grid-cols-6">
-            <TabsTrigger value="general">
-              {t("settings.tabGeneral")}
-            </TabsTrigger>
-            <TabsTrigger value="proxy">{t("settings.tabProxy")}</TabsTrigger>
-            <TabsTrigger value="auth">
-              {t("settings.tabAuth", { defaultValue: "认证" })}
-            </TabsTrigger>
-            <TabsTrigger value="advanced">
-              {t("settings.tabAdvanced")}
-            </TabsTrigger>
-            <TabsTrigger value="usage">{t("usage.title")}</TabsTrigger>
-            <TabsTrigger value="about">{t("common.about")}</TabsTrigger>
-          </TabsList>
+          <div className="sticky top-0 z-20 mb-6 bg-gradient-to-b from-background via-background/96 to-transparent pb-4 pt-1 backdrop-blur-xl">
+            <div className="glass-card rounded-[30px] border border-border-default p-2 shadow-xl">
+              <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0 lg:grid-cols-6">
+                <TabsTrigger
+                  value="general"
+                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
+                >
+                  {t("settings.tabGeneral")}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="proxy"
+                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
+                >
+                  {t("settings.tabProxy")}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="auth"
+                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
+                >
+                  {t("settings.tabAuth", { defaultValue: "认证" })}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="advanced"
+                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
+                >
+                  {t("settings.tabAdvanced")}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="usage"
+                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
+                >
+                  {t("usage.title")}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="about"
+                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
+                >
+                  {t("common.about")}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
           <div className="flex-1 min-h-0 flex flex-col">
-            <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2">
+            <div className="scroll-overlay flex-1 overflow-y-auto overflow-x-hidden pr-1 sm:pr-2">
               <TabsContent value="general" className="space-y-6 mt-0">
                 {settings ? (
                   <motion.div
@@ -214,6 +276,17 @@ export function SettingsPage({
                     transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
+                    <SettingsIntroCard
+                      eyebrow={t("settings.tabGeneral")}
+                      title={t("settings.generalIntroTitle", {
+                        defaultValue: "统一整理日常高频设置",
+                      })}
+                      description={t("settings.generalIntroDescription", {
+                        defaultValue:
+                          "把语言、主题、应用显示范围、本地服务和 Claude Code 相关配置集中在一个区域，方便日常快速调整。",
+                      })}
+                      icon={<Palette className="h-5 w-5 theme-primary-text" />}
+                    />
                     <LanguageSettings
                       value={settings.language}
                       onChange={(lang) => handleAutoSave({ language: lang })}
@@ -268,10 +341,23 @@ export function SettingsPage({
 
               <TabsContent value="proxy" className="space-y-6 mt-0 pb-4">
                 {settings ? (
-                  <ProxyTabContent
-                    settings={settings}
-                    onAutoSave={handleAutoSave}
-                  />
+                  <div className="space-y-6">
+                    <SettingsIntroCard
+                      eyebrow={t("settings.tabProxy")}
+                      title={t("settings.proxyIntroTitle", {
+                        defaultValue: "控制代理行为与请求链路",
+                      })}
+                      description={t("settings.proxyIntroDescription", {
+                        defaultValue:
+                          "在这里调整代理接管、转发策略和与请求链路相关的核心设置。",
+                      })}
+                      icon={<Cloud className="h-5 w-5 theme-tertiary-text" />}
+                    />
+                    <ProxyTabContent
+                      settings={settings}
+                      onAutoSave={handleAutoSave}
+                    />
+                  </div>
                 ) : null}
               </TabsContent>
 
@@ -282,22 +368,17 @@ export function SettingsPage({
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  <div className="flex items-center gap-3 px-1">
-                    <KeyRound className="h-5 w-5 text-primary" />
-                    <div>
-                      <h2 className="text-base font-semibold">
-                        {t("settings.authCenter.heading", {
-                          defaultValue: "认证中心",
-                        })}
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        {t("settings.authCenter.headingDescription", {
-                          defaultValue:
-                            "统一管理可跨应用复用的 OAuth 账号和默认认证来源。",
-                        })}
-                      </p>
-                    </div>
-                  </div>
+                  <SettingsIntroCard
+                    eyebrow={t("settings.tabAuth", { defaultValue: "认证" })}
+                    title={t("settings.authCenter.heading", {
+                      defaultValue: "认证中心",
+                    })}
+                    description={t("settings.authCenter.headingDescription", {
+                      defaultValue:
+                        "统一管理可跨应用复用的 OAuth 账号和默认认证来源。",
+                    })}
+                    icon={<KeyRound className="h-5 w-5 text-primary" />}
+                  />
 
                   <AuthCenterPanel />
                 </motion.div>
@@ -309,8 +390,19 @@ export function SettingsPage({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="space-y-4"
+                    className="space-y-6"
                   >
+                    <SettingsIntroCard
+                      eyebrow={t("settings.tabAdvanced")}
+                      title={t("settings.advancedIntroTitle", {
+                        defaultValue: "管理数据、目录和高级工具",
+                      })}
+                      description={t("settings.advancedIntroDescription", {
+                        defaultValue:
+                          "高级设置聚合了配置目录、导入导出、备份、云同步、日志和模型测试等偏运维能力。",
+                      })}
+                      icon={<Database className="h-5 w-5 theme-tertiary-text" />}
+                    />
                     <Accordion
                       type="multiple"
                       defaultValue={[]}
@@ -494,20 +586,41 @@ export function SettingsPage({
                 ) : null}
               </TabsContent>
 
-              <TabsContent value="usage" className="mt-0">
+              <TabsContent value="usage" className="space-y-6 mt-0 pb-4">
+                <SettingsIntroCard
+                  eyebrow={t("usage.title")}
+                  title={t("settings.usageIntroTitle", {
+                    defaultValue: "观察请求、额度和数据来源",
+                  })}
+                  description={t("settings.usageIntroDescription", {
+                    defaultValue:
+                      "用量面板聚合请求趋势、来源分布、会话同步和各供应商统计，方便持续观察成本与使用状态。",
+                  })}
+                  icon={<ScrollText className="h-5 w-5 theme-primary-text" />}
+                />
                 <UsageDashboard />
               </TabsContent>
-              <TabsContent value="about" className="mt-0">
+              <TabsContent value="about" className="space-y-6 mt-0 pb-4">
+                <SettingsIntroCard
+                  eyebrow={t("common.about")}
+                  title={t("settings.aboutIntroTitle", {
+                    defaultValue: "版本、更新与项目信息",
+                  })}
+                  description={t("settings.aboutIntroDescription", {
+                    defaultValue:
+                      "集中查看当前版本、更新状态、外部链接和项目说明，作为整个应用设置的收口区域。",
+                  })}
+                  icon={<Save className="h-5 w-5 theme-tertiary-text" />}
+                />
                 <AboutSection />
               </TabsContent>
             </div>
 
             {activeTab === "advanced" && settings && (
               <div
-                className="flex-shrink-0 py-4 border-t border-border-default"
-                style={{ backgroundColor: "hsl(var(--background))" }}
+                className="sticky bottom-0 flex-shrink-0 border-t border-border-default bg-background/90 py-4 backdrop-blur-xl"
               >
-                <div className="px-6 flex items-center justify-end gap-3">
+                <div className="flex items-center justify-end gap-3 px-1 sm:px-2">
                   <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? (
                       <span className="inline-flex items-center gap-2">

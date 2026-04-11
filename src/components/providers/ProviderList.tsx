@@ -13,7 +13,7 @@ import {
   type CSSProperties,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -316,7 +316,7 @@ export function ProviderList({
         items={filteredProviders.map((provider) => provider.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {filteredProviders.map((provider) => {
             const isOmo = provider.category === "omo";
             const isOmoSlim = provider.category === "omo-slim";
@@ -374,6 +374,98 @@ export function ProviderList({
 
   return (
     <div className="mt-4 space-y-4">
+      <div className="glass-card rounded-[30px] border border-border-default p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              {t("provider.workspaceLabel", {
+                defaultValue: "Provider Workspace",
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                {t("provider.listTitle", {
+                  defaultValue: "供应商工作台",
+                })}
+              </h2>
+              <span className="theme-chip-neutral inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
+                {t("provider.countSummary", {
+                  count: sortedProviders.length,
+                  defaultValue: "{{count}} 个配置",
+                })}
+              </span>
+              {searchTerm.trim() && (
+                <span className="theme-chip-primary inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
+                  {t("provider.filteredCount", {
+                    count: filteredProviders.length,
+                    defaultValue: "筛选后 {{count}} 个",
+                  })}
+                </span>
+              )}
+            </div>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {searchTerm.trim()
+                ? t("provider.searchSummary", {
+                    defaultValue:
+                      "正在按名称、备注和 URL 过滤当前应用下的供应商配置。",
+                  })
+                : t("provider.workspaceDescription", {
+                    defaultValue:
+                      "集中查看、筛选和整理当前应用的供应商配置，常用操作可以直接在这里完成。",
+                  })}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant={isSearchOpen || searchTerm.trim() ? "default" : "outline"}
+              className="min-w-[8rem]"
+              onClick={() => setIsSearchOpen(true)}
+            >
+              <Search className="mr-2 h-4 w-4" />
+              {searchTerm.trim()
+                ? t("provider.searching", {
+                    defaultValue: "筛选中",
+                  })
+                : t("provider.search", {
+                    defaultValue: "搜索",
+                  })}
+            </Button>
+            {onCreate && (
+              <Button
+                type="button"
+                className="theme-primary-solid min-w-[8rem]"
+                onClick={onCreate}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {t("provider.addProvider")}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {searchTerm.trim() && (
+          <div className="mt-4 flex flex-col gap-2 rounded-[22px] border border-border-default bg-background/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {t("provider.searchActiveHint", {
+                count: filteredProviders.length,
+                defaultValue: "当前显示 {{count}} 个匹配项。",
+              })}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="justify-start sm:justify-center"
+              onClick={() => setSearchTerm("")}
+            >
+              {t("common.clear", { defaultValue: "清空" })}
+            </Button>
+          </div>
+        )}
+      </div>
+
       <AnimatePresence>
         {isSearchOpen && (
           <motion.div
@@ -382,7 +474,7 @@ export function ProviderList({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="fixed left-1/2 top-[6.5rem] z-40 w-[min(90vw,26rem)] -translate-x-1/2 sm:right-6 sm:left-auto sm:translate-x-0"
+            className="fixed left-1/2 top-[7.75rem] z-40 w-[min(92vw,28rem)] -translate-x-1/2 sm:right-6 sm:left-auto sm:translate-x-0"
           >
             <div className="p-4 space-y-3 border shadow-md rounded-2xl border-white/10 bg-background/95 shadow-black/20 backdrop-blur-md">
               <div className="relative flex items-center gap-2">
@@ -439,10 +531,21 @@ export function ProviderList({
       </AnimatePresence>
 
       {filteredProviders.length === 0 ? (
-        <div className="px-6 py-8 text-sm text-center border border-dashed rounded-lg border-border text-muted-foreground">
-          {t("provider.noSearchResults", {
-            defaultValue: "No providers match your search.",
-          })}
+        <div className="glass-card rounded-[28px] border border-dashed border-border-default px-6 py-10 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted/70">
+            <Search className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div className="mt-4 text-base font-semibold text-foreground">
+            {t("provider.noSearchResults", {
+              defaultValue: "No providers match your search.",
+            })}
+          </div>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+            {t("provider.noSearchResultsHint", {
+              defaultValue:
+                "试试更短的关键字，或者清空筛选后重新查看全部供应商。",
+            })}
+          </p>
         </div>
       ) : (
         renderProviderList()

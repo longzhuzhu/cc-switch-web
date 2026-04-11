@@ -257,8 +257,8 @@ export function ProviderCard({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl border border-border p-4 transition-all duration-300",
-        "bg-card text-card-foreground group",
+        "glass-card relative overflow-hidden rounded-[28px] border border-border-default p-5 text-card-foreground transition-all duration-300 sm:p-6",
+        "group",
         isAutoFailoverEnabled || isProxyTakeover
           ? "hover:border-[hsl(var(--success)/0.45)]"
           : "hover:border-border-active",
@@ -280,12 +280,12 @@ export function ProviderCard({
             : "opacity-0",
         )}
       />
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-2">
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-1 items-start gap-3">
           <button
             type="button"
             className={cn(
-              "-ml-1.5 flex-shrink-0 cursor-grab active:cursor-grabbing p-1.5",
+              "-ml-1.5 mt-1 flex-shrink-0 cursor-grab p-1.5 active:cursor-grabbing",
               "text-muted-foreground/50 hover:text-muted-foreground transition-colors",
               dragHandleProps?.isDragging && "cursor-grabbing",
             )}
@@ -296,7 +296,7 @@ export function ProviderCard({
             <GripVertical className="h-4 w-4" />
           </button>
 
-          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center border border-border group-hover:scale-105 transition-transform duration-300">
+          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-border-default bg-background/80 shadow-sm transition-transform duration-300 group-hover:scale-105">
             <ProviderIcon
               icon={provider.icon}
               name={provider.name}
@@ -305,9 +305,9 @@ export function ProviderCard({
             />
           </div>
 
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2 min-h-7">
-              <h3 className="text-base font-semibold leading-none">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex min-h-7 flex-wrap items-center gap-2">
+              <h3 className="text-base font-semibold leading-none tracking-tight">
                 {provider.name}
               </h3>
 
@@ -353,7 +353,7 @@ export function ProviderCard({
                 type="button"
                 onClick={handleOpenWebsite}
                 className={cn(
-                  "inline-flex items-center text-sm max-w-[280px]",
+                  "inline-flex max-w-[320px] items-center text-sm sm:max-w-[420px]",
                   isClickableUrl
                     ? "theme-primary-link cursor-pointer hover:underline"
                     : "text-muted-foreground cursor-default",
@@ -368,15 +368,15 @@ export function ProviderCard({
         </div>
 
         <div
-          className="relative flex items-center ml-auto min-w-0 gap-3"
+          className="relative ml-auto flex min-w-0 flex-col gap-3 sm:min-h-[3rem] sm:items-end"
           style={
             {
               "--actions-width": `${actionsWidth || 320}px`,
             } as React.CSSProperties
           }
         >
-          <div className="ml-auto">
-            <div className="flex items-center gap-1 transition-transform duration-200 group-hover:-translate-x-[var(--actions-width)] group-focus-within:-translate-x-[var(--actions-width)]">
+          <div className="sm:ml-auto">
+            <div className="flex flex-wrap items-center gap-1 transition-transform duration-200 sm:justify-end sm:group-hover:-translate-x-[var(--actions-width)] sm:group-focus-within:-translate-x-[var(--actions-width)]">
               {isCopilot ? (
                 <CopilotQuotaFooter
                   meta={provider.meta}
@@ -440,7 +440,7 @@ export function ProviderCard({
 
           <div
             ref={actionsRef}
-            className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pl-3 opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 group-hover:pointer-events-auto group-focus-within:pointer-events-auto transition-all duration-200 translate-x-2 group-hover:translate-x-0 group-focus-within:translate-x-0"
+            className="flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-3 sm:absolute sm:right-0 sm:top-1/2 sm:mt-0 sm:w-max sm:-translate-y-1/2 sm:border-t-0 sm:pl-3 sm:pt-0 sm:opacity-0 sm:pointer-events-none sm:translate-x-2 sm:transition-all sm:duration-200 sm:group-hover:pointer-events-auto sm:group-focus-within:pointer-events-auto sm:group-hover:translate-x-0 sm:group-focus-within:translate-x-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
           >
             <ProviderActions
               appId={appId}

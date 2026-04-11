@@ -19,22 +19,29 @@ export function ProviderEmptyState({
     appId === "claude" || appId === "codex" || appId === "gemini";
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-10 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+    <div className="glass-card flex flex-col items-center justify-center rounded-[30px] border border-dashed border-border-default p-10 text-center">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-background/80 shadow-sm">
         <Users className="h-7 w-7 text-muted-foreground" />
       </div>
-      <h3 className="text-lg font-semibold">{t("provider.noProviders")}</h3>
-      <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+        {t("provider.workspaceLabel", {
+          defaultValue: "Provider Workspace",
+        })}
+      </div>
+      <h3 className="mt-3 text-xl font-semibold tracking-tight">
+        {t("provider.noProviders")}
+      </h3>
+      <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
         {t("provider.noProvidersDescription")}
       </p>
       {showSnippetHint && (
-        <p className="mt-1 max-w-lg text-sm text-muted-foreground">
+        <p className="mt-1 max-w-lg text-sm leading-6 text-muted-foreground">
           {t("provider.noProvidersDescriptionSnippet")}
         </p>
       )}
-      <div className="mt-6 flex flex-col gap-2">
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         {onImport && (
-          <Button onClick={onImport}>
+          <Button onClick={onImport} className="theme-primary-solid">
             <Download className="mr-2 h-4 w-4" />
             {t("provider.importCurrent")}
           </Button>
