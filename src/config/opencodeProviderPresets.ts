@@ -916,7 +916,7 @@ export const opencodeProviderPresets: OpenCodeProviderPreset[] = [
     settingsConfig: {
       npm: "@ai-sdk/openai",
       options: {
-        apiKey: "sk-",
+        apiKey: "",
         baseURL: "https://e-flowcode.cc/v1",
       },
       models: {

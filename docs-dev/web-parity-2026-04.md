@@ -202,6 +202,9 @@
 - Codex OAuth 多账号文案补齐
   - Web 端补齐 `codexOauth.*` 三语文案，覆盖 ChatGPT OAuth 登录、账号选择、设默认、复制验证码与批量登出等状态提示
   - 避免认证中心的 Codex OAuth 区块继续回退到 key 文本
+- E-FlowCode 预设默认密钥对齐
+  - Web 端将 Claude / Codex / Gemini / OpenCode / OpenClaw 的 `E-FlowCode` 预设默认 API Key 改回空字符串
+  - 避免新建预设时把示例前缀 `sk-` 误写入真实配置，保持与桌面端一致
 
 实现约束：
 

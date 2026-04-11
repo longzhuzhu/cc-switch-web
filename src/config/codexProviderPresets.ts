@@ -386,7 +386,7 @@ requires_openai_auth = true`,
     websiteUrl: "https://e-flowcode.cc",
     apiKeyUrl: "https://e-flowcode.cc",
     auth: {
-      OPENAI_API_KEY: "sk-",
+      OPENAI_API_KEY: "",
     },
     config: `model_provider = "e-flowcode"
 model = "gpt-5.4"

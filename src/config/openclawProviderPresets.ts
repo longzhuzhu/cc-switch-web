@@ -771,7 +771,7 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
     apiKeyUrl: "https://e-flowcode.cc",
     settingsConfig: {
       api: "openai-responses",
-      apiKey: "sk-",
+      apiKey: "",
       baseUrl: "https://e-flowcode.cc/v1",
       headers: {
         "User-Agent":

@@ -694,7 +694,7 @@ export const providerPresets: ProviderPreset[] = [
     settingsConfig: {
       effortLevel: "high",
       env: {
-        ANTHROPIC_AUTH_TOKEN: "sk-",
+        ANTHROPIC_AUTH_TOKEN: "",
         ANTHROPIC_BASE_URL: "https://e-flowcode.cc",
       },
       enabledPlugins: {

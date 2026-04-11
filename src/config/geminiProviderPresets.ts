@@ -267,7 +267,7 @@ export const geminiProviderPresets: GeminiProviderPreset[] = [
     settingsConfig: {
       env: {
         GOOGLE_GEMINI_BASE_URL: "https://e-flowcode.cc",
-        GEMINI_API_KEY: "sk-",
+        GEMINI_API_KEY: "",
         GEMINI_MODEL: "gemini-3.1-pro-preview",
       },
       config: {
