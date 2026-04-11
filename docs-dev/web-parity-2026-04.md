@@ -244,6 +244,9 @@
 - Deep Link 解析失败提示补齐
   - Web 端 Deep Link 导入在解析失败时补回桌面版同类 toast 标题提示，同时保留现有内联错误展示
   - 同步补齐三语 `deeplink.parseError` 文案，自动 deeplink 和手动解析失败时的错误反馈更完整
+- Deep Link 子资源标题补齐
+  - Web 端 Deep Link 确认视图补回 Prompt / MCP / Skill 三类资源的标题行，确认信息层级与桌面端保持一致
+  - 同步补齐三语 `deeplink.prompt.title` / `deeplink.mcp.title` / `deeplink.skill.title` 文案
 
 实现约束：
 

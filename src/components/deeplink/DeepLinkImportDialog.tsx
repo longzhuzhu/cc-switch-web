@@ -647,6 +647,9 @@ export function DeepLinkImportDialog() {
 
               {request.resource === "prompt" && (
                 <div className="space-y-3">
+                  <div className="text-lg font-semibold">
+                    {t("deeplink.prompt.title")}
+                  </div>
                   <InfoRow
                     label={t("deeplink.prompt.app")}
                     value={request.app ?? "-"}
@@ -677,6 +680,9 @@ export function DeepLinkImportDialog() {
 
               {request.resource === "mcp" && (
                 <div className="space-y-3">
+                  <div className="text-lg font-semibold">
+                    {t("deeplink.mcp.title")}
+                  </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-muted-foreground">
                       {t("deeplink.mcp.targetApps")}
@@ -741,6 +747,9 @@ export function DeepLinkImportDialog() {
 
               {request.resource === "skill" && (
                 <div className="space-y-3">
+                  <div className="text-lg font-semibold">
+                    {t("deeplink.skill.title")}
+                  </div>
                   <InfoRow
                     label={t("deeplink.skill.repo")}
                     value={request.repo ?? "-"}

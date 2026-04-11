@@ -2426,6 +2426,7 @@
     "skillImportSuccessDescription": "追加済み: {{repo}}",
     "importError": "Deep Link のインポートに失敗しました",
     "prompt": {
+      "title": "プロンプト情報",
       "app": "アプリ",
       "name": "プロンプト名",
       "description": "説明",
@@ -2433,12 +2434,14 @@
       "enabledWarning": "インポート後すぐにこのプロンプトが有効になり、他は無効になります"
     },
     "mcp": {
+      "title": "MCP Server 設定",
       "targetApps": "対象アプリ",
       "serverPreview": "サーバープレビュー",
       "serverCount": "MCP サーバー（{{count}} 件）",
       "enabledWarning": "インポート後、指定したすべてのアプリに即座に書き込まれます"
     },
     "skill": {
+      "title": "Skill リポジトリ情報",
       "repo": "リポジトリ",
       "directory": "ディレクトリ",
       "branch": "ブランチ",

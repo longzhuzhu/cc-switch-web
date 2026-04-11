@@ -2426,6 +2426,7 @@
     "skillImportSuccessDescription": "Added repo: {{repo}}",
     "importError": "Deep Link import failed",
     "prompt": {
+      "title": "Prompt Information",
       "app": "App",
       "name": "Prompt Name",
       "description": "Description",
@@ -2433,12 +2434,14 @@
       "enabledWarning": "After import, this prompt will be enabled immediately and other prompts will be disabled"
     },
     "mcp": {
+      "title": "MCP Server Configuration",
       "targetApps": "Target Apps",
       "serverPreview": "Server Preview",
       "serverCount": "MCP Servers ({{count}})",
       "enabledWarning": "After import, configurations will be written to all specified apps immediately"
     },
     "skill": {
+      "title": "Skill Repository Information",
       "repo": "Repository",
       "directory": "Directory",
       "branch": "Branch",
