@@ -74,6 +74,15 @@
     "effortHigh": "高强度思考",
     "disableAutoUpgrade": "禁用自动升级"
   },
+  "commonConfig": {
+    "guideTitle": "通用配置片段说明",
+    "guidePurpose": "这里保存的是会被多个供应商共享的配置，比如插件、Hook、环境变量等公共设置。",
+    "guideUsage": "创建或编辑供应商时，勾选“写入通用配置”后，这里的内容会在保存时合并进对应配置。",
+    "guideReExtract": "如果你在本地新装了插件或更新了 Hook，请重新从当前配置提取一次，保持片段最新。",
+    "guideReassurance": "这里只编辑共享片段，不会直接覆盖你正在修改的供应商专属字段。",
+    "emptyTitle": "还没有通用配置片段",
+    "emptyHint": "可以先从当前编辑内容提取，或直接在下面输入共享配置。"
+  },
   "header": {
     "viewOnGithub": "在 GitHub 上查看",
     "toggleDarkMode": "切换到暗色模式",

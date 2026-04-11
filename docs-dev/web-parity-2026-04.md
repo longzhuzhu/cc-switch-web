@@ -220,6 +220,9 @@
 - OpenCode 模型拉取恢复
   - Web 端 `OpenCode` provider 表单补回桌面版同款“拉取模型”按钮，支持直接调用现有模型拉取接口
   - 拉取成功后可按 `ownedBy` 分组下拉选择模型 ID，不再只能手动输入
+- 通用配置编辑引导补齐
+  - Web 端 `CommonConfigEditor` 全屏面板补回桌面版的通用配置说明卡片和空状态提示
+  - 同步补齐 `commonConfig.guide*` 与 `commonConfig.empty*` 三语文案，避免编辑体验继续退化成单行说明
 
 实现约束：
 

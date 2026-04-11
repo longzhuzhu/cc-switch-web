@@ -74,6 +74,15 @@
     "effortHigh": "High Effort Thinking",
     "disableAutoUpgrade": "Disable Auto-Upgrade"
   },
+  "commonConfig": {
+    "guideTitle": "About the Common Config Snippet",
+    "guidePurpose": "Store shared settings here, such as plugins, hooks, and environment variables that should be reused across providers.",
+    "guideUsage": "When “Write Common Config” is enabled while creating or editing a provider, this snippet is merged into that provider's configuration on save.",
+    "guideReExtract": "If you install new plugins or update hooks locally, extract from the current config again to keep this snippet up to date.",
+    "guideReassurance": "Editing this area only changes the shared snippet and does not overwrite provider-specific fields you are currently editing.",
+    "emptyTitle": "No common config snippet yet",
+    "emptyHint": "Extract it from the current editor content, or type shared configuration below."
+  },
   "header": {
     "viewOnGithub": "View on GitHub",
     "toggleDarkMode": "Switch to Dark Mode",
