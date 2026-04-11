@@ -455,10 +455,12 @@ export function ProviderForm({
         preset,
       }));
     }
-    return providerPresets.map<PresetEntry>((preset, index) => ({
-      id: `claude-${index}`,
-      preset,
-    }));
+    return providerPresets
+      .filter((preset) => !preset.hidden)
+      .map<PresetEntry>((preset, index) => ({
+        id: `claude-${index}`,
+        preset,
+      }));
   }, [appId]);
 
   const {
