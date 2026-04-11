@@ -22,6 +22,7 @@ import {
   User,
 } from "lucide-react";
 import { useManagedAuth } from "./hooks/useManagedAuth";
+import { copyText } from "@/lib/clipboard";
 
 interface CodexOAuthSectionProps {
   className?: string;
@@ -57,7 +58,7 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
 
   const copyUserCode = async () => {
     if (!deviceCode?.user_code) return;
-    await navigator.clipboard.writeText(deviceCode.user_code);
+    await copyText(deviceCode.user_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

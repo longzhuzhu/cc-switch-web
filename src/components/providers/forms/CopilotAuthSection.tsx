@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useManagedAuth } from "./hooks/useManagedAuth";
 import type { ManagedAuthAccount } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 
 interface CopilotAuthSectionProps {
   className?: string;
@@ -67,7 +68,7 @@ export const CopilotAuthSection: React.FC<CopilotAuthSectionProps> = ({
   // 复制用户码
   const copyUserCode = async () => {
     if (deviceCode?.user_code) {
-      await navigator.clipboard.writeText(deviceCode.user_code);
+      await copyText(deviceCode.user_code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }

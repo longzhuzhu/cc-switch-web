@@ -232,6 +232,9 @@
 - 通用配置 legacy 迁移恢复
   - Web 端恢复 Claude / Codex / Gemini 通用配置片段从旧 `localStorage` 键迁移到统一存储的兼容逻辑
   - 旧用户升级到当前版本后，历史通用配置片段会自动迁移，不再因存储链路变更而丢失
+- 认证验证码复制兼容性补齐
+  - Web 端新增统一 `copyText` helper，并在 Copilot / Codex OAuth 认证区块复用
+  - 验证码复制不再只依赖 `navigator.clipboard`，在受限环境下可回退到 DOM 复制方案
 
 实现约束：
 
