@@ -18,7 +18,7 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.1.3`.
+The current repository version is `0.2.0`.
 
 This repository now treats `0.1.0` as its initial Web release baseline. Previous inherited release history has been removed from this repository and should be considered part of the upstream project history.
 
@@ -34,9 +34,9 @@ This repository now treats `0.1.0` as its initial Web release baseline. Previous
 
 If you are looking for the original CC Switch project or upstream release information, please visit the upstream repository directly.
 
-## Recent Web Alignment
+## Recent Web Alignment And UI Refresh
 
-The current Web branch has aligned the following desktop-side capabilities:
+The current Web branch has aligned the following desktop-side capabilities and completed a new round of Web UI refresh:
 
 - Provider form model fetching for Claude, Codex, Gemini, and OpenClaw
 - Official subscription quota display for Claude, Codex, and Gemini
@@ -44,6 +44,8 @@ The current Web branch has aligned the following desktop-side capabilities:
 - Environment variable conflict detection and cleanup entry points
 - Deep link import via `?deeplink=...` or manual `ccswitch://...` input
 - About page entry to open the latest GitHub release page
+- Refreshed workspace-style UI hierarchy for Provider, Settings, Skills, and Sessions pages
+- Refreshed related full-screen panels, repository management panel, and session TOC panel to match the new Web visual language
 
 ## Run
 
