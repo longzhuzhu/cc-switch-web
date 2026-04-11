@@ -373,13 +373,6 @@ export const iconMetadata: Record<string, IconMetadata> = {
     keywords: ["pipellm", "pipe"],
     defaultColor: "currentColor",
   },
-  eflowcode: {
-    name: "eflowcode",
-    displayName: "E-FlowCode",
-    category: "ai-provider",
-    keywords: ["eflowcode", "e-flowcode", "flow"],
-    defaultColor: "currentColor",
-  },
   shengsuanyun: {
     name: "shengsuanyun",
     displayName: "Shengsuanyun",

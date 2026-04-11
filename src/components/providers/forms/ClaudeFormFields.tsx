@@ -142,7 +142,6 @@ export function ClaudeFormFields({
   selectedGitHubAccountId,
   onGitHubAccountSelect,
   isCodexOauthPreset,
-  isCodexOauthAuthenticated,
   selectedCodexAccountId,
   onCodexAccountSelect,
   templateValueEntries,
