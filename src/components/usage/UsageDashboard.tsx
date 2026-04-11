@@ -183,7 +183,10 @@ export function UsageDashboard() {
             transition={{ delay: 0.2 }}
           >
             <TabsContent value="logs" className="mt-0">
-              <RequestLogTable refreshIntervalMs={refreshIntervalMs} />
+              <RequestLogTable
+                appType={appType}
+                refreshIntervalMs={refreshIntervalMs}
+              />
             </TabsContent>
 
             <TabsContent value="providers" className="mt-0">
