@@ -28,6 +28,8 @@ export interface ProviderPreset {
   websiteUrl: string;
   // 新增：第三方/聚合等可单独配置获取 API Key 的链接
   apiKeyUrl?: string;
+  isPartner?: boolean; // 标识是否为商业合作伙伴
+  partnerPromotionKey?: string; // 合作伙伴促销信息的 i18n key
   settingsConfig: object;
   isOfficial?: boolean; // 标识是否为官方预设
   category?: ProviderCategory; // 新增：分类
@@ -87,6 +89,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "shengsuanyun",
     icon: "shengsuanyun",
   },
   {
@@ -299,6 +303,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "cn_official",
+    isPartner: true,
+    partnerPromotionKey: "minimax_cn",
     theme: {
       backgroundColor: "#f64551",
       textColor: "#FFFFFF",
@@ -323,6 +329,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "cn_official",
+    isPartner: true,
+    partnerPromotionKey: "minimax_en",
     theme: {
       backgroundColor: "#f64551",
       textColor: "#FFFFFF",
@@ -397,6 +405,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "siliconflow",
     icon: "siliconflow",
     iconColor: "#6E29F6",
   },
@@ -415,6 +425,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "siliconflow",
     icon: "siliconflow",
     iconColor: "#000000",
   },
@@ -431,6 +443,8 @@ export const providerPresets: ProviderPreset[] = [
     // 请求地址候选（用于地址管理/测速），用户可自行选择/覆盖
     endpointCandidates: ["https://www.dmxapi.cn", "https://api.dmxapi.cn"],
     category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "dmxapi",
   },
   {
     name: "PackyCode",
@@ -448,6 +462,8 @@ export const providerPresets: ProviderPreset[] = [
       "https://api-slb.packyapi.com",
     ],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "packycode",
     icon: "packycode",
   },
   {
@@ -467,6 +483,8 @@ export const providerPresets: ProviderPreset[] = [
       "https://api-bwg.cubence.com",
     ],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "cubence",
     icon: "cubence",
     iconColor: "#000000",
   },
@@ -483,6 +501,8 @@ export const providerPresets: ProviderPreset[] = [
     // 请求地址候选（用于地址管理/测速）
     endpointCandidates: ["https://api.aigocode.com"],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "aigocode",
     icon: "aigocode",
     iconColor: "#5B7FFF",
   },
@@ -497,6 +517,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "rightcode",
     icon: "rc",
     iconColor: "#E96B2C",
   },
@@ -515,6 +537,8 @@ export const providerPresets: ProviderPreset[] = [
       "https://api.claudecode.net.cn/api/claudecode",
     ],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "aicodemirror",
     icon: "aicodemirror",
     iconColor: "#000000",
   },
@@ -530,6 +554,8 @@ export const providerPresets: ProviderPreset[] = [
     },
     endpointCandidates: ["https://api.aicoding.sh"],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "aicoding",
     icon: "aicoding",
     iconColor: "#000000",
   },
@@ -545,6 +571,8 @@ export const providerPresets: ProviderPreset[] = [
     },
     endpointCandidates: ["https://crazyrouter.com"],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "crazyrouter",
     icon: "crazyrouter",
     iconColor: "#000000",
   },
@@ -564,6 +592,8 @@ export const providerPresets: ProviderPreset[] = [
       "https://anti.sssaicode.com/api",
     ],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "sssaicode",
     icon: "sssaicode",
     iconColor: "#000000",
   },
@@ -581,6 +611,8 @@ export const providerPresets: ProviderPreset[] = [
     },
     endpointCandidates: ["https://api.modelverse.cn"],
     category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "ucloud",
     icon: "ucloud",
     iconColor: "#000000",
   },
@@ -596,6 +628,8 @@ export const providerPresets: ProviderPreset[] = [
     },
     endpointCandidates: ["https://www.openclaudecode.cn"],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "micu",
     icon: "micu",
     iconColor: "#000000",
   },
@@ -611,6 +645,8 @@ export const providerPresets: ProviderPreset[] = [
     },
     endpointCandidates: ["https://x-code.cc"],
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "x-code",
     icon: "x-code",
     iconColor: "#000000",
   },
@@ -625,6 +661,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "ctok",
     icon: "ctok",
     iconColor: "#000000",
   },
@@ -698,6 +736,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "ddshub",
     icon: "dds",
     iconColor: "#000000",
   },
@@ -768,6 +808,8 @@ export const providerPresets: ProviderPreset[] = [
       },
     },
     category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "lionccapi",
     icon: "lioncc",
   },
   {

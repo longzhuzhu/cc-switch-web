@@ -59,6 +59,8 @@ interface ClaudeFormFieldsProps {
   category?: ProviderCategory;
   shouldShowApiKeyLink: boolean;
   websiteUrl: string;
+  isPartner?: boolean;
+  partnerPromotionKey?: string;
 
   // GitHub Copilot OAuth
   isCopilotPreset?: boolean;
@@ -132,6 +134,8 @@ export function ClaudeFormFields({
   category,
   shouldShowApiKeyLink,
   websiteUrl,
+  isPartner,
+  partnerPromotionKey,
   isCopilotPreset,
   usesOAuth,
   isCopilotAuthenticated,
@@ -377,6 +381,8 @@ export function ClaudeFormFields({
           category={category}
           shouldShowLink={shouldShowApiKeyLink}
           websiteUrl={websiteUrl}
+          isPartner={isPartner}
+          partnerPromotionKey={partnerPromotionKey}
         />
       )}
 

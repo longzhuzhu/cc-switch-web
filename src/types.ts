@@ -141,6 +141,10 @@ export interface ProviderMeta {
   usage_script?: UsageScript;
   // 请求地址管理：测速后自动选择最佳端点
   endpointAutoSelect?: boolean;
+  // 是否为官方合作伙伴
+  isPartner?: boolean;
+  // 合作伙伴促销信息 i18n key
+  partnerPromotionKey?: string;
   // 供应商单独的模型测试配置
   testConfig?: ProviderTestConfig;
   // 供应商单独的代理配置

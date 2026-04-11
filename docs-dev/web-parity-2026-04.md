@@ -114,6 +114,10 @@
 - 预设图标资源
   - Web 端补齐 `Shengsuanyun / LionCCAPI / DDSHub / PIPELLM` 的本地图标资源映射，新增预设不再退化为字母占位
   - 复用桌面版现有 logo 资源，通过 `src/icons/local.ts` 挂接，避免继续膨胀提取图标索引
+- 合作伙伴促销链路
+  - Web 端预设元数据补齐 `isPartner / partnerPromotionKey`，覆盖桌面版已有的合作伙伴预设
+  - `ApiKeySection` 与各应用表单补齐合作伙伴促销提示展示，预设选中后可直接看到注册链接对应的优惠说明
+  - Provider 元数据保存时补齐合作伙伴标记与促销 key，并同步补齐三语 `partnerPromotion` 文案
 
 实现约束：
 

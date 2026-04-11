@@ -15,6 +15,8 @@ interface ApiKeySectionProps {
     thirdParty: string;
   };
   disabled?: boolean;
+  isPartner?: boolean;
+  partnerPromotionKey?: string;
 }
 
 export function ApiKeySection({
@@ -27,6 +29,8 @@ export function ApiKeySection({
   websiteUrl,
   placeholder,
   disabled,
+  isPartner,
+  partnerPromotionKey,
 }: ApiKeySectionProps) {
   const { t } = useTranslation();
 
@@ -57,7 +61,7 @@ export function ApiKeySection({
       />
       {/* API Key 获取链接 */}
       {shouldShowLink && websiteUrl && (
-        <div className="-mt-1 pl-1">
+        <div className="space-y-2 -mt-1 pl-1">
           <a
             href={websiteUrl}
             target="_blank"
@@ -68,6 +72,15 @@ export function ApiKeySection({
               defaultValue: "获取 API Key",
             })}
           </a>
+          {isPartner && partnerPromotionKey && (
+            <div className="rounded-md border border-primary/15 bg-primary/5 p-2.5">
+              <p className="text-xs leading-relaxed text-primary">
+                {t(`providerForm.partnerPromotion.${partnerPromotionKey}`, {
+                  defaultValue: "",
+                })}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

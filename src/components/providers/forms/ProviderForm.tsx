@@ -164,6 +164,8 @@ export function ProviderForm({
   const [activePreset, setActivePreset] = useState<{
     id: string;
     category?: ProviderCategory;
+    isPartner?: boolean;
+    partnerPromotionKey?: string;
     suggestedDefaults?: OpenClawSuggestedDefaults;
   } | null>(null);
   const [isEndpointModalOpen, setIsEndpointModalOpen] = useState(false);
@@ -926,6 +928,14 @@ export function ProviderForm({
 
     payload.meta = {
       ...(baseMeta ?? {}),
+      isPartner: activePreset
+        ? activePreset.isPartner
+          ? true
+          : undefined
+        : baseMeta?.isPartner,
+      partnerPromotionKey: activePreset
+        ? activePreset.partnerPromotionKey
+        : baseMeta?.partnerPromotionKey,
       commonConfigEnabled:
         appId === "claude"
           ? useCommonConfig
@@ -1006,6 +1016,8 @@ export function ProviderForm({
   const {
     shouldShowApiKeyLink: shouldShowClaudeApiKeyLink,
     websiteUrl: claudeWebsiteUrl,
+    isPartner: isClaudePartner,
+    partnerPromotionKey: claudePartnerPromotionKey,
   } = useApiKeyLink({
     appId: "claude",
     category,
@@ -1017,6 +1029,8 @@ export function ProviderForm({
   const {
     shouldShowApiKeyLink: shouldShowCodexApiKeyLink,
     websiteUrl: codexWebsiteUrl,
+    isPartner: isCodexPartner,
+    partnerPromotionKey: codexPartnerPromotionKey,
   } = useApiKeyLink({
     appId: "codex",
     category,
@@ -1028,6 +1042,8 @@ export function ProviderForm({
   const {
     shouldShowApiKeyLink: shouldShowGeminiApiKeyLink,
     websiteUrl: geminiWebsiteUrl,
+    isPartner: isGeminiPartner,
+    partnerPromotionKey: geminiPartnerPromotionKey,
   } = useApiKeyLink({
     appId: "gemini",
     category,
@@ -1039,6 +1055,8 @@ export function ProviderForm({
   const {
     shouldShowApiKeyLink: shouldShowOpencodeApiKeyLink,
     websiteUrl: opencodeWebsiteUrl,
+    isPartner: isOpencodePartner,
+    partnerPromotionKey: opencodePartnerPromotionKey,
   } = useApiKeyLink({
     appId: "opencode",
     category,
@@ -1051,6 +1069,8 @@ export function ProviderForm({
   const {
     shouldShowApiKeyLink: shouldShowOpenclawApiKeyLink,
     websiteUrl: openclawWebsiteUrl,
+    isPartner: isOpenclawPartner,
+    partnerPromotionKey: openclawPartnerPromotionKey,
   } = useApiKeyLink({
     appId: "openclaw",
     category,
@@ -1101,6 +1121,8 @@ export function ProviderForm({
     setActivePreset({
       id: value,
       category: entry.preset.category,
+      isPartner: entry.preset.isPartner,
+      partnerPromotionKey: entry.preset.partnerPromotionKey,
     });
 
     if (appId === "codex") {
@@ -1174,6 +1196,8 @@ export function ProviderForm({
       setActivePreset({
         id: value,
         category: preset.category,
+        isPartner: preset.isPartner,
+        partnerPromotionKey: preset.partnerPromotionKey,
         suggestedDefaults: preset.suggestedDefaults,
       });
 
@@ -1385,6 +1409,8 @@ export function ProviderForm({
             category={category}
             shouldShowApiKeyLink={shouldShowClaudeApiKeyLink}
             websiteUrl={claudeWebsiteUrl}
+            isPartner={isClaudePartner}
+            partnerPromotionKey={claudePartnerPromotionKey}
             isCopilotPreset={
               templatePreset?.providerType === "github_copilot" ||
               initialData?.meta?.providerType === "github_copilot" ||
@@ -1447,6 +1473,8 @@ export function ProviderForm({
             category={category}
             shouldShowApiKeyLink={shouldShowCodexApiKeyLink}
             websiteUrl={codexWebsiteUrl}
+            isPartner={isCodexPartner}
+            partnerPromotionKey={codexPartnerPromotionKey}
             shouldShowSpeedTest={shouldShowSpeedTest}
             codexBaseUrl={codexBaseUrl}
             onBaseUrlChange={handleCodexBaseUrlChange}
@@ -1478,6 +1506,8 @@ export function ProviderForm({
             category={category}
             shouldShowApiKeyLink={shouldShowGeminiApiKeyLink}
             websiteUrl={geminiWebsiteUrl}
+            isPartner={isGeminiPartner}
+            partnerPromotionKey={geminiPartnerPromotionKey}
             shouldShowSpeedTest={shouldShowSpeedTest}
             baseUrl={geminiBaseUrl}
             onBaseUrlChange={handleGeminiBaseUrlChange}
@@ -1502,6 +1532,8 @@ export function ProviderForm({
             category={category}
             shouldShowApiKeyLink={shouldShowOpencodeApiKeyLink}
             websiteUrl={opencodeWebsiteUrl}
+            isPartner={isOpencodePartner}
+            partnerPromotionKey={opencodePartnerPromotionKey}
             baseUrl={opencodeForm.opencodeBaseUrl}
             onBaseUrlChange={opencodeForm.handleOpencodeBaseUrlChange}
             models={opencodeForm.opencodeModels}
@@ -1541,6 +1573,8 @@ export function ProviderForm({
             category={category}
             shouldShowApiKeyLink={shouldShowOpenclawApiKeyLink}
             websiteUrl={openclawWebsiteUrl}
+            isPartner={isOpenclawPartner}
+            partnerPromotionKey={openclawPartnerPromotionKey}
             api={openclawForm.openclawApi}
             onApiChange={openclawForm.handleOpenclawApiChange}
             models={openclawForm.openclawModels}
