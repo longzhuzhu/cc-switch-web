@@ -124,6 +124,10 @@
 - Provider 卡片状态补齐
   - Web 端补齐 OpenCode 累加模式的“已写入配置”高亮状态，便于区分仅存在数据库与已同步到 live 配置的供应商
   - `token_plan` 用量模板不再错误进入多套餐展开分支，保持与桌面版一致的额度卡片展示
+- Provider Key 锁定逻辑
+  - Web 端补齐 OpenCode / OpenClaw 累加模式的 `providerKey` 锁定规则，仅对已写入 live 配置的供应商禁改标识
+  - 新增 / 未写入 live 配置的编辑态仍允许修改 `providerKey`，重复校验改为同时覆盖数据库与 live 配置中的已存在标识
+  - 表单提交阶段补齐锁定状态加载拦截与三语提示文案，避免在 live 状态未完成查询时误保存
 
 实现约束：
 
