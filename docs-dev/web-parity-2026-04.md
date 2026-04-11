@@ -111,6 +111,9 @@
 - DDSHub 预设
   - Web 端补齐 Claude 侧 `DDSHub` 预设，并同步桌面版默认地址与 API Key 链接
   - 当前仅补齐桌面版已存在的 Claude 预设，不扩到其他应用
+- 预设图标资源
+  - Web 端补齐 `Shengsuanyun / LionCCAPI / DDSHub / PIPELLM` 的本地图标资源映射，新增预设不再退化为字母占位
+  - 复用桌面版现有 logo 资源，通过 `src/icons/local.ts` 挂接，避免继续膨胀提取图标索引
 
 实现约束：
 
