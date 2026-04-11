@@ -164,6 +164,9 @@
   - Web 端补齐 `liveConfigManaged` 元数据，区分“已写入 live config”与“仅存在数据库”的 additive provider
   - `sync_current_providers_live` 对 OpenCode / OpenClaw 不再无差别把所有数据库 provider 写回 live，明确跳过 `DB-only` provider
   - provider 从“加入配置 / 移出配置 / 仅落库新增 / 重命名”流转时会同步更新该标记，避免后续同步把不该进 live 的 provider 重新写回去
+- OpenCode / OpenClaw 测试按钮恢复
+  - Web 端 Provider 列表重新为 OpenCode / OpenClaw 透传“测试模型”动作，不再错误禁用前端入口
+  - 与前面已补齐的流式健康检查链路配套，用户现在可以直接从卡片触发测试
 
 实现约束：
 
