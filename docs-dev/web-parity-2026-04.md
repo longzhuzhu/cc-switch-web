@@ -190,6 +190,9 @@
 - X-Code 预设图标键对齐
   - Web 端补齐 `xcode` 图标元数据与名称推断映射，同时保留旧 `x-code` 键兼容已有数据
   - Claude / Codex / OpenCode 的 X-Code 预设统一切换为桌面端同款 `xcode` 图标键
+- 本地图标元数据搜索补齐
+  - Web 端为 `DDS / PIPELLM / Shengsuanyun / LionCC` 等本地图标补齐元数据，图标选择器搜索不再漏掉这些预设图标
+  - 供应商表单选择上述图标时，可同步拿到桌面端同款展示名与默认颜色
 
 实现约束：
 
