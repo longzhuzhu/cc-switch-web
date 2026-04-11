@@ -152,6 +152,7 @@ export function ProviderCard({
   // OMO and OMO Slim share the same card behavior
   const isAnyOmo = isOmo || isOmoSlim;
   const handleDisableAnyOmo = isOmoSlim ? onDisableOmoSlim : onDisableOmo;
+  const isAdditiveMode = appId === "opencode" && !isAnyOmo;
 
   const { data: health } = useProviderHealth(provider.id, appId);
 
@@ -194,8 +195,10 @@ export function ProviderCard({
     autoQueryInterval,
   });
 
+  const isTokenPlan =
+    provider.meta?.usage_script?.templateType === "token_plan";
   const hasMultiplePlans =
-    usage?.success && usage.data && usage.data.length > 1;
+    usage?.success && usage.data && usage.data.length > 1 && !isTokenPlan;
 
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -244,9 +247,12 @@ export function ProviderCard({
           : isCurrent;
 
   const shouldUseGreen = !isAnyOmo && isProxyTakeover && isActiveProvider;
+  const hasPersistentConfigHighlight = isAdditiveMode && isInConfig;
   const shouldUseBlue =
     (isAnyOmo && isActiveProvider) ||
-    (!isAnyOmo && !isProxyTakeover && isActiveProvider);
+    (!isAnyOmo &&
+      !isProxyTakeover &&
+      (isActiveProvider || hasPersistentConfigHighlight));
 
   return (
     <div
@@ -258,7 +264,7 @@ export function ProviderCard({
           : "hover:border-border-active",
         shouldUseGreen && "provider-card-active-success",
         shouldUseBlue && "provider-card-active-primary",
-        !isActiveProvider && "hover:shadow-sm",
+        !(isActiveProvider || hasPersistentConfigHighlight) && "hover:shadow-sm",
         dragHandleProps?.isDragging &&
           "cursor-grabbing border-primary shadow-lg scale-105 z-10",
       )}
@@ -268,8 +274,10 @@ export function ProviderCard({
           "absolute inset-0 bg-gradient-to-r to-transparent transition-opacity duration-500 pointer-events-none",
           shouldUseGreen && "provider-card-overlay-success",
           shouldUseBlue && "provider-card-overlay-primary",
-          !isActiveProvider && "from-primary/10",
-          isActiveProvider ? "opacity-100" : "opacity-0",
+          !(isActiveProvider || hasPersistentConfigHighlight) && "from-primary/10",
+          isActiveProvider || hasPersistentConfigHighlight
+            ? "opacity-100"
+            : "opacity-0",
         )}
       />
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
