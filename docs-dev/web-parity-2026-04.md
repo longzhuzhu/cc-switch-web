@@ -108,6 +108,9 @@
 - LionCCAPI 预设
   - Web 端补齐 Claude / Codex / Gemini / OpenCode / OpenClaw 的 `LionCCAPI` 预设，并同步桌面版默认网关地址
   - OpenClaw 同步补齐默认模型映射，新增后可直接得到 `Opus / Sonnet` 推荐默认项
+- DDSHub 预设
+  - Web 端补齐 Claude 侧 `DDSHub` 预设，并同步桌面版默认地址与 API Key 链接
+  - 当前仅补齐桌面版已存在的 Claude 预设，不扩到其他应用
 
 实现约束：
 
