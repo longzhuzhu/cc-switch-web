@@ -238,6 +238,9 @@
 - Deep Link 配置合并失败降级导入
   - Web 端 `DeepLinkImportDialog` 改为先保留已解析出的 provider 请求，再异步尝试合并内嵌/远程配置
   - 当配置拉取或合并失败时，会提示“合并配置文件失败”，但仍允许按原始 deeplink 信息继续导入，不再直接中断整个导入流程
+- OMO Slim Council agent 补齐
+  - Web 端补回桌面版已有的 `Council` 内置 agent 与 disableable agent 选项
+  - 同步补齐三语 `omo.slimAgentDesc.council` / `omo.slimAgentTooltip.council`，现有 OMO Slim 表单会自动显示该代理项
 
 实现约束：
 
