@@ -1969,10 +1969,12 @@ export async function deleteWebSessions(
 export async function getWebUsageSummary(
   startDate?: number,
   endDate?: number,
+  appType?: string,
 ): Promise<UsageSummary> {
   const params = new URLSearchParams();
   if (typeof startDate === "number") params.set("startDate", String(startDate));
   if (typeof endDate === "number") params.set("endDate", String(endDate));
+  if (appType) params.set("appType", appType);
   const query = params.toString();
   return requestJson<UsageSummary>(
     `/api/usage/summary${query ? `?${query}` : ""}`,
@@ -1982,22 +1984,38 @@ export async function getWebUsageSummary(
 export async function getWebUsageTrends(
   startDate?: number,
   endDate?: number,
+  appType?: string,
 ): Promise<DailyStats[]> {
   const params = new URLSearchParams();
   if (typeof startDate === "number") params.set("startDate", String(startDate));
   if (typeof endDate === "number") params.set("endDate", String(endDate));
+  if (appType) params.set("appType", appType);
   const query = params.toString();
   return requestJson<DailyStats[]>(
     `/api/usage/trends${query ? `?${query}` : ""}`,
   );
 }
 
-export async function getWebProviderStats(): Promise<ProviderStats[]> {
-  return requestJson<ProviderStats[]>("/api/usage/provider-stats");
+export async function getWebProviderStats(
+  appType?: string,
+): Promise<ProviderStats[]> {
+  const params = new URLSearchParams();
+  if (appType) params.set("appType", appType);
+  const query = params.toString();
+  return requestJson<ProviderStats[]>(
+    `/api/usage/provider-stats${query ? `?${query}` : ""}`,
+  );
 }
 
-export async function getWebModelStats(): Promise<ModelStats[]> {
-  return requestJson<ModelStats[]>("/api/usage/model-stats");
+export async function getWebModelStats(
+  appType?: string,
+): Promise<ModelStats[]> {
+  const params = new URLSearchParams();
+  if (appType) params.set("appType", appType);
+  const query = params.toString();
+  return requestJson<ModelStats[]>(
+    `/api/usage/model-stats${query ? `?${query}` : ""}`,
+  );
 }
 
 export async function getWebRequestLogs(

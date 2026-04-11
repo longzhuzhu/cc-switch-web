@@ -121,45 +121,55 @@ impl Database {
         &self,
         start_date: Option<i64>,
         end_date: Option<i64>,
+        app_type: Option<&str>,
     ) -> Result<UsageSummary, AppError> {
         let conn = lock_conn!(self.conn);
 
-        let (where_clause, params_vec) = if start_date.is_some() || end_date.is_some() {
-            let mut conditions = Vec::new();
-            let mut params = Vec::new();
+        let (where_clause, params_vec) =
+            if start_date.is_some() || end_date.is_some() || app_type.is_some() {
+                let mut conditions = Vec::new();
+                let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
-            if let Some(start) = start_date {
-                conditions.push("created_at >= ?");
-                params.push(start);
-            }
-            if let Some(end) = end_date {
-                conditions.push("created_at <= ?");
-                params.push(end);
-            }
+                if let Some(start) = start_date {
+                    conditions.push("created_at >= ?");
+                    params.push(Box::new(start));
+                }
+                if let Some(end) = end_date {
+                    conditions.push("created_at <= ?");
+                    params.push(Box::new(end));
+                }
+                if let Some(value) = app_type {
+                    conditions.push("app_type = ?");
+                    params.push(Box::new(value.to_string()));
+                }
 
-            (format!("WHERE {}", conditions.join(" AND ")), params)
-        } else {
-            (String::new(), Vec::new())
-        };
+                (format!("WHERE {}", conditions.join(" AND ")), params)
+            } else {
+                (String::new(), Vec::new())
+            };
 
-        // Build rollup WHERE clause using date strings (use ? for sequential binding)
-        let (rollup_where, rollup_params) = if start_date.is_some() || end_date.is_some() {
-            let mut conditions: Vec<String> = Vec::new();
-            let mut params = Vec::new();
+        let (rollup_where, rollup_params) =
+            if start_date.is_some() || end_date.is_some() || app_type.is_some() {
+                let mut conditions: Vec<String> = Vec::new();
+                let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
-            if let Some(start) = start_date {
-                conditions.push("date >= date(?, 'unixepoch', 'localtime')".to_string());
-                params.push(start);
-            }
-            if let Some(end) = end_date {
-                conditions.push("date <= date(?, 'unixepoch', 'localtime')".to_string());
-                params.push(end);
-            }
+                if let Some(start) = start_date {
+                    conditions.push("date >= date(?, 'unixepoch', 'localtime')".to_string());
+                    params.push(Box::new(start));
+                }
+                if let Some(end) = end_date {
+                    conditions.push("date <= date(?, 'unixepoch', 'localtime')".to_string());
+                    params.push(Box::new(end));
+                }
+                if let Some(value) = app_type {
+                    conditions.push("app_type = ?".to_string());
+                    params.push(Box::new(value.to_string()));
+                }
 
-            (format!("WHERE {}", conditions.join(" AND ")), params)
-        } else {
-            (String::new(), Vec::new())
-        };
+                (format!("WHERE {}", conditions.join(" AND ")), params)
+            } else {
+                (String::new(), Vec::new())
+            };
 
         let sql = format!(
             "SELECT
@@ -191,11 +201,11 @@ impl Database {
                  FROM usage_daily_rollups {rollup_where}) r"
         );
 
-        // Combine params: detail params first, then rollup params
-        let mut all_params: Vec<i64> = params_vec;
+        let mut all_params: Vec<Box<dyn rusqlite::ToSql>> = params_vec;
         all_params.extend(rollup_params);
+        let param_refs: Vec<&dyn rusqlite::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
 
-        let result = conn.query_row(&sql, rusqlite::params_from_iter(all_params), |row| {
+        let result = conn.query_row(&sql, param_refs.as_slice(), |row| {
             let total_requests: i64 = row.get(0)?;
             let total_cost: f64 = row.get(1)?;
             let total_input_tokens: i64 = row.get(2)?;
@@ -229,6 +239,7 @@ impl Database {
         &self,
         start_date: Option<i64>,
         end_date: Option<i64>,
+        app_type: Option<&str>,
     ) -> Result<Vec<DailyStats>, AppError> {
         let conn = lock_conn!(self.conn);
 
@@ -251,7 +262,6 @@ impl Database {
             ((duration as f64) / bucket_seconds as f64).ceil() as i64
         };
 
-        // 固定 24 小时窗口为 24 个小时桶，避免浮点误差
         if bucket_seconds == 60 * 60 {
             bucket_count = 24;
         }
@@ -260,8 +270,14 @@ impl Database {
             bucket_count = 1;
         }
 
-        // Query detail logs
-        let sql = "
+        let app_type_filter = if app_type.is_some() {
+            "AND app_type = ?4"
+        } else {
+            ""
+        };
+
+        let sql = format!(
+            "
             SELECT
                 CAST((created_at - ?1) / ?3 AS INTEGER) as bucket_idx,
                 COUNT(*) as request_count,
@@ -272,12 +288,13 @@ impl Database {
                 COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation_tokens,
                 COALESCE(SUM(cache_read_tokens), 0) as total_cache_read_tokens
             FROM proxy_request_logs
-            WHERE created_at >= ?1 AND created_at <= ?2
+            WHERE created_at >= ?1 AND created_at <= ?2 {app_type_filter}
             GROUP BY bucket_idx
-            ORDER BY bucket_idx ASC";
+            ORDER BY bucket_idx ASC"
+        );
 
-        let mut stmt = conn.prepare(sql)?;
-        let rows = stmt.query_map(params![start_ts, end_ts, bucket_seconds], |row| {
+        let mut stmt = conn.prepare(&sql)?;
+        let row_mapper = |row: &rusqlite::Row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 DailyStats {
@@ -291,7 +308,13 @@ impl Database {
                     total_cache_read_tokens: row.get::<_, i64>(7)? as u64,
                 },
             ))
-        })?;
+        };
+
+        let rows = if let Some(value) = app_type {
+            stmt.query_map(params![start_ts, end_ts, bucket_seconds, value], row_mapper)?
+        } else {
+            stmt.query_map(params![start_ts, end_ts, bucket_seconds], row_mapper)?
+        };
 
         let mut map: HashMap<i64, DailyStats> = HashMap::new();
         for row in rows {
@@ -307,7 +330,8 @@ impl Database {
 
         // Also query rollup data (daily granularity, only useful for daily buckets)
         if bucket_seconds >= 86400 {
-            let rollup_sql = "
+            let rollup_sql = format!(
+                "
                 SELECT
                     CAST((CAST(strftime('%s', date) AS INTEGER) - ?1) / ?3 AS INTEGER) as bucket_idx,
                     COALESCE(SUM(request_count), 0),
@@ -318,12 +342,13 @@ impl Database {
                     COALESCE(SUM(cache_creation_tokens), 0),
                     COALESCE(SUM(cache_read_tokens), 0)
                 FROM usage_daily_rollups
-                WHERE date >= date(?1, 'unixepoch', 'localtime') AND date <= date(?2, 'unixepoch', 'localtime')
+                WHERE date >= date(?1, 'unixepoch', 'localtime') AND date <= date(?2, 'unixepoch', 'localtime') {app_type_filter}
                 GROUP BY bucket_idx
-                ORDER BY bucket_idx ASC";
+                ORDER BY bucket_idx ASC"
+            );
 
-            let mut rstmt = conn.prepare(rollup_sql)?;
-            let rrows = rstmt.query_map(params![start_ts, end_ts, bucket_seconds], |row| {
+            let mut rstmt = conn.prepare(&rollup_sql)?;
+            let rollup_mapper = |row: &rusqlite::Row| {
                 Ok((
                     row.get::<_, i64>(0)?,
                     (
@@ -336,7 +361,16 @@ impl Database {
                         row.get::<_, i64>(7)? as u64,
                     ),
                 ))
-            })?;
+            };
+
+            let rrows = if let Some(value) = app_type {
+                rstmt.query_map(
+                    params![start_ts, end_ts, bucket_seconds, value],
+                    rollup_mapper,
+                )?
+            } else {
+                rstmt.query_map(params![start_ts, end_ts, bucket_seconds], rollup_mapper)?
+            };
 
             for row in rrows {
                 let (mut bucket_idx, (req, cost, tok, inp, out, cc, cr)) = row?;
@@ -398,11 +432,18 @@ impl Database {
     }
 
     /// 获取 Provider 统计
-    pub fn get_provider_stats(&self) -> Result<Vec<ProviderStats>, AppError> {
+    pub fn get_provider_stats(&self, app_type: Option<&str>) -> Result<Vec<ProviderStats>, AppError> {
         let conn = lock_conn!(self.conn);
 
+        let (detail_where, rollup_where) = if app_type.is_some() {
+            ("WHERE l.app_type = ?1", "WHERE r.app_type = ?2")
+        } else {
+            ("", "")
+        };
+
         // UNION detail logs + rollup data, then aggregate
-        let sql = "SELECT
+        let sql = format!(
+            "SELECT
                 provider_id, app_type, provider_name,
                 SUM(request_count) as request_count,
                 SUM(total_tokens) as total_tokens,
@@ -421,6 +462,7 @@ impl Database {
                     COALESCE(SUM(l.latency_ms), 0) as latency_sum
                 FROM proxy_request_logs l
                 LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
+                {detail_where}
                 GROUP BY l.provider_id, l.app_type
                 UNION ALL
                 SELECT r.provider_id, r.app_type,
@@ -432,13 +474,15 @@ impl Database {
                     COALESCE(SUM(r.avg_latency_ms * r.request_count), 0)
                 FROM usage_daily_rollups r
                 LEFT JOIN providers p2 ON r.provider_id = p2.id AND r.app_type = p2.app_type
+                {rollup_where}
                 GROUP BY r.provider_id, r.app_type
             )
             GROUP BY provider_id, app_type
-            ORDER BY total_cost DESC";
+            ORDER BY total_cost DESC"
+        );
 
-        let mut stmt = conn.prepare(sql)?;
-        let rows = stmt.query_map([], |row| {
+        let mut stmt = conn.prepare(&sql)?;
+        let row_mapper = |row: &rusqlite::Row| {
             let request_count: i64 = row.get(3)?;
             let success_count: i64 = row.get(6)?;
             let success_rate = if request_count > 0 {
@@ -458,7 +502,12 @@ impl Database {
                 success_rate,
                 avg_latency_ms: row.get::<_, f64>(7)? as u64,
             })
-        })?;
+        };
+        let rows = if let Some(value) = app_type {
+            stmt.query_map(params![value, value], row_mapper)?
+        } else {
+            stmt.query_map([], row_mapper)?
+        };
 
         let mut stats = Vec::new();
         for row in rows {
@@ -469,11 +518,18 @@ impl Database {
     }
 
     /// 获取模型统计
-    pub fn get_model_stats(&self) -> Result<Vec<ModelStats>, AppError> {
+    pub fn get_model_stats(&self, app_type: Option<&str>) -> Result<Vec<ModelStats>, AppError> {
         let conn = lock_conn!(self.conn);
 
+        let (detail_where, rollup_where) = if app_type.is_some() {
+            ("WHERE app_type = ?1", "WHERE app_type = ?2")
+        } else {
+            ("", "")
+        };
+
         // UNION detail logs + rollup data
-        let sql = "SELECT
+        let sql = format!(
+            "SELECT
                 model,
                 SUM(request_count) as request_count,
                 SUM(total_tokens) as total_tokens,
@@ -484,6 +540,7 @@ impl Database {
                     COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens,
                     COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0) as total_cost
                 FROM proxy_request_logs
+                {detail_where}
                 GROUP BY model
                 UNION ALL
                 SELECT model,
@@ -491,13 +548,15 @@ impl Database {
                     COALESCE(SUM(input_tokens + output_tokens), 0),
                     COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0)
                 FROM usage_daily_rollups
+                {rollup_where}
                 GROUP BY model
             )
             GROUP BY model
-            ORDER BY total_cost DESC";
+            ORDER BY total_cost DESC"
+        );
 
-        let mut stmt = conn.prepare(sql)?;
-        let rows = stmt.query_map([], |row| {
+        let mut stmt = conn.prepare(&sql)?;
+        let row_mapper = |row: &rusqlite::Row| {
             let request_count: i64 = row.get(1)?;
             let total_cost: f64 = row.get(3)?;
             let avg_cost = if request_count > 0 {
@@ -513,7 +572,12 @@ impl Database {
                 total_cost: format!("{total_cost:.6}"),
                 avg_cost_per_request: format!("{avg_cost:.6}"),
             })
-        })?;
+        };
+        let rows = if let Some(value) = app_type {
+            stmt.query_map(params![value, value], row_mapper)?
+        } else {
+            stmt.query_map([], row_mapper)?
+        };
 
         let mut stats = Vec::new();
         for row in rows {
@@ -1040,7 +1104,7 @@ mod tests {
             )?;
         }
 
-        let summary = db.get_usage_summary(None, None)?;
+        let summary = db.get_usage_summary(None, None, None)?;
         assert_eq!(summary.total_requests, 2);
         assert_eq!(summary.success_rate, 100.0);
 
@@ -1075,7 +1139,7 @@ mod tests {
             )?;
         }
 
-        let stats = db.get_model_stats()?;
+        let stats = db.get_model_stats(None)?;
         assert_eq!(stats.len(), 1);
         assert_eq!(stats[0].model, "claude-3-sonnet");
         assert_eq!(stats[0].request_count, 1);

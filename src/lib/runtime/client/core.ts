@@ -687,16 +687,22 @@ export async function invoke<T>(
       return (await getWebUsageSummary(
         args?.startDate as number | undefined,
         args?.endDate as number | undefined,
+        args?.appType as string | undefined,
       )) as T;
     case "get_usage_trends":
       return (await getWebUsageTrends(
         args?.startDate as number | undefined,
         args?.endDate as number | undefined,
+        args?.appType as string | undefined,
       )) as T;
     case "get_provider_stats":
-      return (await getWebProviderStats()) as T;
+      return (await getWebProviderStats(
+        args?.appType as string | undefined,
+      )) as T;
     case "get_model_stats":
-      return (await getWebModelStats()) as T;
+      return (await getWebModelStats(
+        args?.appType as string | undefined,
+      )) as T;
     case "get_request_logs":
       return (await getWebRequestLogs(
         args?.filters as any,

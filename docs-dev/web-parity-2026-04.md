@@ -173,6 +173,10 @@
 - 官方额度仅对当前 provider 轮询展示
   - Web 端 `SubscriptionQuotaFooter` 改为仅在当前官方 provider 上显示，并仅对当前项启用自动轮询
   - 避免非当前 provider 误展示 CLI 官方额度，也与桌面版当前激活态的展示语义保持一致
+- 用量页应用类型过滤
+  - Web 端 `UsageDashboard` 恢复桌面版同款应用类型过滤条，可在 `全部 / Claude / Codex / Gemini` 之间切换统计口径
+  - 用量汇总、趋势图、Provider 统计和模型统计的查询链路重新透传 `appType`，不再固定聚合全量应用数据
+  - Web 后端 `usage` 统计接口补齐 `appType` 过滤参数，SQL 聚合会同时作用于明细日志与日汇总表
 
 实现约束：
 

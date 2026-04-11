@@ -351,6 +351,7 @@ struct SessionMessagesQuery {
 struct UsageRangeQuery {
     start_date: Option<i64>,
     end_date: Option<i64>,
+    app_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1285,6 +1286,7 @@ async fn get_usage_summary(
         state.app_state.as_ref(),
         query.start_date,
         query.end_date,
+        query.app_type.clone(),
     )
     .map_err(|e| ApiError::internal(format!("failed to load usage summary: {e}")))?;
     Ok(Json(summary))
@@ -1298,6 +1300,7 @@ async fn get_usage_trends(
         state.app_state.as_ref(),
         query.start_date,
         query.end_date,
+        query.app_type.clone(),
     )
     .map_err(|e| ApiError::internal(format!("failed to load usage trends: {e}")))?;
     Ok(Json(trends))
@@ -1305,16 +1308,24 @@ async fn get_usage_trends(
 
 async fn get_usage_provider_stats(
     State(state): State<WebApiState>,
+    Query(query): Query<UsageRangeQuery>,
 ) -> Result<Json<Vec<crate::services::usage_stats::ProviderStats>>, ApiError> {
-    let stats = crate::commands::get_provider_stats_internal(state.app_state.as_ref())
+    let stats = crate::commands::get_provider_stats_internal(
+        state.app_state.as_ref(),
+        query.app_type.clone(),
+    )
         .map_err(|e| ApiError::internal(format!("failed to load provider stats: {e}")))?;
     Ok(Json(stats))
 }
 
 async fn get_usage_model_stats(
     State(state): State<WebApiState>,
+    Query(query): Query<UsageRangeQuery>,
 ) -> Result<Json<Vec<crate::services::usage_stats::ModelStats>>, ApiError> {
-    let stats = crate::commands::get_model_stats_internal(state.app_state.as_ref())
+    let stats = crate::commands::get_model_stats_internal(
+        state.app_state.as_ref(),
+        query.app_type.clone(),
+    )
         .map_err(|e| ApiError::internal(format!("failed to load model stats: {e}")))?;
     Ok(Json(stats))
 }
