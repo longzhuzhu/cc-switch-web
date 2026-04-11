@@ -5,13 +5,6 @@ param(
   [string[]]$ExtraArgs
 )
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+. (Join-Path $PSScriptRoot "lib\entry.ps1")
 
-Push-Location $repoRoot
-try {
-  & node (Join-Path $scriptDir "dev.mjs") $Mode @ExtraArgs
-  exit $LASTEXITCODE
-} finally {
-  Pop-Location
-}
+exit (Invoke-RepoNodeScript -ScriptPath 'scripts/dev.mjs' -Arguments @($Mode) + $ExtraArgs)

@@ -3,13 +3,6 @@ param(
   [string]$Mode = "w"
 )
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+. (Join-Path $PSScriptRoot "lib\entry.ps1")
 
-Push-Location $repoRoot
-try {
-  & node (Join-Path $scriptDir "build.mjs") $Mode
-  exit $LASTEXITCODE
-} finally {
-  Pop-Location
-}
+exit (Invoke-RepoNodeScript -ScriptPath 'scripts/build.mjs' -Arguments @($Mode))

@@ -1,9 +1,7 @@
-import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { cargoCmd, runOrExit } from "./lib/process.mjs";
 
 const mode = (process.argv[2] || "w").toLowerCase();
-const isWindows = process.platform === "win32";
-const cargoCmd = isWindows ? "cargo.exe" : "cargo";
 
 function printUsage() {
   console.log("Usage: pnpm build -- <w|d>");
@@ -11,31 +9,11 @@ function printUsage() {
   console.log("  d: Docker image build");
 }
 
-function run(command, args) {
-  const result =
-    isWindows && command === "pnpm"
-      ? spawnSync("cmd.exe", ["/d", "/s", "/c", command, ...args], {
-          cwd: process.cwd(),
-          stdio: "inherit",
-          env: process.env,
-        })
-      : spawnSync(command, args, {
-          cwd: process.cwd(),
-          stdio: "inherit",
-          shell: isWindows && command === "docker",
-          env: process.env,
-        });
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
-}
-
 switch (mode) {
   case "w":
     console.log("[build] mode=w -> local release build");
-    run("pnpm", ["exec", "vite", "build"]);
-    run(cargoCmd, [
+    runOrExit("pnpm", ["exec", "vite", "build"]);
+    runOrExit(cargoCmd, [
       "build",
       "--release",
       "--manifest-path",
@@ -46,7 +24,7 @@ switch (mode) {
     break;
   case "d":
     console.log("[build] mode=d -> Docker image build");
-    run("docker", ["compose", "build"]);
+    runOrExit("docker", ["compose", "build"]);
     break;
   default:
     console.error(`[build] unsupported argument: ${mode}`);

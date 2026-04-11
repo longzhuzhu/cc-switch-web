@@ -1,12 +1,6 @@
 param()
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+. (Join-Path $PSScriptRoot "lib\entry.ps1")
 
-Push-Location $repoRoot
-try {
-  & node (Join-Path $scriptDir "check.mjs")
-  exit $LASTEXITCODE
-} finally {
-  Pop-Location
-}
+Write-Host '[check.ps1] running static project checks'
+exit (Invoke-RepoNodeScript -ScriptPath 'scripts/check.mjs')

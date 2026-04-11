@@ -1,9 +1,7 @@
-import { spawn } from "node:child_process";
 import net from "node:net";
 import process from "node:process";
+import { cargoCmd, spawnInherited } from "./lib/process.mjs";
 
-const isWindows = process.platform === "win32";
-const cargoCmd = isWindows ? "cargo.exe" : "cargo";
 const defaultFrontendHost = "127.0.0.1";
 const children = [];
 let shuttingDown = false;
@@ -35,23 +33,9 @@ function printUsage() {
 }
 
 function spawnCommand(command, args, extraEnv = {}) {
-  const env = {
-    ...process.env,
-    ...extraEnv,
-  };
-
-  const child =
-    isWindows && command === "pnpm"
-      ? spawn("cmd.exe", ["/d", "/s", "/c", command, ...args], {
-          cwd: process.cwd(),
-          stdio: "inherit",
-          env,
-        })
-      : spawn(command, args, {
-          cwd: process.cwd(),
-          stdio: "inherit",
-          env,
-        });
+  const child = spawnInherited(command, args, {
+    env: extraEnv,
+  });
 
   child.on("error", (error) => {
     console.error(`[${command}] failed to start`, error);

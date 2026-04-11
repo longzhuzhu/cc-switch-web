@@ -121,28 +121,26 @@ jobs:
       - name: Project check
         run: pnpm check
 
-  docker-smoke:
-    name: Docker Smoke
-    runs-on: ubuntu-latest
-    env:
-      CC_SWITCH_WEB_SMOKE_PORT: 8890
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Build Docker image
+        if: runner.os == 'Linux'
         run: docker build -t cc-switch-web:test .
 
       - name: Run Docker container
+        if: runner.os == 'Linux'
+        env:
+          CC_SWITCH_WEB_SMOKE_PORT: 8890
         run: docker run -d --name cc-switch-web-smoke -p ${CC_SWITCH_WEB_SMOKE_PORT}:${CC_SWITCH_WEB_SMOKE_PORT} cc-switch-web:test
 
       - name: Install curl
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends curl
 
       - name: Wait for health endpoint
+        if: runner.os == 'Linux'
+        env:
+          CC_SWITCH_WEB_SMOKE_PORT: 8890
         shell: bash
         run: |
           set -euo pipefail
@@ -157,9 +155,9 @@ jobs:
           exit 1
 
       - name: Print container logs on failure
-        if: failure()
+        if: failure() && runner.os == 'Linux'
         run: docker logs cc-switch-web-smoke
 
       - name: Stop Docker container
-        if: always()
+        if: always() && runner.os == 'Linux'
         run: docker rm -f cc-switch-web-smoke

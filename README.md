@@ -57,8 +57,15 @@ The current Web branch has aligned the following desktop-side capabilities and c
 | Docker foreground development (`d`) | `pnpm dev -- d` |
 | Local release build (`w`) | `pnpm build` |
 | Docker image build (`d`) | `pnpm build -- d` |
-| Project check | `pnpm check` |
-| Export artifacts on Windows | `.\scripts\package-artifacts.ps1 [all|w|l|d]` |
+| Project check | `.\scripts\check.ps1` |
+| Local CI check | `.\scripts\ci-check.ps1` |
+| Export artifacts on Windows | `.\scripts\package-artifacts.ps1` |
+
+Script entry layout:
+
+- `scripts/*.mjs` contains the cross-platform main logic used directly by `pnpm` and CI
+- `scripts/*.ps1` provides thin Windows-local wrappers for PowerShell usage
+- `scripts/lib/process.mjs` and `scripts/lib/entry.ps1` hold the shared Node / PowerShell execution helpers to avoid duplicated scripting logic
 
 ### Local Development
 
@@ -256,20 +263,37 @@ If you are working on Windows and already have Rust plus Docker/Buildx installed
 .\scripts\package-artifacts.ps1
 ```
 
-Without arguments, the script exports all three local artifacts:
+If you only want the project static checks on Windows, use:
+
+```powershell
+.\scripts\check.ps1
+```
+
+It only runs the existing Node script validation, TypeScript check, and Rust check. It does not trigger any Docker build.
+
+If you want to reproduce the full CI check flow locally on Windows, use:
+
+```powershell
+.\scripts\ci-check.ps1
+```
+
+That runs the static checks first, then the same Docker smoke check used in CI: `docker build` + container startup + `GET /api/health`. If port `8890` is already occupied, override it with:
+
+```powershell
+.\scripts\ci-check.ps1 -DockerSmokePort 8895
+```
+
+If you prefer the npm script for static checks, you can still run:
+
+```powershell
+pnpm check
+```
+
+The Windows export script now directly produces the local release-equivalent artifact set:
 
 - Windows executable: `release\local-artifacts\windows\cc-switch-web.exe`
 - Linux release package: `release\local-artifacts\linux\cc-switch-web-linux-x64.tar.gz`
 - Docker image archive: `release\local-artifacts\docker\cc-switch-web-docker-image.tar.gz`
-
-It also supports single-target export modes:
-
-- `.\scripts\package-artifacts.ps1 w`
-  - Export only the Windows executable
-- `.\scripts\package-artifacts.ps1 l`
-  - Export only the Linux release package
-- `.\scripts\package-artifacts.ps1 d`
-  - Export only the Docker image archive
 
 Details:
 
