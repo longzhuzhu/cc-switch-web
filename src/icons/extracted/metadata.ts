@@ -408,6 +408,13 @@ export const iconMetadata: Record<string, IconMetadata> = {
     keywords: ["stepfun", "step", "jieyue", "阶跃星辰"],
     defaultColor: "#005AFF",
   },
+  xcode: {
+    name: "xcode",
+    displayName: "Xcode",
+    category: "tool",
+    keywords: ["apple", "xcode", "ide"],
+    defaultColor: "currentColor",
+  },
 };
 
 export function getIconMetadata(name: string): IconMetadata | undefined {

@@ -187,6 +187,9 @@
   - Web 后端补齐 `POST /api/usage/session-sync` 与 `GET /api/usage/data-sources`，支持手动导入 Claude / Codex / Gemini 会话日志并聚合数据来源分布
   - 用量页恢复桌面版 `DataSourceBar`，展示 `Proxy / Session Log / Codex Session / Gemini Session` 来源计数，并提供手动同步入口
   - 前端 runtime、usage API、三语文案与类型定义同步补齐，保持 Web 与桌面端的会话统计交互一致
+- X-Code 预设图标键对齐
+  - Web 端补齐 `xcode` 图标元数据与名称推断映射，同时保留旧 `x-code` 键兼容已有数据
+  - Claude / Codex / OpenCode 的 X-Code 预设统一切换为桌面端同款 `xcode` 图标键
 
 实现约束：
 

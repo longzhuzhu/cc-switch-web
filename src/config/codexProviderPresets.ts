@@ -347,7 +347,7 @@ requires_openai_auth = true`,
     category: "third_party",
     isPartner: true,
     partnerPromotionKey: "x-code",
-    icon: "x-code",
+    icon: "xcode",
     iconColor: "#000000",
   },
   {

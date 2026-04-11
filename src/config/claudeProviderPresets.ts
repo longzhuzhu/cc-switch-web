@@ -650,7 +650,7 @@ export const providerPresets: ProviderPreset[] = [
     category: "third_party",
     isPartner: true,
     partnerPromotionKey: "x-code",
-    icon: "x-code",
+    icon: "xcode",
     iconColor: "#000000",
   },
   {
