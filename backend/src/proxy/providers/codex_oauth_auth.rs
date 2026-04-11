@@ -506,12 +506,6 @@ impl CodexOAuthManager {
         self.resolve_default_account_id().await
     }
 
-    pub async fn list_accounts(&self) -> Vec<GitHubAccount> {
-        let accounts = self.accounts.read().await.clone();
-        let default_id = self.resolve_default_account_id().await;
-        Self::sorted_accounts(&accounts, default_id.as_deref())
-    }
-
     pub async fn remove_account(&self, account_id: &str) -> Result<(), CodexOAuthError> {
         {
             let mut accounts = self.accounts.write().await;
@@ -585,11 +579,6 @@ impl CodexOAuthManager {
         }
 
         Ok(())
-    }
-
-    pub async fn is_authenticated(&self) -> bool {
-        let accounts = self.accounts.read().await;
-        !accounts.is_empty()
     }
 
     pub async fn get_status(&self) -> CodexOAuthStatus {
@@ -902,7 +891,8 @@ mod tests {
     async fn test_manager_initial_state() {
         let temp = tempfile::tempdir().unwrap();
         let manager = CodexOAuthManager::new(temp.path().to_path_buf());
-        assert!(!manager.is_authenticated().await);
-        assert!(manager.list_accounts().await.is_empty());
+        let status = manager.get_status().await;
+        assert!(!status.authenticated);
+        assert!(status.accounts.is_empty());
     }
 }
