@@ -2375,6 +2375,7 @@
     "manualInput": "Deep Link",
     "manualInputHint": "Paste a ccswitch://v1/import?... link, or open the page with ?deeplink=... to import automatically",
     "parse": "Parse Link",
+    "parseError": "Failed to parse Deep Link",
     "confirmImport": "Confirm Import",
     "confirmImportDescription": "Review the Deep Link payload before importing it.",
     "importPrompt": "Import Prompt",

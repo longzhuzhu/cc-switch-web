@@ -2375,6 +2375,7 @@
     "manualInput": "Deep Link",
     "manualInputHint": "ccswitch://v1/import?... リンクを貼り付けるか、?deeplink=... 付きで開くと自動で取り込みます",
     "parse": "リンクを解析",
+    "parseError": "Deep Link の解析に失敗しました",
     "confirmImport": "インポート確認",
     "confirmImportDescription": "インポート前に Deep Link の内容を確認してください。",
     "importPrompt": "プロンプトをインポート",

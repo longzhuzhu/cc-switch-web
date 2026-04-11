@@ -241,6 +241,9 @@
 - OMO Slim Council agent 补齐
   - Web 端补回桌面版已有的 `Council` 内置 agent 与 disableable agent 选项
   - 同步补齐三语 `omo.slimAgentDesc.council` / `omo.slimAgentTooltip.council`，现有 OMO Slim 表单会自动显示该代理项
+- Deep Link 解析失败提示补齐
+  - Web 端 Deep Link 导入在解析失败时补回桌面版同类 toast 标题提示，同时保留现有内联错误展示
+  - 同步补齐三语 `deeplink.parseError` 文案，自动 deeplink 和手动解析失败时的错误反馈更完整
 
 实现约束：
 

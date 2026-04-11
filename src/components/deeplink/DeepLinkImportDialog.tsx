@@ -171,10 +171,15 @@ export function DeepLinkImportDialog() {
         });
       }
     } catch (error) {
+      const message = extractErrorMessage(error);
       setRawValue(trimmed);
       setRequest(null);
-      setParseError(extractErrorMessage(error));
+      setParseError(message);
       setOpen(true);
+      toast.error(t("deeplink.parseError"), {
+        description: message,
+        closeButton: true,
+      });
     } finally {
       setIsParsing(false);
     }

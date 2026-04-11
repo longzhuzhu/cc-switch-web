@@ -2375,6 +2375,7 @@
     "manualInput": "Deep Link 链接",
     "manualInputHint": "支持粘贴 ccswitch://v1/import?... 链接，或通过 ?deeplink=... 自动导入",
     "parse": "解析链接",
+    "parseError": "Deep Link 解析失败",
     "confirmImport": "确认导入",
     "confirmImportDescription": "请确认即将导入的 Deep Link 内容。",
     "importPrompt": "导入提示词",
