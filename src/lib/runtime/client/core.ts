@@ -372,6 +372,7 @@ export async function invoke<T>(
       return (await updateWebProvider(
         args?.app as AppId,
         args?.provider as any,
+        args?.originalId as string | undefined,
       )) as T;
     case "delete_provider":
       return (await deleteWebProvider(

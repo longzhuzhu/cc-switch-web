@@ -98,8 +98,14 @@ export const useUpdateProviderMutation = (appId: AppId) => {
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: async (provider: Provider) => {
-      await providersApi.update(provider, appId);
+    mutationFn: async ({
+      provider,
+      originalId,
+    }: {
+      provider: Provider;
+      originalId?: string;
+    }) => {
+      await providersApi.update(provider, appId, originalId);
       return provider;
     },
     onSuccess: async () => {

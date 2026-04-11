@@ -1392,9 +1392,10 @@ export async function addWebProvider(
 export async function updateWebProvider(
   appId: AppId,
   provider: Provider,
+  originalId?: string,
 ): Promise<boolean> {
   return requestWithBody<boolean>(
-    `/api/providers/${appId}/${provider.id}`,
+    `/api/providers/${appId}/${encodeURIComponent(originalId ?? provider.id)}`,
     "PUT",
     provider,
   );

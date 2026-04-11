@@ -40,10 +40,12 @@ pub(crate) fn add_provider_internal(
 pub(crate) fn update_provider_internal(
     state: &AppState,
     app: String,
+    original_id: Option<String>,
     provider: Provider,
 ) -> Result<bool, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
-    ProviderService::update(state, app_type, provider).map_err(|e| e.to_string())
+    ProviderService::update(state, app_type, original_id.as_deref(), provider)
+        .map_err(|e| e.to_string())
 }
 
 pub(crate) fn delete_provider_internal(

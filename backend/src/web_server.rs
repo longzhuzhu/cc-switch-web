@@ -2325,12 +2325,15 @@ async fn add_provider(
 async fn update_provider(
     State(state): State<WebApiState>,
     Path((app, id)): Path<(String, String)>,
-    Json(mut provider): Json<Provider>,
+    Json(provider): Json<Provider>,
 ) -> Result<Json<bool>, ApiError> {
-    provider.id = id;
-    let updated =
-        crate::commands::update_provider_internal(state.app_state.as_ref(), app, provider)
-            .map_err(|e| ApiError::internal(format!("failed to update provider: {e}")))?;
+    let updated = crate::commands::update_provider_internal(
+        state.app_state.as_ref(),
+        app,
+        Some(id),
+        provider,
+    )
+    .map_err(|e| ApiError::internal(format!("failed to update provider: {e}")))?;
     Ok(Json(updated))
 }
 

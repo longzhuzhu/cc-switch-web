@@ -31,7 +31,8 @@ pub use live::{
 pub(crate) use live::sanitize_claude_settings_for_live;
 pub(crate) use live::{
     build_effective_settings_with_common_config, normalize_provider_common_config_for_storage,
-    strip_common_config_from_live_settings, sync_current_provider_for_app_to_live,
+    provider_exists_in_live_config, strip_common_config_from_live_settings,
+    sync_current_provider_for_app_to_live,
     write_live_with_common_config,
 };
 
@@ -207,21 +208,80 @@ impl ProviderService {
     pub fn update(
         state: &AppState,
         app_type: AppType,
+        original_id: Option<&str>,
         provider: Provider,
     ) -> Result<bool, AppError> {
         let mut provider = provider;
+        let original_id = original_id.unwrap_or(provider.id.as_str()).to_string();
+        let provider_id_changed = original_id != provider.id;
+        let existing_provider = state
+            .db
+            .get_provider_by_id(&original_id, app_type.as_str())?;
         // Normalize Claude model keys
         Self::normalize_provider_if_claude(&app_type, &mut provider);
         Self::validate_provider_settings(&app_type, &provider)?;
         normalize_provider_common_config_for_storage(state.db.as_ref(), &app_type, &mut provider)?;
 
-        // Save to database
-        state.db.save_provider(app_type.as_str(), &provider)?;
+        if provider_id_changed {
+            if !app_type.is_additive_mode() {
+                return Err(AppError::Message(
+                    "Only additive-mode providers support changing provider key".to_string(),
+                ));
+            }
 
-        // Additive mode apps (OpenCode, OpenClaw) - always update in live config
+            let Some(existing_provider) = existing_provider else {
+                return Err(AppError::Message(format!(
+                    "Original provider '{}' does not exist in app '{}'",
+                    original_id,
+                    app_type.as_str()
+                )));
+            };
+
+            if matches!(app_type, AppType::OpenCode)
+                && matches!(
+                    existing_provider.category.as_deref(),
+                    Some("omo") | Some("omo-slim")
+                )
+            {
+                return Err(AppError::Message(
+                    "Provider key cannot be changed for OMO/OMO Slim providers".to_string(),
+                ));
+            }
+
+            if provider_exists_in_live_config(&app_type, &original_id)? {
+                return Err(AppError::Message(
+                    "Provider key cannot be changed after the provider has been added to the app config"
+                        .to_string(),
+                ));
+            }
+
+            if state
+                .db
+                .get_provider_by_id(&provider.id, app_type.as_str())?
+                .is_some()
+                || provider_exists_in_live_config(&app_type, &provider.id)?
+            {
+                return Err(AppError::Message(format!(
+                    "Provider '{}' already exists in app '{}'",
+                    provider.id,
+                    app_type.as_str()
+                )));
+            }
+
+            state.db.save_provider(app_type.as_str(), &provider)?;
+            state.db.delete_provider(app_type.as_str(), &original_id)?;
+
+            if crate::settings::get_current_provider(&app_type).as_deref() == Some(&original_id) {
+                crate::settings::set_current_provider(&app_type, Some(provider.id.as_str()))?;
+            }
+
+            return Ok(true);
+        }
+
         if app_type.is_additive_mode() {
             if matches!(app_type, AppType::OpenCode) && provider.category.as_deref() == Some("omo")
             {
+                state.db.save_provider(app_type.as_str(), &provider)?;
                 let is_omo_current =
                     state
                         .db
@@ -237,6 +297,7 @@ impl ProviderService {
             if matches!(app_type, AppType::OpenCode)
                 && provider.category.as_deref() == Some("omo-slim")
             {
+                state.db.save_provider(app_type.as_str(), &provider)?;
                 let is_current = state.db.is_omo_provider_current(
                     app_type.as_str(),
                     &provider.id,
@@ -250,9 +311,17 @@ impl ProviderService {
                 }
                 return Ok(true);
             }
+            let exists_in_live = provider_exists_in_live_config(&app_type, &provider.id)?;
+            state.db.save_provider(app_type.as_str(), &provider)?;
+            if !exists_in_live {
+                return Ok(true);
+            }
             write_live_with_common_config(state.db.as_ref(), &app_type, &provider)?;
             return Ok(true);
         }
+
+        // Save to database
+        state.db.save_provider(app_type.as_str(), &provider)?;
 
         // For other apps: Check if this is current provider (use effective current, not just DB)
         let effective_current =

@@ -117,8 +117,8 @@ export function useProviderActions(activeApp: AppId, isProxyRunning?: boolean) {
 
   // 更新供应商
   const updateProvider = useCallback(
-    async (provider: Provider) => {
-      await updateProviderMutation.mutateAsync(provider);
+    async (provider: Provider, originalId?: string) => {
+      await updateProviderMutation.mutateAsync({ provider, originalId });
     },
     [updateProviderMutation],
   );

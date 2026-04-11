@@ -152,6 +152,10 @@
 - Deep Link Provider 配置预览语义化
   - Web 端 Deep Link 导入弹窗补齐 Claude / Codex / Gemini 的分类型配置预览，不再统一退化为 JSON 文本
   - Claude 的通用 `model` 标签改为与桌面版一致的“多模态模型”，配置来源同时展示 `JSON/TOML` 格式信息
+- Provider Key 编辑重命名闭环
+  - Web 端编辑 OpenCode / OpenClaw provider 时，`providerKey` 改动会连同 `originalId` 一起透传到更新链路，真正支持数据库层的重命名
+  - Web 后端补齐 additive provider rename 规则：已写入 live config 的 provider、以及 OMO / OMO Slim provider 仍禁止改 key
+  - additive provider 编辑行为改为仅在该 provider 已存在 live config 时才回写 live，避免把仅存在数据库的 provider 误加回配置
 
 实现约束：
 

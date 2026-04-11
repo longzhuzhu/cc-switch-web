@@ -31,6 +31,19 @@ pub(crate) fn sanitize_claude_settings_for_live(settings: &Value) -> Value {
     v
 }
 
+pub(crate) fn provider_exists_in_live_config(
+    app_type: &AppType,
+    provider_id: &str,
+) -> Result<bool, AppError> {
+    match app_type {
+        AppType::OpenCode => crate::opencode_config::get_providers()
+            .map(|providers| providers.contains_key(provider_id)),
+        AppType::OpenClaw => crate::openclaw_config::get_providers()
+            .map(|providers| providers.contains_key(provider_id)),
+        _ => Ok(false),
+    }
+}
+
 fn json_is_subset(target: &Value, source: &Value) -> bool {
     match source {
         Value::Object(source_map) => {
