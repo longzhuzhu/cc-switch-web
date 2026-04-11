@@ -193,6 +193,9 @@
 - 本地图标元数据搜索补齐
   - Web 端为 `DDS / PIPELLM / Shengsuanyun / LionCC` 等本地图标补齐元数据，图标选择器搜索不再漏掉这些预设图标
   - 供应商表单选择上述图标时，可同步拿到桌面端同款展示名与默认颜色
+- 模型拉取三语文案补齐
+  - Web 端补齐 `providerForm.fetchModels*` 三语文案，覆盖 Claude / Codex / Gemini / OpenClaw 表单中的模型拉取按钮与提示消息
+  - 避免模型拉取交互退化为直接显示 i18n key 文本
 
 实现约束：
 
