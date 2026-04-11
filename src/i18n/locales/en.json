@@ -237,6 +237,7 @@
     "tabGeneral": "General",
     "tabAdvanced": "Advanced",
     "tabProxy": "Proxy",
+    "tabAuth": "Auth",
     "skillStorage": {
       "title": "Skill Storage Location",
       "description": "Switch the shared Skill source directory between the CC Switch managed path and ~/.agents/skills.",

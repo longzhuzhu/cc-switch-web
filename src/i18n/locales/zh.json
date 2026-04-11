@@ -237,6 +237,7 @@
     "tabGeneral": "通用",
     "tabAdvanced": "高级",
     "tabProxy": "代理",
+    "tabAuth": "认证",
     "skillStorage": {
       "title": "Skill 存储位置",
       "description": "切换统一 Skill 源目录，可在 CC Switch 专用目录和 ~/.agents/skills 之间迁移。",

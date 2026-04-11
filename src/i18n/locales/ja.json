@@ -237,6 +237,7 @@
     "tabGeneral": "一般",
     "tabAdvanced": "詳細",
     "tabProxy": "プロキシ",
+    "tabAuth": "認証",
     "skillStorage": {
       "title": "Skill 保存先",
       "description": "共有 Skill ソースディレクトリを CC Switch 管理パスと ~/.agents/skills の間で切り替えます。",
