@@ -196,6 +196,9 @@
 - 模型拉取三语文案补齐
   - Web 端补齐 `providerForm.fetchModels*` 三语文案，覆盖 Claude / Codex / Gemini / OpenClaw 表单中的模型拉取按钮与提示消息
   - 避免模型拉取交互退化为直接显示 i18n key 文本
+- 认证中心与用量标签文案补齐
+  - Web 端补齐认证中心标题/说明、Provider 侧终端打开提示，以及用量页 `requests / total cost` 标签的三语文案
+  - 避免认证页和用量概览继续回退到默认文案或 i18n key
 
 实现约束：
 

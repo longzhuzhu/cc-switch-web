@@ -125,6 +125,8 @@
     "noSearchResults": "一致するプロバイダーがありません。",
     "duplicate": "複製",
     "openTerminal": "ターミナルを開く",
+    "terminalOpened": "ターミナルを開きました",
+    "terminalOpenFailed": "ターミナルを開けませんでした",
     "sortUpdateFailed": "並び順の更新に失敗しました",
     "configureUsage": "利用状況を設定",
     "officialPartner": "公式パートナー",
@@ -238,6 +240,15 @@
     "tabAdvanced": "詳細",
     "tabProxy": "プロキシ",
     "tabAuth": "認証",
+    "authCenter": {
+      "title": "OAuth 認証センター",
+      "description": "アプリ間で再利用できる OAuth アカウントを一元管理します。Provider はこれらの認証元に紐付くだけで、毎回再ログインする必要はありません。",
+      "beta": "Beta",
+      "copilotDescription": "GitHub Copilot アカウント、既定アカウント、および Claude / Codex / Gemini で共有する認証情報を管理します。",
+      "codexOauthDescription": "ChatGPT アカウント、既定アカウント、および Claude プロバイダーが利用する共有認証情報を管理します。",
+      "heading": "認証センター",
+      "headingDescription": "アプリ間で再利用できる OAuth アカウントと既定の認証元を一元管理します。"
+    },
     "skillStorage": {
       "title": "Skill 保存先",
       "description": "共有 Skill ソースディレクトリを CC Switch 管理パスと ~/.agents/skills の間で切り替えます。",
@@ -1025,6 +1036,8 @@
   "usage": {
     "title": "利用統計",
     "subtitle": "AI モデルの利用状況とコスト統計を表示",
+    "requestsLabel": "リクエスト",
+    "costLabel": "合計コスト",
     "today": "24時間",
     "last7days": "7日間",
     "last30days": "30日間",
