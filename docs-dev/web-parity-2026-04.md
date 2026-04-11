@@ -170,6 +170,9 @@
 - Token Plan 内联徽章展示
   - Web 端 `UsageFooter` 补齐 `token_plan` 模板的 inline 专用展示，改回桌面版的 tier 百分比徽章样式
   - 不再把多套餐 Token Plan 退化成普通首条用量文案，便于在 Provider 卡片上直接比较不同 tier 的使用率
+- 官方额度仅对当前 provider 轮询展示
+  - Web 端 `SubscriptionQuotaFooter` 改为仅在当前官方 provider 上显示，并仅对当前项启用自动轮询
+  - 避免非当前 provider 误展示 CLI 官方额度，也与桌面版当前激活态的展示语义保持一致
 
 实现约束：
 

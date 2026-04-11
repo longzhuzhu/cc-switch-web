@@ -355,8 +355,11 @@ const SubscriptionQuotaFooter: React.FC<SubscriptionQuotaFooterProps> = ({
 }) => {
   const { data: quota, isFetching: loading, refetch } = useSubscriptionQuota(
     appId,
-    true,
+    isCurrent,
+    isCurrent,
   );
+
+  if (!isCurrent) return null;
 
   return (
     <SubscriptionQuotaView
