@@ -104,7 +104,8 @@ export function GeminiFormFields({
   }, [apiKey, baseUrl, t]);
 
   // 检测是否为 Google 官方（使用 OAuth）
-  const isGoogleOfficial = category === "official";
+  const isGoogleOfficial =
+    partnerPromotionKey?.toLowerCase() === "google-official";
 
   return (
     <>

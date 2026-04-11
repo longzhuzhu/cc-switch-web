@@ -134,6 +134,9 @@
 - Claude 预设隐藏支持
   - Web 端补齐 Claude 预设的 `hidden` 元数据支持，桌面版已隐藏的预设在 Web 端也会自动从选择器中过滤
   - 仅影响新建供应商时的预设展示，不改已有供应商配置与保存链路
+- Gemini 官方 OAuth 判断对齐
+  - Web 端 Gemini 表单改为按 `partnerPromotionKey=google-official` 判断 Google 官方 OAuth 模式
+  - 避免仅依赖 `category=official` 导致非官方场景误判，保持与桌面版一致的 API Key 显隐逻辑
 
 实现约束：
 
