@@ -184,6 +184,20 @@ fn schema_migration_rejects_future_version() {
 }
 
 #[test]
+fn schema_migration_accepts_latest_previous_version_on_current_schema() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    Database::set_user_version(&conn, SCHEMA_VERSION - 1).expect("set previous version");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migration from latest step");
+
+    assert_eq!(
+        Database::get_user_version(&conn).expect("read version after"),
+        SCHEMA_VERSION
+    );
+}
+
+#[test]
 fn schema_migration_adds_missing_columns_for_providers() {
     let conn = Connection::open_in_memory().expect("open memory db");
 

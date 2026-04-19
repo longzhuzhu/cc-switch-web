@@ -18,7 +18,9 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.2.0`.
+The current repository version is `0.2.1`.
+
+`0.2.1` fixes the release regression in `v0.2.0` where packaged binaries accidentally declared schema `v8` without a matching final migration step.
 
 This repository now treats `0.1.0` as its initial Web release baseline. Previous inherited release history has been removed from this repository and should be considered part of the upstream project history.
 
