@@ -24,6 +24,7 @@ export interface StreamCheckResult {
   modelUsed: string;
   testedAt: number;
   retryCount: number;
+  errorCategory?: string;
 }
 
 // ===== 流式健康检查 API =====

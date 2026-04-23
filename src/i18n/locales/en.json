@@ -2110,7 +2110,19 @@
     "operational": "{{providerName}} is operational ({{responseTimeMs}}ms)",
     "degraded": "{{providerName}} is slow ({{responseTimeMs}}ms)",
     "failed": "{{providerName}} check failed: {{message}}",
-    "error": "{{providerName}} check error: {{error}}"
+    "rejected": "{{providerName}} check rejected: {{message}}",
+    "error": "{{providerName}} check error: {{error}}",
+    "modelNotFound": "{{providerName}} test model {{model}} does not exist or has been deprecated",
+    "modelNotFoundHint": "This model may have been retired by the provider. Update the default test model in \"Model Test Config\".",
+    "httpHint": {
+      "400": "Provider rejected request format. Health check probe may differ from actual usage.",
+      "401": "API key may be invalid, or provider uses OAuth auth. Check failure doesn't mean it's unusable.",
+      "402": "Account quota or billing issue.",
+      "403": "Provider blocked this request. Some verify client identity; may work fine in actual use.",
+      "404": "Endpoint not found. Check base URL and API path.",
+      "429": "Rate limited. Retry later.",
+      "5xx": "Provider internal error, usually temporary."
+    }
   },
   "proxyConfig": {
     "proxyEnabled": "Proxy Enabled",

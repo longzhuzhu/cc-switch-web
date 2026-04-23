@@ -143,17 +143,26 @@
 - Web 后端已引入 Gemini Native 所需的 URL 归一化、schema/请求转换、流式转换与 shadow 模块
 - Claude 代理链路已支持 `gemini_native` 的识别、鉴权、目标 URL 重写、请求转换与响应回转
 
+### 2026-04-23 已完成第二笔
+
+- 前端 `Stream Check` 已补齐 `modelNotFound`、`rejected` 和 `httpHint.*` 分类提示
+- 三语 locale 已补齐探测模型失效、请求被拒和常见 HTTP 状态的解释文案
+- Web 后端 `Stream Check` 已返回 `errorCategory`
+- 默认探测模型已刷新为 `gpt-5.4@low` 与 `gemini-3-flash-preview`
+- Claude `gemini_native` 的健康检查已支持 URL 归一化、请求转换与错误分类回传
+
 ### 第二阶段状态
 
-- `gemini_native` 的配置与请求转发闭环已补齐
-- `Stream Check` 分类反馈仍待后续补入，适合单独一笔继续推进
+- `gemini_native` 的配置、请求转发与健康检查闭环已补齐
+- `Stream Check` 分类反馈与默认探测模型刷新已补齐
+- 第二阶段剩余工作可转入 Hermes 等后续能力
 
 ### 计划项
 
 - `gemini_native` 代理能力
 - 相关 schema / transform / streaming 适配
 - 与现有 Claude Provider 表单中的 `apiFormat` 选项联动
-- 视情况补入 `Stream Check` 分类反馈
+- 补齐 `Stream Check` 分类反馈与默认探测模型刷新
 
 ### 影响范围
 
@@ -173,6 +182,7 @@
 
 - `gemini_native` 可被保存、可被识别、可走通请求转发
 - 不影响现有 `openai` / `responses` / `anthropic` / `gemini` 路径
+- `Stream Check` 能区分模型下架、请求被拒与常见 HTTP 错误
 
 ### 第三阶段：Hermes 全链路接入
 

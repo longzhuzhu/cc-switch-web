@@ -38,15 +38,15 @@ pub async fn stream_check_provider_internal(
         provider,
         &config,
         auth_override,
+        None,
         claude_api_format_override,
     )
     .await?;
 
     // 记录日志
-    let _ =
-        state
-            .db
-            .save_stream_check_log(provider_id, &provider.name, app_type.as_str(), &result);
+    let _ = state
+        .db
+        .save_stream_check_log(provider_id, &provider.name, app_type.as_str(), &result);
 
     Ok(result)
 }
@@ -105,18 +105,30 @@ pub async fn stream_check_all_providers_internal(
             &provider,
             &config,
             auth_override,
+            None,
             claude_api_format_override,
         )
         .await
-        .unwrap_or_else(|e| StreamCheckResult {
-            status: HealthStatus::Failed,
-            success: false,
-            message: e.to_string(),
-            response_time_ms: None,
-            http_status: None,
-            model_used: String::new(),
-            tested_at: chrono::Utc::now().timestamp(),
-            retry_count: 0,
+        .unwrap_or_else(|e| {
+            let (http_status, message) = match &e {
+                AppError::HttpStatus { status, .. } => (
+                    Some(*status),
+                    StreamCheckService::classify_http_status(*status).to_string(),
+                ),
+                _ => (None, e.to_string()),
+            };
+
+            StreamCheckResult {
+                status: HealthStatus::Failed,
+                success: false,
+                message,
+                response_time_ms: None,
+                http_status,
+                model_used: String::new(),
+                tested_at: chrono::Utc::now().timestamp(),
+                retry_count: 0,
+                error_category: None,
+            }
         });
 
         let _ = state
@@ -146,17 +158,7 @@ async fn resolve_copilot_auth_override(
     provider: &crate::provider::Provider,
     copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
 ) -> Result<Option<crate::proxy::providers::AuthInfo>, AppError> {
-    let is_copilot = provider
-        .meta
-        .as_ref()
-        .and_then(|meta| meta.provider_type.as_deref())
-        == Some("github_copilot")
-        || provider
-            .settings_config
-            .pointer("/env/ANTHROPIC_BASE_URL")
-            .and_then(|value| value.as_str())
-            .map(|url| url.contains("githubcopilot.com"))
-            .unwrap_or(false);
+    let is_copilot = is_copilot_provider(provider);
 
     if !is_copilot {
         return Ok(None);
@@ -166,7 +168,7 @@ async fn resolve_copilot_auth_override(
     let account_id = provider
         .meta
         .as_ref()
-        .and_then(|meta| meta.github_account_id.clone());
+        .and_then(|meta| meta.managed_account_id_for("github_copilot"));
 
     let token = match account_id.as_deref() {
         Some(id) => auth_manager
@@ -183,6 +185,20 @@ async fn resolve_copilot_auth_override(
         token,
         crate::proxy::providers::AuthStrategy::GitHubCopilot,
     )))
+}
+
+fn is_copilot_provider(provider: &crate::provider::Provider) -> bool {
+    provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.provider_type.as_deref())
+        == Some("github_copilot")
+        || provider
+            .settings_config
+            .pointer("/env/ANTHROPIC_BASE_URL")
+            .and_then(|value| value.as_str())
+            .map(|url| url.contains("githubcopilot.com"))
+            .unwrap_or(false)
 }
 
 async fn resolve_claude_api_format_override(

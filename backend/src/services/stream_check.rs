@@ -12,9 +12,13 @@ use std::time::Instant;
 use crate::app_config::AppType;
 use crate::error::AppError;
 use crate::provider::Provider;
+use crate::proxy::gemini_url::{normalize_gemini_model_id, resolve_gemini_native_url};
 use crate::proxy::providers::copilot_auth;
 use crate::proxy::providers::transform::anthropic_to_openai;
-use crate::proxy::providers::transform_responses::anthropic_to_responses;
+use crate::proxy::providers::transform_gemini::anthropic_to_gemini;
+use crate::proxy::providers::transform_responses::{
+    anthropic_to_responses, anthropic_to_responses_for_codex_oauth,
+};
 use crate::proxy::providers::{get_adapter, AuthInfo, AuthStrategy};
 
 /// 健康状态枚举
@@ -55,8 +59,8 @@ impl Default for StreamCheckConfig {
             max_retries: 2,
             degraded_threshold_ms: 6000,
             claude_model: "claude-haiku-4-5-20251001".to_string(),
-            codex_model: "gpt-5.1-codex@low".to_string(),
-            gemini_model: "gemini-3-pro-preview".to_string(),
+            codex_model: "gpt-5.4@low".to_string(),
+            gemini_model: "gemini-3-flash-preview".to_string(),
             test_prompt: default_test_prompt(),
         }
     }
@@ -74,6 +78,8 @@ pub struct StreamCheckResult {
     pub model_used: String,
     pub tested_at: i64,
     pub retry_count: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_category: Option<String>,
 }
 
 /// 流式健康检查服务
@@ -88,6 +94,7 @@ impl StreamCheckService {
         provider: &Provider,
         config: &StreamCheckConfig,
         auth_override: Option<AuthInfo>,
+        base_url_override: Option<String>,
         claude_api_format_override: Option<String>,
     ) -> Result<StreamCheckResult, AppError> {
         // 合并供应商单独配置和全局配置
@@ -100,6 +107,7 @@ impl StreamCheckService {
                 provider,
                 &effective_config,
                 auth_override.clone(),
+                base_url_override.clone(),
                 claude_api_format_override.clone(),
             )
             .await;
@@ -141,6 +149,7 @@ impl StreamCheckService {
             model_used: String::new(),
             tested_at: chrono::Utc::now().timestamp(),
             retry_count: effective_config.max_retries,
+            error_category: None,
         }))
     }
 
@@ -191,6 +200,7 @@ impl StreamCheckService {
         provider: &Provider,
         config: &StreamCheckConfig,
         auth_override: Option<AuthInfo>,
+        base_url_override: Option<String>,
         claude_api_format_override: Option<String>,
     ) -> Result<StreamCheckResult, AppError> {
         let start = Instant::now();
@@ -201,9 +211,12 @@ impl StreamCheckService {
 
         let adapter = get_adapter(app_type);
 
-        let base_url = adapter
-            .extract_base_url(provider)
-            .map_err(|e| AppError::Message(format!("Failed to extract base_url: {e}")))?;
+        let base_url = match base_url_override {
+            Some(base_url) => base_url,
+            None => adapter
+                .extract_base_url(provider)
+                .map_err(|e| AppError::Message(format!("Failed to extract base_url: {e}")))?,
+        };
 
         let auth = auth_override
             .or_else(|| adapter.extract_auth(provider))
@@ -262,34 +275,12 @@ impl StreamCheckService {
         };
 
         let response_time = start.elapsed().as_millis() as u64;
-        let tested_at = chrono::Utc::now().timestamp();
-
-        match result {
-            Ok((status_code, model)) => {
-                let health_status =
-                    Self::determine_status(response_time, config.degraded_threshold_ms);
-                Ok(StreamCheckResult {
-                    status: health_status,
-                    success: true,
-                    message: "Check succeeded".to_string(),
-                    response_time_ms: Some(response_time),
-                    http_status: Some(status_code),
-                    model_used: model,
-                    tested_at,
-                    retry_count: 0,
-                })
-            }
-            Err(e) => Ok(StreamCheckResult {
-                status: HealthStatus::Failed,
-                success: false,
-                message: e.to_string(),
-                response_time_ms: Some(response_time),
-                http_status: None,
-                model_used: String::new(),
-                tested_at,
-                retry_count: 0,
-            }),
-        }
+        Ok(Self::build_stream_check_result(
+            result,
+            response_time,
+            config.degraded_threshold_ms,
+            &model_to_test,
+        ))
     }
 
     /// Claude 流式检查
@@ -334,8 +325,14 @@ impl StreamCheckService {
             .unwrap_or(false);
         let is_openai_chat = effective_api_format == "openai_chat";
         let is_openai_responses = effective_api_format == "openai_responses";
-        let url =
-            Self::resolve_claude_stream_url(base, auth.strategy, effective_api_format, is_full_url);
+        let is_gemini_native = effective_api_format == "gemini_native";
+        let url = Self::resolve_claude_stream_url(
+            base,
+            auth.strategy,
+            effective_api_format,
+            is_full_url,
+            model,
+        );
 
         let max_tokens = if is_openai_responses { 16 } else { 1 };
 
@@ -346,8 +343,21 @@ impl StreamCheckService {
             "messages": [{ "role": "user", "content": test_prompt }],
             "stream": true
         });
+        let is_codex_oauth = provider
+            .meta
+            .as_ref()
+            .and_then(|m| m.provider_type.as_deref())
+            == Some("codex_oauth");
+
         let body = if is_openai_responses {
-            anthropic_to_responses(anthropic_body, Some(&provider.id))
+            if is_codex_oauth {
+                anthropic_to_responses_for_codex_oauth(anthropic_body, Some(&provider.id))
+            } else {
+                anthropic_to_responses(anthropic_body, Some(&provider.id))
+            }
+            .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
+        } else if is_gemini_native {
+            anthropic_to_gemini(anthropic_body)
                 .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else if is_openai_chat {
             anthropic_to_openai(anthropic_body, Some(&provider.id))
@@ -376,6 +386,23 @@ impl StreamCheckService {
                 )
                 .header("x-github-api-version", copilot_auth::COPILOT_API_VERSION)
                 .header("openai-intent", "conversation-panel");
+        } else if is_gemini_native {
+            request_builder = match auth.strategy {
+                AuthStrategy::GoogleOAuth => {
+                    let token = auth.access_token.as_ref().unwrap_or(&auth.api_key);
+                    request_builder
+                        .header("authorization", format!("Bearer {token}"))
+                        .header("x-goog-api-client", "GeminiCLI/1.0")
+                        .header("content-type", "application/json")
+                        .header("accept", "text/event-stream")
+                        .header("accept-encoding", "identity")
+                }
+                _ => request_builder
+                    .header("x-goog-api-key", &auth.api_key)
+                    .header("content-type", "application/json")
+                    .header("accept", "text/event-stream")
+                    .header("accept-encoding", "identity"),
+            };
         } else if is_openai_chat || is_openai_responses {
             // OpenAI-compatible targets: Bearer auth + SSE headers only
             request_builder = request_builder
@@ -445,7 +472,7 @@ impl StreamCheckService {
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::Message(format!("HTTP {status}: {error_text}")));
+            return Err(Self::http_status_error(status, error_text));
         }
 
         // 流式读取：只需首个 chunk
@@ -525,7 +552,7 @@ impl StreamCheckService {
                 if i == 0 && status == 404 && urls.len() > 1 {
                     continue;
                 }
-                return Err(AppError::Message(format!("HTTP {status}: {error_text}")));
+                return Err(Self::http_status_error(status, error_text));
             }
 
             let mut stream = response.bytes_stream();
@@ -557,13 +584,14 @@ impl StreamCheckService {
         extra_headers: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<(u16, String), AppError> {
         let base = base_url.trim_end_matches('/');
+        let normalized_model = normalize_gemini_model_id(model);
         // Gemini 原生 API: /v1beta/models/{model}:streamGenerateContent?alt=sse
         // 智能处理 /v1beta 路径：如果 base_url 不包含版本路径，则添加 /v1beta
         // alt=sse 参数使 API 返回 SSE 格式（text/event-stream）而非 JSON 数组
         let url = if base.contains("/v1beta") || base.contains("/v1/") {
-            format!("{base}/models/{model}:streamGenerateContent?alt=sse")
+            format!("{base}/models/{normalized_model}:streamGenerateContent?alt=sse")
         } else {
-            format!("{base}/v1beta/models/{model}:streamGenerateContent?alt=sse")
+            format!("{base}/v1beta/models/{normalized_model}:streamGenerateContent?alt=sse")
         };
 
         // Gemini 原生请求体格式
@@ -599,7 +627,7 @@ impl StreamCheckService {
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::Message(format!("HTTP {status}: {error_text}")));
+            return Err(Self::http_status_error(status, error_text));
         }
 
         let mut stream = response.bytes_stream();
@@ -654,6 +682,7 @@ impl StreamCheckService {
             result,
             response_time,
             config.degraded_threshold_ms,
+            &model_to_test,
         ))
     }
 
@@ -661,6 +690,7 @@ impl StreamCheckService {
         result: Result<(u16, String), AppError>,
         response_time: u64,
         degraded_threshold_ms: u64,
+        model_tested: &str,
     ) -> StreamCheckResult {
         let tested_at = chrono::Utc::now().timestamp();
         match result {
@@ -673,18 +703,62 @@ impl StreamCheckService {
                 model_used: model,
                 tested_at,
                 retry_count: 0,
+                error_category: None,
             },
-            Err(e) => StreamCheckResult {
-                status: HealthStatus::Failed,
-                success: false,
-                message: e.to_string(),
-                response_time_ms: Some(response_time),
-                http_status: None,
-                model_used: String::new(),
-                tested_at,
-                retry_count: 0,
-            },
+            Err(e) => {
+                let (http_status, message, error_category) = match &e {
+                    AppError::HttpStatus { status, body } => {
+                        let category = Self::detect_error_category(*status, body);
+                        (
+                            Some(*status),
+                            Self::classify_http_status(*status).to_string(),
+                            category.map(str::to_string),
+                        )
+                    }
+                    _ => (None, e.to_string(), None),
+                };
+
+                StreamCheckResult {
+                    status: HealthStatus::Failed,
+                    success: false,
+                    message,
+                    response_time_ms: Some(response_time),
+                    http_status,
+                    model_used: model_tested.to_string(),
+                    tested_at,
+                    retry_count: 0,
+                    error_category,
+                }
+            }
         }
+    }
+
+    pub(crate) fn detect_error_category(status: u16, body: &str) -> Option<&'static str> {
+        if !(400..500).contains(&status) {
+            return None;
+        }
+
+        let lower = body.to_lowercase();
+        if !lower.contains("model") {
+            return None;
+        }
+
+        let indicators = [
+            "model_not_found",
+            "model not found",
+            "does not exist",
+            "invalid_model",
+            "invalid model",
+            "unknown_model",
+            "unknown model",
+            "is not a valid model",
+            "not_found_error",
+        ];
+
+        indicators
+            .iter()
+            .any(|indicator| lower.contains(indicator))
+            .then_some("modelNotFound")
     }
 
     async fn check_openclaw_stream(
@@ -1039,6 +1113,37 @@ impl StreamCheckService {
         }
     }
 
+    fn http_status_error(status: u16, body: String) -> AppError {
+        let body = if body.len() > 200 {
+            let mut end = 200;
+            while end > 0 && !body.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{}…", &body[..end])
+        } else {
+            body
+        };
+
+        AppError::HttpStatus { status, body }
+    }
+
+    pub(crate) fn classify_http_status(status: u16) -> &'static str {
+        match status {
+            400 => "Bad request (400)",
+            401 => "Auth rejected (401)",
+            402 => "Payment required (402)",
+            403 => "Access denied (403)",
+            404 => "Not found (404)",
+            429 => "Rate limited (429)",
+            500 => "Internal server error (500)",
+            502 => "Bad gateway (502)",
+            503 => "Service unavailable (503)",
+            504 => "Gateway timeout (504)",
+            s if (500..600).contains(&s) => "Server error",
+            _ => "HTTP error",
+        }
+    }
+
     fn resolve_test_model(
         app_type: &AppType,
         provider: &Provider,
@@ -1141,7 +1246,15 @@ impl StreamCheckService {
         auth_strategy: AuthStrategy,
         api_format: &str,
         is_full_url: bool,
+        model: &str,
     ) -> String {
+        if api_format == "gemini_native" {
+            let normalized_model = normalize_gemini_model_id(model);
+            let endpoint =
+                format!("/v1beta/models/{normalized_model}:streamGenerateContent?alt=sse");
+            return resolve_gemini_native_url(base_url, &endpoint, is_full_url);
+        }
+
         if is_full_url {
             return base_url.to_string();
         }
@@ -1264,8 +1377,8 @@ mod tests {
             "api": "openai-completions",
             "headers": { "User-Agent": "MyBot/1.0", "X-Trace": "abc" },
         }));
-        let headers = StreamCheckService::extract_openclaw_headers(&provider)
-            .expect("headers should exist");
+        let headers =
+            StreamCheckService::extract_openclaw_headers(&provider).expect("headers should exist");
         assert_eq!(
             headers.get("User-Agent").and_then(|v| v.as_str()),
             Some("MyBot/1.0")
@@ -1324,6 +1437,27 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_model_not_found() {
+        let openai_404 = r#"{"error":{"message":"The model `gpt-5.4` does not exist or you do not have access to it","type":"invalid_request_error","param":null,"code":"model_not_found"}}"#;
+        assert_eq!(
+            StreamCheckService::detect_error_category(404, openai_404),
+            Some("modelNotFound")
+        );
+
+        let anthropic_404 = r#"{"type":"error","error":{"type":"not_found_error","message":"model: claude-deprecated"}}"#;
+        assert_eq!(
+            StreamCheckService::detect_error_category(404, anthropic_404),
+            Some("modelNotFound")
+        );
+
+        let generic_404 = r#"{"error":"Not Found"}"#;
+        assert_eq!(
+            StreamCheckService::detect_error_category(404, generic_404),
+            None
+        );
+    }
+
+    #[test]
     fn test_get_os_name() {
         let os_name = StreamCheckService::get_os_name();
         // 确保返回非空字符串
@@ -1377,6 +1511,7 @@ mod tests {
             AuthStrategy::Bearer,
             "openai_chat",
             true,
+            "gpt-5.4",
         );
 
         assert_eq!(url, "https://relay.example/v1/chat/completions");
@@ -1389,6 +1524,7 @@ mod tests {
             AuthStrategy::GitHubCopilot,
             "openai_chat",
             false,
+            "gpt-5.4",
         );
 
         assert_eq!(url, "https://api.githubcopilot.com/chat/completions");
@@ -1401,6 +1537,7 @@ mod tests {
             AuthStrategy::GitHubCopilot,
             "openai_responses",
             false,
+            "gpt-5.4",
         );
 
         assert_eq!(url, "https://api.githubcopilot.com/v1/responses");
@@ -1413,6 +1550,7 @@ mod tests {
             AuthStrategy::Bearer,
             "openai_chat",
             false,
+            "gpt-5.4",
         );
 
         assert_eq!(url, "https://example.com/v1/chat/completions");
@@ -1425,6 +1563,7 @@ mod tests {
             AuthStrategy::Bearer,
             "openai_responses",
             false,
+            "gpt-5.4",
         );
 
         assert_eq!(url, "https://example.com/v1/responses");
@@ -1437,9 +1576,26 @@ mod tests {
             AuthStrategy::Anthropic,
             "anthropic",
             false,
+            "claude-sonnet-4",
         );
 
         assert_eq!(url, "https://api.anthropic.com/v1/messages");
+    }
+
+    #[test]
+    fn test_resolve_claude_stream_url_for_gemini_native() {
+        let url = StreamCheckService::resolve_claude_stream_url(
+            "https://generativelanguage.googleapis.com",
+            AuthStrategy::Google,
+            "gemini_native",
+            false,
+            "models/gemini-2.5-flash",
+        );
+
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+        );
     }
 
     #[test]
