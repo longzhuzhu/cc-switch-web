@@ -1,4 +1,5 @@
-import { Copy } from "lucide-react";
+import { memo, useState } from "react";
+import { ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -16,27 +17,38 @@ import {
   highlightText,
 } from "./utils";
 
+const COLLAPSE_THRESHOLD = 3000;
+const COLLAPSED_LENGTH = 1500;
+
 interface SessionMessageItemProps {
   message: SessionMessage;
-  index: number;
   isActive: boolean;
   searchQuery?: string;
-  setRef: (el: HTMLDivElement | null) => void;
   onCopy: (content: string) => void;
 }
 
-export function SessionMessageItem({
+export const SessionMessageItem = memo(function SessionMessageItem({
   message,
   isActive,
   searchQuery,
-  setRef,
   onCopy,
 }: SessionMessageItemProps) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+
+  const isLong = message.content.length > COLLAPSE_THRESHOLD;
+  const hasSearchMatch =
+    isLong &&
+    !expanded &&
+    !!searchQuery &&
+    message.content.toLowerCase().includes(searchQuery.toLowerCase());
+  const collapsed = isLong && !expanded && !hasSearchMatch;
+  const displayContent = collapsed
+    ? `${message.content.slice(0, COLLAPSED_LENGTH)}...`
+    : message.content;
 
   return (
     <div
-      ref={setRef}
       className={cn(
         "group relative min-w-0 rounded-[22px] border px-4 py-3 transition-all",
         message.role.toLowerCase() === "user"
@@ -81,9 +93,36 @@ export function SessionMessageItem({
       </div>
       <div className="min-w-0 whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">
         {searchQuery
-          ? highlightText(message.content, searchQuery)
-          : message.content}
+          ? highlightText(displayContent, searchQuery)
+          : displayContent}
       </div>
+      {isLong && !hasSearchMatch && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="size-3" />
+              {t("sessionManager.collapseContent", {
+                defaultValue: "收起",
+              })}
+            </>
+          ) : (
+            <>
+              <ChevronDown className="size-3" />
+              {t("sessionManager.expandContent", {
+                defaultValue: "展开完整内容",
+              })}
+              <span className="text-muted-foreground/60">
+                ({Math.round(message.content.length / 1000)}k)
+              </span>
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
-}
+});

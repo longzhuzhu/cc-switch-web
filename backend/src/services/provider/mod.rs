@@ -602,6 +602,14 @@ impl ProviderService {
         // Hot-switch only when BOTH: this app is taken over AND proxy server is actually running
         let should_hot_switch = (is_app_taken_over || live_taken_over) && is_proxy_running;
 
+        if should_hot_switch && _provider.category.as_deref() == Some("official") {
+            return Err(AppError::localized(
+                "provider.switch.official_blocked_by_proxy",
+                "Routing 激活时不能切换到官方供应商，经由本地代理访问官方 API 可能导致账号风险。请先关闭 Routing，或改用第三方供应商。",
+                "Cannot switch to an official provider while routing is active. Sending official API traffic through the local proxy may put the account at risk. Disable routing first or switch to a third-party provider.",
+            ));
+        }
+
         if should_hot_switch {
             // Proxy takeover mode: hot-switch only, don't write Live config
             log::info!(

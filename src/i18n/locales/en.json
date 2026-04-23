@@ -188,6 +188,7 @@
     "settingsSaved": "Settings saved",
     "settingsSaveFailed": "Failed to save settings: {{error}}",
     "proxyRequiredForSwitch": "This provider {{reason}}, requires the proxy service to work properly. Start the proxy first.",
+    "officialBlockedByProxy": "Cannot switch to an official provider while routing is active. Sending official API traffic through the local proxy may put the account at risk.",
     "proxyReasonCopilot": "uses GitHub Copilot as a Claude provider",
     "proxyReasonOpenAIChat": "uses OpenAI Chat API format",
     "proxyReasonOpenAIResponses": "uses OpenAI Responses API format",
@@ -1993,14 +1994,14 @@
     },
     "switchFailed": "Switch failed: {{error}}",
     "takeover": {
-      "hint": "Select apps to take over — once enabled, requests from that app will be routed through the local proxy",
-      "enabled": "{{app}} takeover enabled",
-      "disabled": "{{app}} takeover disabled",
-      "failed": "Failed to toggle takeover",
+      "hint": "Select apps to route — once enabled, requests from that app will be routed through the local proxy",
+      "enabled": "{{app}} routing enabled",
+      "disabled": "{{app}} routing disabled",
+      "failed": "Failed to update routing state",
       "tooltip": {
-        "active": "{{appLabel}} is intercepting - {{address}}:{{port}}\nSwitch provider for hot switching",
-        "broken": "{{appLabel}} is intercepting, but proxy service is not running",
-        "inactive": "Intercept {{appLabel}}'s live config to route requests through local proxy"
+        "active": "{{appLabel}} routed via local proxy - {{address}}:{{port}}\nSwitch provider for hot switching",
+        "broken": "{{appLabel}} routing is enabled, but proxy service is not running",
+        "inactive": "Route {{appLabel}} live config through the local proxy"
       }
     },
     "failover": {
@@ -2074,7 +2075,7 @@
       "started": "Proxy service started - {{address}}:{{port}}",
       "startFailed": "Failed to start proxy service: {{detail}}"
     },
-    "stoppedWithRestore": "Proxy service stopped, all takeover configs restored",
+    "stoppedWithRestore": "Proxy service stopped, all routed configs restored",
     "stopWithRestoreFailed": "Stop failed: {{detail}}"
   },
   "streamCheck": {
@@ -2096,7 +2097,7 @@
   },
   "proxyConfig": {
     "proxyEnabled": "Proxy Enabled",
-    "appTakeover": "Proxy Enabled",
+    "appTakeover": "App Routing",
     "perAppConfig": "Per-App Config",
     "circuitBreaker": "Circuit Breaker",
     "circuitBreakerSettings": "Circuit Breaker Settings",

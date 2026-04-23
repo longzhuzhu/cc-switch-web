@@ -349,7 +349,7 @@ export function SettingsPage({
                       })}
                       description={t("settings.proxyIntroDescription", {
                         defaultValue:
-                          "在这里调整代理接管、转发策略和与请求链路相关的核心设置。",
+                          "在这里调整代理路由、转发策略和与请求链路相关的核心设置。",
                       })}
                       icon={<Cloud className="h-5 w-5 theme-tertiary-text" />}
                     />

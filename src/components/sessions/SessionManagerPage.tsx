@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSessionSearch } from "@/hooks/useSessionSearch";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -70,8 +71,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const { data, isLoading, refetch } = useSessionsQuery();
   const sessions = data ?? [];
   const detailRef = useRef<HTMLDivElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [activeMessageIndex, setActiveMessageIndex] = useState<number | null>(
     null,
   );
@@ -135,6 +135,20 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const deleteSessionMutation = useDeleteSessionMutation();
   const isDeleting = deleteSessionMutation.isPending || isBatchDeleting;
 
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 180,
+    overscan: 6,
+    gap: 14,
+  });
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [selectedKey]);
+
   useEffect(() => {
     const validKeys = new Set(
       sessions.map((session) => getSessionKey(session)),
@@ -167,37 +181,38 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   }, [messages]);
 
   const scrollToMessage = (index: number) => {
-    const el = messageRefs.current.get(index);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setActiveMessageIndex(index);
-      setTocDialogOpen(false); // 关闭弹窗
-      // 清除高亮状态
-      setTimeout(() => setActiveMessageIndex(null), 2000);
-    }
+    virtualizer.scrollToIndex(index, { align: "center", behavior: "smooth" });
+    setActiveMessageIndex(index);
+    setTocDialogOpen(false);
+    setTimeout(() => setActiveMessageIndex(null), 2000);
   };
 
-  // 清理定时器
-  useEffect(() => {
-    return () => {
-      // 这里的 setTimeout 其实无法直接清理，因为它在函数闭包里。
-      // 如果要严格清理，需要用 useRef 存 timer id。
-      // 但对于 2秒的高亮清除，通常不清理也没大问题。
-      // 为了代码规范，我们在组件卸载时将 activeMessageIndex 重置 (虽然 React 会处理)
-    };
-  }, []);
+  const handleCopy = useCallback(
+    async (text: string, successMessage: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast.success(successMessage);
+      } catch (error) {
+        toast.error(
+          extractErrorMessage(error) ||
+            t("common.error", { defaultValue: "Copy failed" }),
+        );
+      }
+    },
+    [t],
+  );
 
-  const handleCopy = async (text: string, successMessage: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(successMessage);
-    } catch (error) {
-      toast.error(
-        extractErrorMessage(error) ||
-          t("common.error", { defaultValue: "Copy failed" }),
+  const handleMessageCopy = useCallback(
+    (content: string) => {
+      void handleCopy(
+        content,
+        t("sessionManager.messageCopied", {
+          defaultValue: "已复制消息内容",
+        }),
       );
-    }
-  };
+    },
+    [handleCopy, t],
+  );
 
   const handleResume = async () => {
     if (!selectedSession?.resumeCommand) return;
@@ -1092,8 +1107,8 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                   <CardContent className="flex-1 min-h-0 p-0">
                     <div className="flex h-full min-w-0">
                       {/* 消息列表 */}
-                      <ScrollArea className="flex-1 min-w-0">
-                        <div className="min-w-0 p-5">
+                      <div className="flex flex-1 min-w-0 flex-col">
+                        <div className="min-w-0 px-5 pb-3 pt-5">
                           <div className="mb-4 flex items-center gap-2">
                             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background/80 shadow-sm">
                               <MessageSquare className="size-4 text-muted-foreground" />
@@ -1110,7 +1125,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               {messages.length}
                             </Badge>
                           </div>
+                        </div>
 
+                        <div
+                          ref={scrollContainerRef}
+                          className="flex-1 min-w-0 overflow-y-auto px-5 pb-5"
+                        >
                           {isLoadingMessages ? (
                             <div className="flex items-center justify-center py-12">
                               <RefreshCw className="size-5 animate-spin text-muted-foreground" />
@@ -1131,32 +1151,34 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               </p>
                             </div>
                           ) : (
-                            <div className="space-y-3.5">
-                              {messages.map((message, index) => (
-                                <SessionMessageItem
-                                  key={`${message.role}-${index}`}
-                                  message={message}
-                                  index={index}
-                                  isActive={activeMessageIndex === index}
-                                  searchQuery={search}
-                                  setRef={(el) => {
-                                    if (el) messageRefs.current.set(index, el);
+                            <div
+                              className="relative"
+                              style={{ height: virtualizer.getTotalSize() }}
+                            >
+                              {virtualizer.getVirtualItems().map((virtualRow) => (
+                                <div
+                                  key={virtualRow.key}
+                                  data-index={virtualRow.index}
+                                  ref={virtualizer.measureElement}
+                                  className="absolute left-0 top-0 w-full"
+                                  style={{
+                                    transform: `translateY(${virtualRow.start}px)`,
                                   }}
-                                  onCopy={(content) =>
-                                    handleCopy(
-                                      content,
-                                      t("sessionManager.messageCopied", {
-                                        defaultValue: "已复制消息内容",
-                                      }),
-                                    )
-                                  }
-                                />
+                                >
+                                  <SessionMessageItem
+                                    message={messages[virtualRow.index]}
+                                    isActive={
+                                      activeMessageIndex === virtualRow.index
+                                    }
+                                    searchQuery={search}
+                                    onCopy={handleMessageCopy}
+                                  />
+                                </div>
                               ))}
-                              <div ref={messagesEndRef} />
                             </div>
                           )}
                         </div>
-                      </ScrollArea>
+                      </div>
 
                       {/* 右侧目录 - 类似少数派 (大屏幕) */}
                       <SessionTocSidebar

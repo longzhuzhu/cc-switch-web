@@ -188,6 +188,7 @@
     "settingsSaved": "设置已保存",
     "settingsSaveFailed": "保存设置失败：{{error}}",
     "proxyRequiredForSwitch": "此供应商{{reason}}，需要代理服务才能正常使用，请先启动代理",
+    "officialBlockedByProxy": "Routing 激活时不能切换到官方供应商，经由本地代理访问官方 API 可能导致账号风险",
     "proxyReasonCopilot": "使用 GitHub Copilot 作为 Claude 供应商",
     "proxyReasonOpenAIChat": "使用 OpenAI Chat 接口格式",
     "proxyReasonOpenAIResponses": "使用 OpenAI Responses 接口格式",
@@ -1993,14 +1994,14 @@
     },
     "switchFailed": "切换失败: {{error}}",
     "takeover": {
-      "hint": "选择要接管的应用，启用后该应用的请求将通过本地代理转发",
-      "enabled": "{{app}} 接管已启用",
-      "disabled": "{{app}} 接管已关闭",
-      "failed": "切换接管状态失败",
+      "hint": "选择要路由的应用，启用后该应用的请求将通过本地代理转发",
+      "enabled": "{{app}} 路由已启用",
+      "disabled": "{{app}} 路由已关闭",
+      "failed": "切换路由状态失败",
       "tooltip": {
-        "active": "{{appLabel}} 已接管 - {{address}}:{{port}}\n切换该应用供应商为热切换",
-        "broken": "{{appLabel}} 已接管，但代理服务未运行",
-        "inactive": "接管 {{appLabel}} 的 Live 配置，让该应用请求走本地代理"
+        "active": "{{appLabel}} 已路由 - {{address}}:{{port}}\n切换该应用供应商为热切换",
+        "broken": "{{appLabel}} 已路由，但代理服务未运行",
+        "inactive": "将 {{appLabel}} 的 Live 配置路由到本地代理"
       }
     },
     "failover": {
@@ -2074,7 +2075,7 @@
       "started": "代理服务已启动 - {{address}}:{{port}}",
       "startFailed": "启动代理服务失败: {{detail}}"
     },
-    "stoppedWithRestore": "代理服务已关闭，已恢复所有接管配置",
+    "stoppedWithRestore": "代理服务已关闭，已恢复所有路由配置",
     "stopWithRestoreFailed": "停止失败: {{detail}}"
   },
   "streamCheck": {
@@ -2096,7 +2097,7 @@
   },
   "proxyConfig": {
     "proxyEnabled": "代理总开关",
-    "appTakeover": "代理启用",
+    "appTakeover": "应用路由",
     "perAppConfig": "应用配置",
     "circuitBreaker": "熔断器配置",
     "circuitBreakerSettings": "熔断器设置",

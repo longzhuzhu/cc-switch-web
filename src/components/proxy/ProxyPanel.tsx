@@ -79,18 +79,18 @@ export function ProxyPanel({
         enabled
           ? t("proxy.takeover.enabled", {
               app: appType,
-              defaultValue: `${appType} 接管已启用`,
+              defaultValue: `${appType} 路由已启用`,
             })
           : t("proxy.takeover.disabled", {
               app: appType,
-              defaultValue: `${appType} 接管已关闭`,
+              defaultValue: `${appType} 路由已关闭`,
             }),
         { closeButton: true },
       );
     } catch (error) {
       toast.error(
         t("proxy.takeover.failed", {
-          defaultValue: "切换接管状态失败",
+          defaultValue: "切换路由状态失败",
         }),
       );
     }
@@ -248,7 +248,7 @@ export function ProxyPanel({
               <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-4 space-y-3">
                 <p className="text-xs font-medium text-primary">
                   {t("proxyConfig.appTakeover", {
-                    defaultValue: "应用接管",
+                    defaultValue: "应用路由",
                   })}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3">
@@ -279,7 +279,7 @@ export function ProxyPanel({
                 <p className="text-xs text-muted-foreground">
                   {t("proxy.takeover.hint", {
                     defaultValue:
-                      "选择要接管的应用，启用后该应用的请求将通过本地代理转发",
+                      "选择要路由的应用，启用后该应用的请求将通过本地代理转发",
                   })}
                 </p>
               </div>

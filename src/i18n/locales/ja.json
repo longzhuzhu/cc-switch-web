@@ -188,6 +188,7 @@
     "settingsSaved": "設定を保存しました",
     "settingsSaveFailed": "設定の保存に失敗しました: {{error}}",
     "proxyRequiredForSwitch": "このプロバイダーは{{reason}}、プロキシサービスが必要です。先にプロキシを起動してください",
+    "officialBlockedByProxy": "Routing が有効な間は公式プロバイダーへ切り替えできません。ローカルプロキシ経由で公式 API を使うとアカウントにリスクが生じる可能性があります。",
     "proxyReasonCopilot": "GitHub Copilot を Claude プロバイダーとして使用しており",
     "proxyReasonOpenAIChat": "OpenAI Chat API フォーマットを使用しており",
     "proxyReasonOpenAIResponses": "OpenAI Responses API フォーマットを使用しており",
@@ -1993,14 +1994,14 @@
     },
     "switchFailed": "切り替えに失敗しました: {{error}}",
     "takeover": {
-      "hint": "テイクオーバーするアプリを選択します。有効にすると、そのアプリのリクエストはローカルプロキシ経由で転送されます",
-      "enabled": "{{app}} テイクオーバー有効",
-      "disabled": "{{app}} テイクオーバー無効",
-      "failed": "テイクオーバーの切り替えに失敗しました",
+      "hint": "ルーティングするアプリを選択します。有効にすると、そのアプリのリクエストはローカルプロキシ経由で転送されます",
+      "enabled": "{{app}} ルーティング有効",
+      "disabled": "{{app}} ルーティング無効",
+      "failed": "ルーティング状態の切り替えに失敗しました",
       "tooltip": {
-        "active": "{{appLabel}} がインターセプト中 - {{address}}:{{port}}\nホットスイッチングのためプロバイダを切り替え",
-        "broken": "{{appLabel}} がインターセプト中ですが、プロキシサービスが実行されていません",
-        "inactive": "{{appLabel}} のライブ設定をインターセプトしてリクエストをローカルプロキシ経由でルーティング"
+        "active": "{{appLabel}} がルーティング中 - {{address}}:{{port}}\nホットスイッチングのためプロバイダを切り替え",
+        "broken": "{{appLabel}} のルーティングは有効ですが、プロキシサービスが実行されていません",
+        "inactive": "{{appLabel}} のライブ設定をローカルプロキシ経由にルーティング"
       }
     },
     "failover": {
@@ -2074,7 +2075,7 @@
       "started": "プロキシサービスが開始されました - {{address}}:{{port}}",
       "startFailed": "プロキシサービスの開始に失敗しました: {{detail}}"
     },
-    "stoppedWithRestore": "プロキシサービスが停止し、すべてのテイクオーバー設定が復元されました",
+    "stoppedWithRestore": "プロキシサービスが停止し、すべてのルーティング設定が復元されました",
     "stopWithRestoreFailed": "停止に失敗しました: {{detail}}"
   },
   "streamCheck": {
@@ -2096,7 +2097,7 @@
   },
   "proxyConfig": {
     "proxyEnabled": "プロキシ有効",
-    "appTakeover": "プロキシ有効",
+    "appTakeover": "アプリルーティング",
     "perAppConfig": "アプリ別設定",
     "circuitBreaker": "サーキットブレーカー",
     "circuitBreakerSettings": "サーキットブレーカー設定",

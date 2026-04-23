@@ -69,7 +69,7 @@ export function useProxyStatus() {
     onSuccess: () => {
       toast.success(
         t("proxy.stoppedWithRestore", {
-          defaultValue: "代理服务已关闭，已恢复所有接管配置",
+          defaultValue: "代理服务已关闭，已恢复所有路由配置",
         }),
         { closeButton: true },
       );
@@ -111,11 +111,11 @@ export function useProxyStatus() {
         variables.enabled
           ? t("proxy.takeover.enabled", {
               app: appLabel,
-              defaultValue: `已接管 ${appLabel} 配置（请求将走本地代理）`,
+              defaultValue: `已将 ${appLabel} 路由到本地代理`,
             })
           : t("proxy.takeover.disabled", {
               app: appLabel,
-              defaultValue: `已恢复 ${appLabel} 配置`,
+              defaultValue: `已关闭 ${appLabel} 路由`,
             }),
         { closeButton: true },
       );
