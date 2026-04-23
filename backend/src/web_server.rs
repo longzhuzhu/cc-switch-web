@@ -1312,6 +1312,8 @@ async fn get_usage_provider_stats(
 ) -> Result<Json<Vec<crate::services::usage_stats::ProviderStats>>, ApiError> {
     let stats = crate::commands::get_provider_stats_internal(
         state.app_state.as_ref(),
+        query.start_date,
+        query.end_date,
         query.app_type.clone(),
     )
         .map_err(|e| ApiError::internal(format!("failed to load provider stats: {e}")))?;
@@ -1324,6 +1326,8 @@ async fn get_usage_model_stats(
 ) -> Result<Json<Vec<crate::services::usage_stats::ModelStats>>, ApiError> {
     let stats = crate::commands::get_model_stats_internal(
         state.app_state.as_ref(),
+        query.start_date,
+        query.end_date,
         query.app_type.clone(),
     )
         .map_err(|e| ApiError::internal(format!("failed to load model stats: {e}")))?;

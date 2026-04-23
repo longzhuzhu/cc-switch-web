@@ -434,13 +434,52 @@ impl Database {
     }
 
     /// 获取 Provider 统计
-    pub fn get_provider_stats(&self, app_type: Option<&str>) -> Result<Vec<ProviderStats>, AppError> {
+    pub fn get_provider_stats(
+        &self,
+        start_date: Option<i64>,
+        end_date: Option<i64>,
+        app_type: Option<&str>,
+    ) -> Result<Vec<ProviderStats>, AppError> {
         let conn = lock_conn!(self.conn);
 
-        let (detail_where, rollup_where) = if app_type.is_some() {
-            ("WHERE l.app_type = ?1", "WHERE r.app_type = ?2")
+        let mut detail_conditions = Vec::new();
+        let mut detail_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        if let Some(start) = start_date {
+            detail_conditions.push("l.created_at >= ?");
+            detail_params.push(Box::new(start));
+        }
+        if let Some(end) = end_date {
+            detail_conditions.push("l.created_at <= ?");
+            detail_params.push(Box::new(end));
+        }
+        if let Some(value) = app_type {
+            detail_conditions.push("l.app_type = ?");
+            detail_params.push(Box::new(value.to_string()));
+        }
+        let detail_where = if detail_conditions.is_empty() {
+            String::new()
         } else {
-            ("", "")
+            format!("WHERE {}", detail_conditions.join(" AND "))
+        };
+
+        let mut rollup_conditions: Vec<String> = Vec::new();
+        let mut rollup_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        if let Some(start) = start_date {
+            rollup_conditions.push("r.date >= date(?, 'unixepoch', 'localtime')".to_string());
+            rollup_params.push(Box::new(start));
+        }
+        if let Some(end) = end_date {
+            rollup_conditions.push("r.date <= date(?, 'unixepoch', 'localtime')".to_string());
+            rollup_params.push(Box::new(end));
+        }
+        if let Some(value) = app_type {
+            rollup_conditions.push("r.app_type = ?".to_string());
+            rollup_params.push(Box::new(value.to_string()));
+        }
+        let rollup_where = if rollup_conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", rollup_conditions.join(" AND "))
         };
 
         // UNION detail logs + rollup data, then aggregate
@@ -505,11 +544,11 @@ impl Database {
                 avg_latency_ms: row.get::<_, f64>(7)? as u64,
             })
         };
-        let rows = if let Some(value) = app_type {
-            stmt.query_map(params![value, value], row_mapper)?
-        } else {
-            stmt.query_map([], row_mapper)?
-        };
+        let mut all_params = detail_params;
+        all_params.extend(rollup_params);
+        let param_refs: Vec<&dyn rusqlite::ToSql> =
+            all_params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), row_mapper)?;
 
         let mut stats = Vec::new();
         for row in rows {
@@ -520,13 +559,52 @@ impl Database {
     }
 
     /// 获取模型统计
-    pub fn get_model_stats(&self, app_type: Option<&str>) -> Result<Vec<ModelStats>, AppError> {
+    pub fn get_model_stats(
+        &self,
+        start_date: Option<i64>,
+        end_date: Option<i64>,
+        app_type: Option<&str>,
+    ) -> Result<Vec<ModelStats>, AppError> {
         let conn = lock_conn!(self.conn);
 
-        let (detail_where, rollup_where) = if app_type.is_some() {
-            ("WHERE app_type = ?1", "WHERE app_type = ?2")
+        let mut detail_conditions = Vec::new();
+        let mut detail_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        if let Some(start) = start_date {
+            detail_conditions.push("created_at >= ?");
+            detail_params.push(Box::new(start));
+        }
+        if let Some(end) = end_date {
+            detail_conditions.push("created_at <= ?");
+            detail_params.push(Box::new(end));
+        }
+        if let Some(value) = app_type {
+            detail_conditions.push("app_type = ?");
+            detail_params.push(Box::new(value.to_string()));
+        }
+        let detail_where = if detail_conditions.is_empty() {
+            String::new()
         } else {
-            ("", "")
+            format!("WHERE {}", detail_conditions.join(" AND "))
+        };
+
+        let mut rollup_conditions: Vec<String> = Vec::new();
+        let mut rollup_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        if let Some(start) = start_date {
+            rollup_conditions.push("date >= date(?, 'unixepoch', 'localtime')".to_string());
+            rollup_params.push(Box::new(start));
+        }
+        if let Some(end) = end_date {
+            rollup_conditions.push("date <= date(?, 'unixepoch', 'localtime')".to_string());
+            rollup_params.push(Box::new(end));
+        }
+        if let Some(value) = app_type {
+            rollup_conditions.push("app_type = ?".to_string());
+            rollup_params.push(Box::new(value.to_string()));
+        }
+        let rollup_where = if rollup_conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", rollup_conditions.join(" AND "))
         };
 
         // UNION detail logs + rollup data
@@ -575,11 +653,11 @@ impl Database {
                 avg_cost_per_request: format!("{avg_cost:.6}"),
             })
         };
-        let rows = if let Some(value) = app_type {
-            stmt.query_map(params![value, value], row_mapper)?
-        } else {
-            stmt.query_map([], row_mapper)?
-        };
+        let mut all_params = detail_params;
+        all_params.extend(rollup_params);
+        let param_refs: Vec<&dyn rusqlite::ToSql> =
+            all_params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), row_mapper)?;
 
         let mut stats = Vec::new();
         for row in rows {
@@ -1143,7 +1221,7 @@ mod tests {
             )?;
         }
 
-        let stats = db.get_model_stats(None)?;
+        let stats = db.get_model_stats(None, None, None)?;
         assert_eq!(stats.len(), 1);
         assert_eq!(stats[0].model, "claude-3-sonnet");
         assert_eq!(stats[0].request_count, 1);

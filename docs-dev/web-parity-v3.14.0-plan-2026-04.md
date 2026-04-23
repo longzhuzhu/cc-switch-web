@@ -257,21 +257,24 @@
 - 已补上会话详情区消息列表虚拟化：
   - 引入 `@tanstack/react-virtual` 以降低长会话滚动开销
   - 长消息默认折叠；当搜索命中折叠内容时自动展开
+- 第一阶段又新增完成一项：
+
+- 已对齐 Usage 日期范围选择器与请求日志分页跳转：
+  - 前端统一从 `days + rolling/fixed` 迁移到 `UsageRangeSelection`
+  - 新增预设范围：`today / 1d / 7d / 14d / 30d / custom`
+  - 新增日历+时间选择器，支持在总览与请求日志筛选中共用
+  - 请求日志分页新增页码输入跳转
+  - Web runtime / Web API / Rust service 已同步为 provider/model stats 透传 `startDate/endDate`
 
 当前仍未开始本阶段的其余项目：
 
-- Usage 日期范围选择器与页码跳转
 - `LemonData` 预设
 
 ## 后续执行入口
 
-确认本文件后，下一步按第一阶段启动，优先顺序建议如下：
+当前第一阶段只剩 1 项待补：
 
-1. `Local Routing` 文案统一
-2. Routing 激活时阻止官方供应商切换
-3. 会话列表虚拟化
-4. Usage 日期范围选择器
-5. `LemonData` 预设
+1. `LemonData` 预设
 
 ## 备注
 

@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { useUsageTrends } from "@/lib/query/usage";
 import { Loader2 } from "lucide-react";
+import type { UsageRangeSelection } from "@/types/usage";
 import {
   fmtInt,
   fmtUsd,
@@ -19,18 +20,20 @@ import {
 } from "./format";
 
 interface UsageTrendChartProps {
-  days: number;
+  range: UsageRangeSelection;
+  rangeLabel: string;
   appType?: string;
   refreshIntervalMs: number;
 }
 
 export function UsageTrendChart({
-  days,
+  range,
+  rangeLabel,
   appType,
   refreshIntervalMs,
 }: UsageTrendChartProps) {
   const { t, i18n } = useTranslation();
-  const { data: trends, isLoading } = useUsageTrends(days, appType, {
+  const { data: trends, isLoading } = useUsageTrends(range, appType, {
     refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
   });
 
@@ -42,7 +45,7 @@ export function UsageTrendChart({
     );
   }
 
-  const isToday = days === 1;
+  const isToday = range.preset === "today" || range.preset === "1d";
   const language = i18n.resolvedLanguage || i18n.language || "en";
   const dateLocale = getLocaleFromLanguage(language);
   const chartData =
@@ -108,13 +111,7 @@ export function UsageTrendChart({
         <h3 className="text-lg font-semibold">
           {t("usage.trends", "使用趋势")}
         </h3>
-        <p className="text-sm text-muted-foreground">
-          {isToday
-            ? t("usage.rangeToday", "今天 (按小时)")
-            : days === 7
-              ? t("usage.rangeLast7Days", "过去 7 天")
-              : t("usage.rangeLast30Days", "过去 30 天")}
-        </p>
+        <p className="text-sm text-muted-foreground">{rangeLabel}</p>
       </div>
 
       <div className="h-[350px] w-full">

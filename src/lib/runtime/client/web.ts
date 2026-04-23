@@ -1999,9 +1999,13 @@ export async function getWebUsageTrends(
 }
 
 export async function getWebProviderStats(
+  startDate?: number,
+  endDate?: number,
   appType?: string,
 ): Promise<ProviderStats[]> {
   const params = new URLSearchParams();
+  if (typeof startDate === "number") params.set("startDate", String(startDate));
+  if (typeof endDate === "number") params.set("endDate", String(endDate));
   if (appType) params.set("appType", appType);
   const query = params.toString();
   return requestJson<ProviderStats[]>(
@@ -2010,9 +2014,13 @@ export async function getWebProviderStats(
 }
 
 export async function getWebModelStats(
+  startDate?: number,
+  endDate?: number,
   appType?: string,
 ): Promise<ModelStats[]> {
   const params = new URLSearchParams();
+  if (typeof startDate === "number") params.set("startDate", String(startDate));
+  if (typeof endDate === "number") params.set("endDate", String(endDate));
   if (appType) params.set("appType", appType);
   const query = params.toString();
   return requestJson<ModelStats[]>(

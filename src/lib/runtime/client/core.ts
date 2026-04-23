@@ -699,10 +699,14 @@ export async function invoke<T>(
       )) as T;
     case "get_provider_stats":
       return (await getWebProviderStats(
+        args?.startDate as number | undefined,
+        args?.endDate as number | undefined,
         args?.appType as string | undefined,
       )) as T;
     case "get_model_stats":
       return (await getWebModelStats(
+        args?.startDate as number | undefined,
+        args?.endDate as number | undefined,
         args?.appType as string | undefined,
       )) as T;
     case "get_request_logs":

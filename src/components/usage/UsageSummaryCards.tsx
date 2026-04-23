@@ -4,22 +4,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useUsageSummary } from "@/lib/query/usage";
 import { Activity, DollarSign, Layers, Database, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import type { UsageRangeSelection } from "@/types/usage";
 import { fmtUsd, parseFiniteNumber } from "./format";
 
 interface UsageSummaryCardsProps {
-  days: number;
+  range: UsageRangeSelection;
   appType?: string;
   refreshIntervalMs: number;
 }
 
 export function UsageSummaryCards({
-  days,
+  range,
   appType,
   refreshIntervalMs,
 }: UsageSummaryCardsProps) {
   const { t } = useTranslation();
 
-  const { data: summary, isLoading } = useUsageSummary(days, appType, {
+  const { data: summary, isLoading } = useUsageSummary(range, appType, {
     refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
   });
 

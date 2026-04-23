@@ -29,16 +29,24 @@ pub fn get_usage_trends_internal(
 
 pub fn get_provider_stats_internal(
     state: &AppState,
+    start_date: Option<i64>,
+    end_date: Option<i64>,
     app_type: Option<String>,
 ) -> Result<Vec<ProviderStats>, AppError> {
-    state.db.get_provider_stats(app_type.as_deref())
+    state
+        .db
+        .get_provider_stats(start_date, end_date, app_type.as_deref())
 }
 
 pub fn get_model_stats_internal(
     state: &AppState,
+    start_date: Option<i64>,
+    end_date: Option<i64>,
     app_type: Option<String>,
 ) -> Result<Vec<ModelStats>, AppError> {
-    state.db.get_model_stats(app_type.as_deref())
+    state
+        .db
+        .get_model_stats(start_date, end_date, app_type.as_deref())
 }
 
 pub fn get_request_logs_internal(
