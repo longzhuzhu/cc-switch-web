@@ -678,7 +678,8 @@
     "codex": "Codex",
     "gemini": "Gemini",
     "opencode": "OpenCode",
-    "openclaw": "OpenClaw"
+    "openclaw": "OpenClaw",
+    "hermes": "Hermes"
   },
   "sessionManager": {
     "title": "セッション管理",
@@ -2122,6 +2123,25 @@
       "404": "エンドポイントが見つかりません。Base URLとAPIパスを確認してください。",
       "429": "レート制限です。しばらく待ってから再試行してください。",
       "5xx": "プロバイダー内部エラーで、通常は一時的な問題です。"
+    }
+  },
+  "hermes": {
+    "placeholderTitle": "Hermes の基本骨格を接続しました",
+    "placeholderDescription": "このコミットでは、Hermes を 6 番目のアプリとしてメインワークスペースに追加し、表示切替と App Switcher の入口を整えました。Provider、Memory、Session などの Hermes 専用機能は後続コミットで順次追加します。",
+    "placeholderToolbar": "Hermes 骨格フェーズ: 現在はアプリ入口とフロー保護を先に提供し、Hermes 専用機能は後続コミットで追加します。",
+    "placeholderStatus": {
+      "appsTitle": "アプリ骨格",
+      "appsDescription": "Hermes の表示、切替、表示可否の制御に対応しました。",
+      "flowTitle": "フロー保護",
+      "flowDescription": "未完成の Provider フローに入らないよう、現在はプレースホルダーページに留まります。",
+      "nextTitle": "次の接続",
+      "nextDescription": "次のコミットで Hermes Provider、Memory、Session の対応を続けます。"
+    },
+    "placeholderChecklistTitle": "この段階で完了した内容",
+    "placeholderChecklist": {
+      "switcher": "メイン画面の App Switcher に Hermes が表示されます。",
+      "visibility": "設定画面で Hermes の表示・非表示を切り替えられます。",
+      "guard": "Hermes へ切り替えても未完成の Provider 操作は発火しません。"
     }
   },
   "proxyConfig": {

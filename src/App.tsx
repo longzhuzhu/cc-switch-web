@@ -66,6 +66,7 @@ import EnvPanel from "@/components/openclaw/EnvPanel";
 import ToolsPanel from "@/components/openclaw/ToolsPanel";
 import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
+import { HermesPlaceholderPanel } from "@/components/hermes/HermesPlaceholderPanel";
 import { UpdateBadge } from "@/components/UpdateBadge";
 
 type View =
@@ -91,6 +92,7 @@ const VALID_APPS: AppId[] = [
   "gemini",
   "opencode",
   "openclaw",
+  "hermes",
 ];
 
 const getInitialApp = (): AppId => {
@@ -149,6 +151,7 @@ function App() {
     gemini: true,
     opencode: true,
     openclaw: true,
+    hermes: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
@@ -157,6 +160,7 @@ function App() {
     if (visibleApps.gemini) return "gemini";
     if (visibleApps.opencode) return "opencode";
     if (visibleApps.openclaw) return "openclaw";
+    if (visibleApps.hermes) return "hermes";
     return "claude"; // fallback
   };
 
@@ -176,6 +180,12 @@ function App() {
       activeApp !== "openclaw" &&
       activeApp !== "gemini"
     ) {
+      setCurrentView("providers");
+    }
+  }, [activeApp, currentView]);
+
+  useEffect(() => {
+    if (activeApp === "hermes" && currentView !== "providers") {
       setCurrentView("providers");
     }
   }, [activeApp, currentView]);
@@ -279,6 +289,7 @@ function App() {
 
   const { data, isLoading, refetch } = useProvidersQuery(activeApp, {
     isProxyRunning,
+    enabled: activeApp !== "hermes",
   });
   const providers = useMemo(() => data?.providers ?? {}, [data]);
   const currentProviderId = data?.currentProviderId ?? "";
@@ -295,10 +306,10 @@ function App() {
   const hasSkillsSupport = true;
   const hasSessionSupport =
     activeApp === "claude" ||
-      activeApp === "codex" ||
-      activeApp === "opencode" ||
-      activeApp === "openclaw" ||
-      activeApp === "gemini";
+    activeApp === "codex" ||
+    activeApp === "opencode" ||
+    activeApp === "openclaw" ||
+    activeApp === "gemini";
 
   const {
     addProvider,
@@ -648,6 +659,10 @@ function App() {
         case "openclawAgents":
           return <AgentsDefaultsPanel />;
         default:
+          if (activeApp === "hermes") {
+            return <HermesPlaceholderPanel />;
+          }
+
           return (
             <div className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="flex-1 overflow-y-auto overflow-x-hidden pb-12 px-1">
@@ -869,7 +884,8 @@ function App() {
           <div className="flex flex-1 min-w-0 items-center justify-end gap-1.5">
             {currentView === "providers" &&
               activeApp !== "opencode" &&
-              activeApp !== "openclaw" && (
+              activeApp !== "openclaw" &&
+              activeApp !== "hermes" && (
                 <div className="flex shrink-0 items-center gap-1.5">
                   {settingsData?.enableLocalProxy && (
                     <ProxyToggle activeApp={activeApp} />
@@ -998,7 +1014,11 @@ function App() {
                       <AnimatePresence mode="wait">
                         <motion.div
                           key={
-                            activeApp === "openclaw" ? "openclaw" : "default"
+                            activeApp === "openclaw"
+                              ? "openclaw"
+                              : activeApp === "hermes"
+                                ? "hermes"
+                                : "default"
                           }
                           className="flex items-center gap-1"
                           initial={{ opacity: 0 }}
@@ -1060,6 +1080,12 @@ function App() {
                                 <Cpu className="w-4 h-4" />
                               </Button>
                             </>
+                          ) : activeApp === "hermes" ? (
+                            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                              {t("hermes.placeholderToolbar", {
+                                defaultValue: "Hermes 骨架阶段",
+                              })}
+                            </div>
                           ) : (
                             <>
                               <Button
@@ -1116,13 +1142,15 @@ function App() {
                       </AnimatePresence>
                     </div>
 
-                    <Button
-                      onClick={() => setIsAddOpen(true)}
-                      size="icon"
-                      className={`ml-2 ${addActionButtonClass}`}
-                    >
-                      <Plus className="w-5 h-5" />
-                    </Button>
+                    {activeApp !== "hermes" && (
+                      <Button
+                        onClick={() => setIsAddOpen(true)}
+                        size="icon"
+                        className={`ml-2 ${addActionButtonClass}`}
+                      >
+                        <Plus className="w-5 h-5" />
+                      </Button>
+                    )}
                   </>
                 )}
               </div>

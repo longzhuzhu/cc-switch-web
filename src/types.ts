@@ -206,6 +206,7 @@ export interface VisibleApps {
   gemini: boolean;
   opencode: boolean;
   openclaw: boolean;
+  hermes: boolean;
 }
 
 // WebDAV 同步状态
@@ -361,6 +362,7 @@ export interface McpApps {
   gemini: boolean;
   opencode: boolean;
   openclaw: boolean;
+  hermes: boolean;
 }
 
 // MCP 服务器条目（v3.7.0 统一结构）

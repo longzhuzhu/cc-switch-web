@@ -69,4 +69,10 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     activeClass: "theme-chip-warning",
     badgeClass: "theme-chip-warning border-0 gap-1.5",
   },
+  hermes: {
+    label: "Hermes",
+    icon: <ProviderIcon icon="hermes" name="Hermes" size={14} />,
+    activeClass: "theme-chip-primary",
+    badgeClass: "theme-chip-primary border-0 gap-1.5",
+  },
 };

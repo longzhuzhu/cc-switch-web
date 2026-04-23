@@ -188,6 +188,20 @@
 
 目标：把 Web 从 5 应用扩到 6 应用，并引入 Hermes 的完整最小闭环。
 
+### 2026-04-23 已完成第一笔
+
+- Hermes 已先以第 6 个应用的基础骨架形式进入 Web 主界面
+- App Switcher、可见应用设置和主界面默认回退逻辑已支持 Hermes
+- 当前进入 Hermes 时会停在占位页，并显式避开现有 Provider 操作链路
+- 后端本笔只补 `settings` 持久化字段与 `hermes_config_dir`，未扩 `app_config.rs`
+- Hermes Provider、Memory、Session、MCP、Skills 等专属能力留待后续提交继续推进
+
+### 第三阶段当前状态
+
+- 第三阶段已完成第一笔“基础承载面”落地
+- 当前已具备 Hermes 的应用入口、可见性控制与流程保护
+- 后续提交应继续按最小闭环拆分，不把 Provider、Memory、Session 混成一笔
+
 ### 计划项
 
 - 应用枚举扩容：

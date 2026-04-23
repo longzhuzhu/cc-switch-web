@@ -678,7 +678,8 @@
     "codex": "Codex",
     "gemini": "Gemini",
     "opencode": "OpenCode",
-    "openclaw": "OpenClaw"
+    "openclaw": "OpenClaw",
+    "hermes": "Hermes"
   },
   "sessionManager": {
     "title": "Session Manager",
@@ -2122,6 +2123,25 @@
       "404": "Endpoint not found. Check base URL and API path.",
       "429": "Rate limited. Retry later.",
       "5xx": "Provider internal error, usually temporary."
+    }
+  },
+  "hermes": {
+    "placeholderTitle": "Hermes base skeleton is in place",
+    "placeholderDescription": "This commit introduces Hermes as the sixth app in the main workspace and wires up its visibility and switcher entry. Provider, Memory, Session, and other Hermes-specific capabilities will follow in later commits.",
+    "placeholderToolbar": "Hermes skeleton phase: app entry and flow guard are available now, while Hermes-specific capabilities will be added in follow-up commits.",
+    "placeholderStatus": {
+      "appsTitle": "App scaffold",
+      "appsDescription": "Hermes is now available in app display, switching, and visibility controls.",
+      "flowTitle": "Flow guard",
+      "flowDescription": "The current experience stays on a placeholder page to avoid entering unfinished provider flows.",
+      "nextTitle": "Next steps",
+      "nextDescription": "Upcoming commits will continue with Hermes Provider, Memory, and Session support."
+    },
+    "placeholderChecklistTitle": "Completed in this phase",
+    "placeholderChecklist": {
+      "switcher": "Hermes is now visible in the main App Switcher.",
+      "visibility": "The settings page can now show or hide Hermes.",
+      "guard": "Switching to Hermes no longer triggers unfinished provider actions."
     }
   },
   "proxyConfig": {
