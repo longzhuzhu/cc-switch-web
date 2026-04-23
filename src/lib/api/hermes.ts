@@ -1,4 +1,5 @@
 import { invoke } from "@/lib/runtime/client/core";
+import { settingsApi } from "./settings";
 import type {
   HermesHealthWarning,
   HermesMemoryKind,
@@ -6,6 +7,17 @@ import type {
 } from "@/types";
 
 export const hermesApi = {
+  async openWebUI(path?: string): Promise<void> {
+    const url = await invoke<string>("get_hermes_web_ui_url", {
+      path: path ?? null,
+    });
+    await settingsApi.openExternal(url);
+  },
+
+  async launchDashboard(): Promise<void> {
+    await invoke("launch_hermes_dashboard");
+  },
+
   async scanHealth(): Promise<HermesHealthWarning[]> {
     return await invoke("scan_hermes_config_health");
   },

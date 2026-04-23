@@ -1,9 +1,12 @@
+import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { hermesApi } from "@/lib/api/hermes";
 import type { HermesMemoryKind } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
+
+export const HERMES_WEB_OFFLINE_ERROR = "hermes_web_offline";
 
 export const hermesKeys = {
   all: ["hermes"] as const,
@@ -19,6 +22,33 @@ export function useHermesHealth(enabled: boolean) {
     staleTime: 30_000,
     enabled,
   });
+}
+
+export function useOpenHermesWebUI(onOffline?: () => void) {
+  const { t } = useTranslation();
+
+  return useCallback(
+    async (path?: string) => {
+      try {
+        await hermesApi.openWebUI(path);
+      } catch (error) {
+        const detail = extractErrorMessage(error);
+        if (detail === HERMES_WEB_OFFLINE_ERROR) {
+          if (onOffline) {
+            onOffline();
+          } else {
+            toast.error(t("hermes.webui.offline"));
+          }
+          return;
+        }
+
+        toast.error(t("hermes.webui.openFailed"), {
+          description: detail || undefined,
+        });
+      }
+    },
+    [onOffline, t],
+  );
 }
 
 export function useHermesMemory(kind: HermesMemoryKind, enabled: boolean) {

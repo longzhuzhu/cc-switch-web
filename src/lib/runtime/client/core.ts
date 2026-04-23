@@ -53,6 +53,7 @@ import {
   getWebOpenClawModelCatalog,
   getWebOpenClawTools,
   getWebHermesHealth,
+  getWebHermesWebUiUrl,
   getWebHermesMemory,
   getWebHermesMemoryLimits,
   getWebOmoLocalFile,
@@ -114,6 +115,7 @@ import {
   syncWebUniversalProvider,
   testWebProxyUrl,
   toggleWebMcpApp,
+  launchWebHermesDashboard,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
   stopWebProxyWithRestore,
@@ -462,6 +464,12 @@ export async function invoke<T>(
       )) as T;
     case "scan_hermes_config_health":
       return (await getWebHermesHealth()) as T;
+    case "get_hermes_web_ui_url":
+      return (await getWebHermesWebUiUrl(
+        args?.path as string | null | undefined,
+      )) as T;
+    case "launch_hermes_dashboard":
+      return (await launchWebHermesDashboard()) as T;
     case "get_hermes_memory":
       return (await getWebHermesMemory(args?.kind as any)) as T;
     case "set_hermes_memory":

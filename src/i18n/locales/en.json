@@ -2162,6 +2162,17 @@
       "toggleFailed": "Failed to update Hermes memory toggle",
       "placeholder": "Edit {{filename}} here ..."
     },
+    "webui": {
+      "open": "Open Hermes Web UI",
+      "offline": "Hermes Web UI is not running. Start it with `hermes dashboard` first.",
+      "openFailed": "Failed to open Hermes Web UI",
+      "fixInWebUI": "Fix in Hermes Web UI",
+      "launchConfirmTitle": "Hermes Dashboard is not running",
+      "launchConfirmMessage": "Open a terminal and start it now with `hermes dashboard`?\n\nOnce it finishes starting, come back here and click “Open Hermes Web UI” again.\n\nIf the terminal reports that `hermes` cannot be found or the web extras are missing, run first:\npip install hermes-agent[web]",
+      "launchConfirmAction": "Open terminal & launch",
+      "launching": "Started `hermes dashboard` in a terminal. Open the Web UI again after the service is ready.",
+      "launchFailed": "Failed to open terminal"
+    },
     "health": {
       "title": "Hermes config warnings detected",
       "parseFailed": "config.yaml could not be parsed as valid YAML. Fix the file before editing it here.",

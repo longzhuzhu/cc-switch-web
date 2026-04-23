@@ -2162,6 +2162,17 @@
       "toggleFailed": "更新 Hermes Memory 开关失败",
       "placeholder": "在此编辑 {{filename}} ..."
     },
+    "webui": {
+      "open": "打开 Hermes Web UI",
+      "offline": "Hermes Web UI 未启动，请先运行 `hermes dashboard` 启动服务。",
+      "openFailed": "打开 Hermes Web UI 失败",
+      "fixInWebUI": "到 Hermes Web UI 修复",
+      "launchConfirmTitle": "Hermes Dashboard 未启动",
+      "launchConfirmMessage": "是否打开终端并运行 `hermes dashboard` 启动服务？\n\n启动完成后，请回到这里再次点击“打开 Hermes Web UI”。\n\n若终端提示找不到 hermes 或缺少 web 依赖，请先运行：\npip install hermes-agent[web]",
+      "launchConfirmAction": "打开终端并启动",
+      "launching": "已在终端启动 hermes dashboard，请等待服务就绪后再打开 Web UI。",
+      "launchFailed": "打开终端失败"
+    },
     "health": {
       "title": "检测到 Hermes 配置告警",
       "parseFailed": "config.yaml 无法被解析为有效 YAML，请先修复文件后再继续在这里编辑。",

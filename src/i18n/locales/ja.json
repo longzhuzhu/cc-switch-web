@@ -2162,6 +2162,17 @@
       "toggleFailed": "Hermes Memory の切替更新に失敗しました",
       "placeholder": "ここで {{filename}} を編集 ..."
     },
+    "webui": {
+      "open": "Hermes Web UI を開く",
+      "offline": "Hermes Web UI が起動していません。まず `hermes dashboard` を実行してください。",
+      "openFailed": "Hermes Web UI を開けませんでした",
+      "fixInWebUI": "Hermes Web UI で修正",
+      "launchConfirmTitle": "Hermes Dashboard が起動していません",
+      "launchConfirmMessage": "ターミナルを開いて `hermes dashboard` を実行しますか？\n\n起動したら、この画面に戻ってもう一度「Hermes Web UI を開く」を押してください。\n\nターミナルに `hermes` が見つからない、または web 依存が不足するというエラーが表示される場合は、まず次を実行してください：\npip install hermes-agent[web]",
+      "launchConfirmAction": "ターミナルを開いて起動",
+      "launching": "ターミナルで `hermes dashboard` を起動しました。サービス準備後に再度 Web UI を開いてください。",
+      "launchFailed": "ターミナルを開けませんでした"
+    },
     "health": {
       "title": "Hermes 設定の警告を検出しました",
       "parseFailed": "config.yaml を有効な YAML として解析できません。ここで編集する前にファイルを修正してください。",

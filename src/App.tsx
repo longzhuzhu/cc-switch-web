@@ -23,13 +23,14 @@ import {
 import type { Provider, VisibleApps } from "@/types";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
 import {
+  hermesApi,
   providersApi,
   settingsApi,
   type AppId,
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
-import { useHermesHealth } from "@/hooks/useHermes";
+import { useHermesHealth, useOpenHermesWebUI } from "@/hooks/useHermes";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useAutoCompact } from "@/hooks/useAutoCompact";
@@ -382,6 +383,10 @@ function App() {
   const headerTopOffset =
     DRAG_BAR_HEIGHT + (isEnvBannerVisible ? envBannerHeight : 0);
   const contentTopOffset = headerTopOffset + HEADER_HEIGHT;
+  const [launchDashboardOpen, setLaunchDashboardOpen] = useState(false);
+  const openHermesWebUI = useOpenHermesWebUI(() =>
+    setLaunchDashboardOpen(true),
+  );
 
   useEffect(() => {
     if (!isEnvBannerVisible && envBannerHeight !== 0) {
@@ -681,7 +686,7 @@ function App() {
           return <HermesMemoryPanel />;
         default:
           if (activeApp === "hermes") {
-            return <HermesPlaceholderPanel />;
+            return <HermesPlaceholderPanel onOpenWebUI={openHermesWebUI} />;
           }
 
           return (
@@ -1199,7 +1204,10 @@ function App() {
           <OpenClawHealthBanner warnings={openclawHealthWarnings} />
         )}
         {isHermesView && hermesHealthWarnings.length > 0 && (
-          <HermesHealthBanner warnings={hermesHealthWarnings} />
+          <HermesHealthBanner
+            warnings={hermesHealthWarnings}
+            onOpenConfig={() => openHermesWebUI("/config")}
+          />
         )}
         {renderContent()}
       </main>
@@ -1259,6 +1267,27 @@ function App() {
         }
         onConfirm={() => void handleConfirmAction()}
         onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        isOpen={launchDashboardOpen}
+        title={t("hermes.webui.launchConfirmTitle")}
+        message={t("hermes.webui.launchConfirmMessage")}
+        confirmText={t("hermes.webui.launchConfirmAction")}
+        variant="info"
+        onConfirm={() => {
+          setLaunchDashboardOpen(false);
+          void (async () => {
+            try {
+              await hermesApi.launchDashboard();
+              toast.success(t("hermes.webui.launching"));
+            } catch (error) {
+              toast.error(t("hermes.webui.launchFailed"), {
+                description: extractErrorMessage(error) || undefined,
+              });
+            }
+          })();
+        }}
+        onCancel={() => setLaunchDashboardOpen(false)}
       />
       <FirstRunNoticeDialog />
       <DeepLinkImportDialog />

@@ -217,10 +217,18 @@
 - 三语 locale 已补齐 Hermes health 告警文案
 - 当前仍未接入 Hermes Provider、Session、MCP、Skills，继续保持按最小闭环拆分推进
 
+### 2026-04-23 已完成第五笔
+
+- Hermes 占位页已补可用入口，可直接尝试打开 Hermes Web UI
+- 本地服务已支持探测 Hermes Web UI 存活并返回可打开地址
+- 若 Hermes Web UI 未启动，前端会弹出确认框，允许直接打开终端执行 `hermes dashboard`
+- Hermes 配置告警 Banner 已补“到 Hermes Web UI 修复”跳转入口
+- 三语 locale 已补齐 Hermes Web UI 相关文案
+
 ### 第三阶段当前状态
 
-- 第三阶段已完成四笔闭环：基础承载面、Memory 面板、配置目录覆盖入口、配置健康告警
-- 当前已具备 Hermes 的应用入口、可见性控制、流程保护、Memory 基础闭环、自定义目录承接与配置告警提示
+- 第三阶段已完成五笔闭环：基础承载面、Memory 面板、配置目录覆盖入口、配置健康告警、Web UI 入口
+- 当前已具备 Hermes 的应用入口、可见性控制、流程保护、Memory 基础闭环、自定义目录承接、配置告警提示与 Web UI 跳转/启动引导
 - 后续提交应继续按最小闭环拆分，不把 Provider、Memory、Session 混成一笔
 
 ### 计划项

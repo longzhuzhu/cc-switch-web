@@ -1,9 +1,16 @@
 import type { ReactNode } from "react";
-import { Construction, Layers3, Route } from "lucide-react";
+import { Construction, ExternalLink, Layers3, Route } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "@/components/ProviderIcon";
+import { Button } from "@/components/ui/button";
 
-export function HermesPlaceholderPanel() {
+interface HermesPlaceholderPanelProps {
+  onOpenWebUI: () => void | Promise<void>;
+}
+
+export function HermesPlaceholderPanel({
+  onOpenWebUI,
+}: HermesPlaceholderPanelProps) {
   const { t } = useTranslation();
 
   return (
@@ -33,6 +40,13 @@ export function HermesPlaceholderPanel() {
                   "这一笔先把 Hermes 作为第 6 个应用接入主工作台，并补齐可见性与切换入口。Provider、Memory、Session 等专属能力会在后续提交继续补齐。",
               })}
             </p>
+
+            <div className="flex flex-wrap gap-3">
+              <Button type="button" onClick={() => void onOpenWebUI()}>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                {t("hermes.webui.open")}
+              </Button>
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <StatusCard

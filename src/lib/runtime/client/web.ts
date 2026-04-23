@@ -1942,6 +1942,17 @@ export async function getWebHermesHealth(): Promise<HermesHealthWarning[]> {
   return requestJson<HermesHealthWarning[]>("/api/hermes/health");
 }
 
+export async function getWebHermesWebUiUrl(
+  path?: string | null,
+): Promise<string> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return requestJson<string>(`/api/hermes/web-ui-url${query}`);
+}
+
+export async function launchWebHermesDashboard(): Promise<void> {
+  return requestWithBody<void>("/api/hermes/dashboard", "POST");
+}
+
 export async function setWebHermesMemory(
   kind: HermesMemoryKind,
   content: string,
