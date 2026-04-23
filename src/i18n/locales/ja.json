@@ -2173,6 +2173,17 @@
       "launching": "ターミナルで `hermes dashboard` を起動しました。サービス準備後に再度 Web UI を開いてください。",
       "launchFailed": "ターミナルを開けませんでした"
     },
+    "summary": {
+      "title": "現在の model 要約",
+      "description": "Hermes の `model` セクションにある現在の要約情報を読み取り専用で表示します。",
+      "source": "ソース: config.yaml / model",
+      "provider": "現在の Provider",
+      "defaultModel": "既定モデル",
+      "baseUrl": "Base URL",
+      "contextLength": "Context Length",
+      "maxTokens": "Max Tokens",
+      "empty": "Hermes config.yaml に `model` セクションがまだ設定されていません。"
+    },
     "health": {
       "title": "Hermes 設定の警告を検出しました",
       "parseFailed": "config.yaml を有効な YAML として解析できません。ここで編集する前にファイルを修正してください。",

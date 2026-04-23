@@ -24,6 +24,14 @@ export function useHermesHealth(enabled: boolean) {
   });
 }
 
+export function useHermesModelConfig(enabled: boolean) {
+  return useQuery({
+    queryKey: ["hermes", "modelConfig"],
+    queryFn: () => hermesApi.getModelConfig(),
+    enabled,
+  });
+}
+
 export function useOpenHermesWebUI(onOffline?: () => void) {
   const { t } = useTranslation();
 

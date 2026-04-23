@@ -53,6 +53,7 @@ import {
   getWebOpenClawModelCatalog,
   getWebOpenClawTools,
   getWebHermesHealth,
+  getWebHermesModelConfig,
   getWebHermesWebUiUrl,
   getWebHermesMemory,
   getWebHermesMemoryLimits,
@@ -464,6 +465,8 @@ export async function invoke<T>(
       )) as T;
     case "scan_hermes_config_health":
       return (await getWebHermesHealth()) as T;
+    case "get_hermes_model_config":
+      return (await getWebHermesModelConfig()) as T;
     case "get_hermes_web_ui_url":
       return (await getWebHermesWebUiUrl(
         args?.path as string | null | undefined,

@@ -2173,6 +2173,17 @@
       "launching": "已在终端启动 hermes dashboard，请等待服务就绪后再打开 Web UI。",
       "launchFailed": "打开终端失败"
     },
+    "summary": {
+      "title": "当前模型摘要",
+      "description": "只读展示 Hermes `model` 段中的当前摘要信息。",
+      "source": "来源：config.yaml / model",
+      "provider": "当前 Provider",
+      "defaultModel": "默认模型",
+      "baseUrl": "Base URL",
+      "contextLength": "Context Length",
+      "maxTokens": "Max Tokens",
+      "empty": "当前尚未在 Hermes config.yaml 中配置 model 段。"
+    },
     "health": {
       "title": "检测到 Hermes 配置告警",
       "parseFailed": "config.yaml 无法被解析为有效 YAML，请先修复文件后再继续在这里编辑。",

@@ -71,6 +71,32 @@ pub struct HermesHealthWarning {
     pub path: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HermesModelConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "baseUrl",
+        alias = "base_url"
+    )]
+    pub base_url: Option<String>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "contextLength",
+        alias = "context_length"
+    )]
+    pub context_length: Option<u64>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "maxTokens",
+        alias = "max_tokens"
+    )]
+    pub max_tokens: Option<u64>,
+}
+
 fn read_hermes_config() -> Result<serde_yaml::Value, AppError> {
     let path = get_hermes_config_path();
     if !path.exists() {
@@ -94,6 +120,17 @@ pub fn scan_hermes_config_health() -> Result<Vec<HermesHealthWarning>, AppError>
 
     let content = fs::read_to_string(&path).map_err(|e| AppError::io(&path, e))?;
     Ok(scan_hermes_health_internal(&content))
+}
+
+pub fn get_model_config() -> Result<Option<HermesModelConfig>, AppError> {
+    let config = read_hermes_config()?;
+    let Some(model_value) = config.get("model") else {
+        return Ok(None);
+    };
+
+    let model = serde_yaml::from_value::<HermesModelConfig>(model_value.clone())
+        .map_err(|e| AppError::Config(format!("Failed to parse Hermes model config: {e}")))?;
+    Ok(Some(model))
 }
 
 fn scan_hermes_health_internal(content: &str) -> Vec<HermesHealthWarning> {

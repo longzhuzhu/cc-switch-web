@@ -44,6 +44,11 @@ pub(crate) fn launch_hermes_dashboard_internal() -> Result<bool, String> {
     )
 }
 
+pub(crate) fn get_hermes_model_config_internal(
+) -> Result<Option<crate::hermes_config::HermesModelConfig>, String> {
+    crate::hermes_config::get_model_config().map_err(|e| e.to_string())
+}
+
 pub(crate) fn scan_hermes_config_health_internal(
 ) -> Result<Vec<crate::hermes_config::HermesHealthWarning>, String> {
     crate::hermes_config::scan_hermes_config_health().map_err(|e| e.to_string())

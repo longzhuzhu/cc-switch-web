@@ -2173,6 +2173,17 @@
       "launching": "Started `hermes dashboard` in a terminal. Open the Web UI again after the service is ready.",
       "launchFailed": "Failed to open terminal"
     },
+    "summary": {
+      "title": "Current Model Summary",
+      "description": "Read-only snapshot of Hermes' current `model` section.",
+      "source": "Source: config.yaml / model",
+      "provider": "Current Provider",
+      "defaultModel": "Default Model",
+      "baseUrl": "Base URL",
+      "contextLength": "Context Length",
+      "maxTokens": "Max Tokens",
+      "empty": "The `model` section is not configured in Hermes config.yaml yet."
+    },
     "health": {
       "title": "Hermes config warnings detected",
       "parseFailed": "config.yaml could not be parsed as valid YAML. Fix the file before editing it here.",

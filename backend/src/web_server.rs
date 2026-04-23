@@ -1255,6 +1255,13 @@ async fn launch_hermes_dashboard() -> Result<Json<bool>, ApiError> {
     Ok(Json(opened))
 }
 
+async fn get_hermes_model_config(
+) -> Result<Json<Option<crate::hermes_config::HermesModelConfig>>, ApiError> {
+    let model = crate::commands::get_hermes_model_config_internal()
+        .map_err(|e| ApiError::internal(format!("failed to load hermes model config: {e}")))?;
+    Ok(Json(model))
+}
+
 async fn scan_hermes_config_health(
 ) -> Result<Json<Vec<crate::hermes_config::HermesHealthWarning>>, ApiError> {
     let warnings = crate::commands::scan_hermes_config_health_internal()
@@ -3403,6 +3410,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             "/api/hermes/memory/:kind",
             get(get_hermes_memory).put(set_hermes_memory),
         )
+        .route("/api/hermes/model", get(get_hermes_model_config))
         .route("/api/hermes/web-ui-url", get(get_hermes_web_ui_url))
         .route("/api/hermes/dashboard", post(launch_hermes_dashboard))
         .route("/api/hermes/health", get(scan_hermes_config_health))

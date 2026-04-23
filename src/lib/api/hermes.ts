@@ -2,6 +2,7 @@ import { invoke } from "@/lib/runtime/client/core";
 import { settingsApi } from "./settings";
 import type {
   HermesHealthWarning,
+  HermesModelConfig,
   HermesMemoryKind,
   HermesMemoryLimits,
 } from "@/types";
@@ -16,6 +17,10 @@ export const hermesApi = {
 
   async launchDashboard(): Promise<void> {
     await invoke("launch_hermes_dashboard");
+  },
+
+  async getModelConfig(): Promise<HermesModelConfig | null> {
+    return await invoke("get_hermes_model_config");
   },
 
   async scanHealth(): Promise<HermesHealthWarning[]> {

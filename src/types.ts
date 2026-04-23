@@ -578,6 +578,14 @@ export interface HermesHealthWarning {
   path?: string;
 }
 
+export interface HermesModelConfig {
+  default?: string;
+  provider?: string;
+  baseUrl?: string;
+  contextLength?: number;
+  maxTokens?: number;
+}
+
 export type HermesMemoryKind = "memory" | "user";
 
 export interface HermesMemoryLimits {

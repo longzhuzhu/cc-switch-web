@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Construction, ExternalLink, Layers3, Route } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useHermesModelConfig } from "@/hooks/useHermes";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { Button } from "@/components/ui/button";
 
@@ -12,6 +13,7 @@ export function HermesPlaceholderPanel({
   onOpenWebUI,
 }: HermesPlaceholderPanelProps) {
   const { t } = useTranslation();
+  const { data: modelConfig } = useHermesModelConfig(true);
 
   return (
     <div className="px-6 pt-4">
@@ -46,6 +48,58 @@ export function HermesPlaceholderPanel({
                 <ExternalLink className="mr-2 h-4 w-4" />
                 {t("hermes.webui.open")}
               </Button>
+            </div>
+
+            <div className="rounded-3xl border border-border-default bg-background/70 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">
+                    {t("hermes.summary.title")}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("hermes.summary.description")}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {t("hermes.summary.source")}
+                </span>
+              </div>
+              {modelConfig ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <SummaryItem
+                    label={t("hermes.summary.provider")}
+                    value={modelConfig.provider}
+                  />
+                  <SummaryItem
+                    label={t("hermes.summary.defaultModel")}
+                    value={modelConfig.default}
+                  />
+                  <SummaryItem
+                    label={t("hermes.summary.baseUrl")}
+                    value={modelConfig.baseUrl}
+                  />
+                  <SummaryItem
+                    label={t("hermes.summary.contextLength")}
+                    value={
+                      modelConfig.contextLength !== undefined
+                        ? String(modelConfig.contextLength)
+                        : undefined
+                    }
+                  />
+                  <SummaryItem
+                    label={t("hermes.summary.maxTokens")}
+                    value={
+                      modelConfig.maxTokens !== undefined
+                        ? String(modelConfig.maxTokens)
+                        : undefined
+                    }
+                  />
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {t("hermes.summary.empty")}
+                </p>
+              )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
@@ -127,6 +181,25 @@ function StatusCard({
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
         {description}
       </p>
+    </div>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border-default bg-background/75 p-4">
+      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-2 break-all text-sm font-medium text-foreground">
+        {value && value.trim().length > 0 ? value : "—"}
+      </div>
     </div>
   );
 }

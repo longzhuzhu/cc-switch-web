@@ -225,10 +225,17 @@
 - Hermes 配置告警 Banner 已补“到 Hermes Web UI 修复”跳转入口
 - 三语 locale 已补齐 Hermes Web UI 相关文案
 
+### 2026-04-23 已完成第六笔
+
+- Web 本地服务已补 Hermes `model` 段读取接口
+- Hermes 占位页已补只读的当前模型摘要，可展示 provider、default model、base URL、context length、max tokens
+- 三语 locale 已补齐 Hermes model 摘要文案
+- 当前仍未接入 Hermes Provider 编辑、Session、MCP、Skills，继续保持按最小闭环拆分推进
+
 ### 第三阶段当前状态
 
-- 第三阶段已完成五笔闭环：基础承载面、Memory 面板、配置目录覆盖入口、配置健康告警、Web UI 入口
-- 当前已具备 Hermes 的应用入口、可见性控制、流程保护、Memory 基础闭环、自定义目录承接、配置告警提示与 Web UI 跳转/启动引导
+- 第三阶段已完成六笔闭环：基础承载面、Memory 面板、配置目录覆盖入口、配置健康告警、Web UI 入口、model 摘要只读面板
+- 当前已具备 Hermes 的应用入口、可见性控制、流程保护、Memory 基础闭环、自定义目录承接、配置告警提示、Web UI 跳转/启动引导与 model 摘要只读展示
 - 后续提交应继续按最小闭环拆分，不把 Provider、Memory、Session 混成一笔
 
 ### 计划项
