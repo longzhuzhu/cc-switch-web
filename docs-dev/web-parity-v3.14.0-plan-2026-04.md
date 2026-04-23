@@ -116,6 +116,22 @@
 - Usage 页面支持预设日期范围和自定义日期时间
 - `LemonData` 在 Web 可创建、可展示、可保存
 
+## 阶段记录
+
+### 2026-04-23 已完成
+
+- 对齐 `Local Proxy Takeover` 到 `Local Routing` 的文案与行为
+- Routing 激活时拦截切换到官方供应商
+- 会话列表引入虚拟化
+- Usage 页面补齐日期范围选择器、起止时间、自定义范围与分页跳转
+- 补齐 `LemonData` 在 Claude、Codex、Gemini、OpenCode、OpenClaw 的预设
+- 同步三语合作伙伴文案与 Web 端图标资源
+
+### 第一阶段状态
+
+- 第一阶段计划项已完成
+- 后续如继续推进，对齐重点转入第二阶段协议层能力，或单独立项处理 Hermes 全链路接入
+
 ### 第二阶段：代理与协议层对齐
 
 目标：补齐 `v3.14.0` 中对 Web 后端最有价值的协议演进，但暂不引入 Hermes。
@@ -265,16 +281,17 @@
   - 新增日历+时间选择器，支持在总览与请求日志筛选中共用
   - 请求日志分页新增页码输入跳转
   - Web runtime / Web API / Rust service 已同步为 provider/model stats 透传 `startDate/endDate`
-
-当前仍未开始本阶段的其余项目：
-
-- `LemonData` 预设
+- 已补齐 `LemonData` 预设：
+  - Claude、Codex、Gemini、OpenCode、OpenClaw 五条配置链路已对齐
+  - 三语合作伙伴文案已补齐
+  - Web 端本地图标资源与映射已接入
 
 ## 后续执行入口
 
-当前第一阶段只剩 1 项待补：
+当前第一阶段已完成，后续建议按计划继续：
 
-1. `LemonData` 预设
+1. 进入第二阶段，补协议层 `gemini_native` 与相关联动
+2. 单独立项推进第三阶段 Hermes 全链路接入
 
 ## 备注
 

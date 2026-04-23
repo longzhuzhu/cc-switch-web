@@ -1,5 +1,6 @@
 import eflowcodeLogo from "@/assets/icons/eflowcode.png";
 import ddsLogo from "@/assets/icons/dds.png";
+import lemondataLogo from "@/assets/icons/lemondata.png";
 import lionccLogo from "@/assets/icons/lioncc.png";
 import pipellmLogo from "@/assets/icons/pipellm.png";
 import shengsuanyunLogo from "@/assets/icons/shengsuanyun.svg";
@@ -7,6 +8,7 @@ import shengsuanyunLogo from "@/assets/icons/shengsuanyun.svg";
 const localIcons: Record<string, string> = {
   dds: ddsLogo,
   eflowcode: eflowcodeLogo,
+  lemondata: lemondataLogo,
   lioncc: lionccLogo,
   pipellm: pipellmLogo,
   shengsuanyun: shengsuanyunLogo,

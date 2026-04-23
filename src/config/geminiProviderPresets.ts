@@ -261,6 +261,25 @@ export const geminiProviderPresets: GeminiProviderPreset[] = [
     icon: "lioncc",
   },
   {
+    name: "LemonData",
+    websiteUrl: "https://lemondata.cc",
+    apiKeyUrl: "https://lemondata.cc/r/FFX1ZDUP",
+    settingsConfig: {
+      env: {
+        GOOGLE_GEMINI_BASE_URL: "https://api.lemondata.cc",
+        GEMINI_MODEL: "gemini-3.1-pro",
+      },
+    },
+    baseURL: "https://api.lemondata.cc",
+    model: "gemini-3.1-pro",
+    description: "LemonData",
+    category: "third_party",
+    isPartner: true,
+    partnerPromotionKey: "lemondata",
+    endpointCandidates: ["https://api.lemondata.cc"],
+    icon: "lemondata",
+  },
+  {
     name: "E-FlowCode",
     websiteUrl: "https://e-flowcode.cc",
     apiKeyUrl: "https://e-flowcode.cc",
