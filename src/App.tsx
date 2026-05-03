@@ -47,7 +47,6 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { DeepLinkImportDialog } from "@/components/deeplink/DeepLinkImportDialog";
-import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { ProxyToggle } from "@/components/proxy/ProxyToggle";
 import { FailoverToggle } from "@/components/proxy/FailoverToggle";
 import UsageScriptModal from "@/components/UsageScriptModal";
@@ -1348,7 +1347,6 @@ function App() {
         }}
         onCancel={() => setLaunchDashboardOpen(false)}
       />
-      <FirstRunNoticeDialog />
       <DeepLinkImportDialog />
     </div>
   );

@@ -1,0 +1,21 @@
+services:
+  cc-switch-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cc-switch-web
+    environment:
+      HOME: /data
+      CC_SWITCH_WEB_HOST: 0.0.0.0
+      CC_SWITCH_WEB_PORT: 8890
+      CC_SWITCH_WEB_PORT_SCAN_COUNT: 1
+    ports:
+      - "5030:8890"
+    volumes:
+      - /home/ubuntu/app/cc-switch-web:/data
+      - /home/ubuntu/.claude:/data/.claude
+      - /home/ubuntu/.codex:/data/.codex
+      - /home/ubuntu/.gemini:/data/.gemini
+      - /home/ubuntu/.config/opencode:/data/.config/opencode
+      - /home/ubuntu/.config/openclaw:/data/.config/openclaw
+    restart: unless-stopped

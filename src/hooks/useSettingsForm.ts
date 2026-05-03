@@ -82,7 +82,7 @@ export function useSettingsForm(): UseSettingsFormResult {
       enableClaudePluginIntegration:
         data.enableClaudePluginIntegration ?? false,
       launchOnStartup: data.launchOnStartup ?? false,
-      skipClaudeOnboarding: data.skipClaudeOnboarding ?? false,
+      skipClaudeOnboarding: data.skipClaudeOnboarding ?? true,
       claudeConfigDir: sanitizeDir(data.claudeConfigDir),
       codexConfigDir: sanitizeDir(data.codexConfigDir),
       geminiConfigDir: sanitizeDir(data.geminiConfigDir),

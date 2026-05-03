@@ -115,7 +115,7 @@ export function LoginPage({ onAuthSuccess }: LoginPageProps) {
               value={key}
               onChange={(e) => setKey(e.target.value)}
               placeholder={t("auth.keyPlaceholder")}
-              autoComplete={isSetup ? "new-password" : "current-password"}
+              autoComplete="current-password"
               className="w-full rounded-lg border border-border-default bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
@@ -130,7 +130,7 @@ export function LoginPage({ onAuthSuccess }: LoginPageProps) {
                 value={confirmKey}
                 onChange={(e) => setConfirmKey(e.target.value)}
                 placeholder={t("auth.keyPlaceholder")}
-                autoComplete="new-password"
+                autoComplete="off"
                 className="w-full rounded-lg border border-border-default bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
