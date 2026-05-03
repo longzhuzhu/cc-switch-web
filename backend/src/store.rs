@@ -12,6 +12,7 @@ pub struct AppState {
     pub copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     pub codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
     pub proxy_service: ProxyService,
+    /// 会话令牌 → 过期时间戳（Unix 秒），惰性清理
     pub auth_tokens: Arc<RwLock<HashMap<String, i64>>>,
 }
 
