@@ -8,6 +8,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
+ENV VITE_LOCAL_API_BASE=
 RUN pnpm exec vite build
 
 
@@ -26,14 +27,14 @@ RUN apk add --no-cache \
 COPY . .
 COPY --from=frontend-builder /app/dist ./dist
 
-RUN cargo build --locked --release --target x86_64-unknown-linux-musl --manifest-path backend/Cargo.toml --bin cc-switch-web
+RUN cargo build --locked --release --manifest-path backend/Cargo.toml --bin cc-switch-web
 
 
 FROM debian:bookworm-slim AS package-linux-dir
 
 WORKDIR /out/cc-switch-web-linux-x64
 
-COPY --from=service-builder /app/backend/target/x86_64-unknown-linux-musl/release/cc-switch-web ./cc-switch-web
+COPY --from=service-builder /app/backend/target/release/cc-switch-web ./cc-switch-web
 
 RUN chmod +x ./cc-switch-web
 
@@ -56,12 +57,15 @@ ENV HOME=/data \
     CC_SWITCH_WEB_PORT=8890 \
     CC_SWITCH_WEB_PORT_SCAN_COUNT=1
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && \
+    adduser -D -u 1001 -h /data appuser
 
-COPY --from=service-builder /app/backend/target/x86_64-unknown-linux-musl/release/cc-switch-web /usr/local/bin/cc-switch-web
+COPY --from=service-builder /app/backend/target/release/cc-switch-web /usr/local/bin/cc-switch-web
 
 VOLUME ["/data"]
 
 EXPOSE 8890
+
+USER appuser
 
 CMD ["cc-switch-web"]

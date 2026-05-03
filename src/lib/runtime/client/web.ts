@@ -98,8 +98,61 @@ interface ProvidersResponse {
 
 const DEFAULT_WEB_API_BASE = "http://127.0.0.1:8890";
 
+const AUTH_TOKEN_KEY = "cc-switch-auth-token";
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string): void {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearAuthToken(): void {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+export interface AuthHasKeyResponse {
+  hasKey: boolean;
+}
+
+export interface AuthLoginResponse {
+  token: string;
+}
+
+export async function authHasKey(): Promise<AuthHasKeyResponse> {
+  return requestJson<AuthHasKeyResponse>("/api/auth/has-key");
+}
+
+export async function authSetupKey(key: string): Promise<AuthLoginResponse> {
+  return requestWithBody<AuthLoginResponse>("/api/auth/setup-key", "POST", {
+    key,
+  });
+}
+
+export async function authLogin(key: string): Promise<AuthLoginResponse> {
+  return requestWithBody<AuthLoginResponse>("/api/auth/login", "POST", {
+    key,
+  });
+}
+
+export async function authChangeKey(
+  oldKey: string,
+  newKey: string,
+): Promise<{ success: boolean }> {
+  return requestWithBody<{ success: boolean }>("/api/auth/change-key", "PUT", {
+    oldKey,
+    newKey,
+  });
+}
+
 export const getWebApiBase = (): string => {
   const configured = import.meta.env.VITE_LOCAL_API_BASE?.trim();
+  // When VITE_LOCAL_API_BASE is explicitly set to empty, use same-origin (empty string).
+  // This is needed for reverse-proxy deployments where frontend and API share the same origin.
+  if (configured !== undefined && configured !== null && configured.length === 0) {
+    return "";
+  }
   return configured && configured.length > 0
     ? configured.replace(/\/+$/, "")
     : DEFAULT_WEB_API_BASE;
@@ -226,11 +279,20 @@ async function getErrorMessage(
 
 async function requestJson<T>(path: string): Promise<T> {
   logWebRequest("GET", path);
-  const response = await fetch(`${getWebApiBase()}${path}`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const response = await fetch(`${getWebApiBase()}${path}`, { headers });
+
+  if (response.status === 401) {
+    clearAuthToken();
+    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+    throw new Error("Unauthorized");
+  }
 
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for ${path}`;
@@ -247,14 +309,25 @@ async function requestWithBody<T>(
   body?: unknown,
 ): Promise<T> {
   logWebRequest(method, path, body);
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+
+  if (response.status === 401) {
+    clearAuthToken();
+    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+    throw new Error("Unauthorized");
+  }
 
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for ${method} ${path}`;
@@ -275,13 +348,24 @@ async function requestFormData<T>(
   formData: FormData,
 ): Promise<T> {
   logWebRequest("POST", path, formData);
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-    },
+    headers,
     body: formData,
   });
+
+  if (response.status === 401) {
+    clearAuthToken();
+    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+    throw new Error("Unauthorized");
+  }
 
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for POST ${path}`;
@@ -1288,6 +1372,7 @@ export async function downloadWebConfigExport(
     {
       headers: {
         Accept: "application/sql,text/plain,*/*",
+        Authorization: `Bearer ${getAuthToken()}`,
       },
     },
   );

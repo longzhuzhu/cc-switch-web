@@ -1,4 +1,22 @@
 {
+  "auth": {
+    "setupKey": "キーを設定",
+    "login": "ログイン",
+    "accessKey": "アクセスキー",
+    "changeKey": "キーを変更",
+    "oldKey": "現在のキー",
+    "newKey": "新しいキー",
+    "confirmKey": "キーの確認",
+    "keyMinLength": "キーは6文字以上必要です",
+    "keyMismatch": "キーが一致しません",
+    "wrongKey": "キーが間違っています",
+    "security": "セキュリティ",
+    "setupTitle": "アクセスキーを設定",
+    "loginTitle": "アクセスキーを入力",
+    "keyPlaceholder": "キーを入力",
+    "changeSuccess": "キーを変更しました",
+    "logout": "ログアウト"
+  },
   "app": {
     "title": "CC Switch Web",
     "description": "CC Switch の Web ブランチ。ブラウザ UI とローカル Rust サービスで動作"

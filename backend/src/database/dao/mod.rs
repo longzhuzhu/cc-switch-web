@@ -2,6 +2,7 @@
 //!
 //! Database access operations for each domain
 
+mod access_key;
 mod failover;
 mod mcp;
 mod prompts;

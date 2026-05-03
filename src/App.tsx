@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -47,7 +47,6 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { DeepLinkImportDialog } from "@/components/deeplink/DeepLinkImportDialog";
-import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { ProxyToggle } from "@/components/proxy/ProxyToggle";
 import { FailoverToggle } from "@/components/proxy/FailoverToggle";
 import UsageScriptModal from "@/components/UsageScriptModal";
@@ -72,6 +71,13 @@ import HermesHealthBanner from "@/components/hermes/HermesHealthBanner";
 import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
 import { HermesPlaceholderPanel } from "@/components/hermes/HermesPlaceholderPanel";
 import { UpdateBadge } from "@/components/UpdateBadge";
+import { LoginPage } from "@/components/auth/LoginPage";
+import {
+  authHasKey,
+  getAuthToken,
+  clearAuthToken,
+  getWebApiBase,
+} from "@/lib/runtime/client/web";
 
 type View =
   | "providers"
@@ -136,6 +142,54 @@ const getInitialView = (): View => {
 function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+
+  // 认证状态
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getAuthToken());
+  const [needsAuthCheck, setNeedsAuthCheck] = useState(true);
+
+  // 首次加载：检查是否需要认证
+  useEffect(() => {
+    if (!needsAuthCheck) return;
+    authHasKey()
+      .then((res) => {
+        if (!res.hasKey) {
+          setIsAuthenticated(false);
+        } else if (getAuthToken()) {
+          fetch(`${getWebApiBase()}/api/health`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+          })
+            .then((r) => {
+              if (r.ok) {
+                setIsAuthenticated(true);
+              } else {
+                clearAuthToken();
+                setIsAuthenticated(false);
+              }
+            })
+            .catch(() => setIsAuthenticated(false));
+        } else {
+          setIsAuthenticated(false);
+        }
+      })
+      .catch(() => {
+        // 无法连接后端 → 视为未认证，要求登录
+        setIsAuthenticated(false);
+      })
+      .finally(() => setNeedsAuthCheck(false));
+  }, [needsAuthCheck]);
+
+  // 监听 401 事件，自动跳转登录
+  useEffect(() => {
+    const handler = () => {
+      setIsAuthenticated(false);
+    };
+    window.addEventListener("auth:unauthorized", handler);
+    return () => window.removeEventListener("auth:unauthorized", handler);
+  }, []);
+
+  const handleAuthSuccess = useCallback(() => {
+    setIsAuthenticated(true);
+  }, []);
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const [currentView, setCurrentView] = useState<View>(getInitialView);
@@ -767,6 +821,10 @@ function App() {
     );
   };
 
+  if (!isAuthenticated) {
+    return <LoginPage onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div
       className="app-shell flex flex-col h-screen overflow-hidden bg-background text-foreground selection:bg-primary/30 pb-4"
@@ -1289,7 +1347,6 @@ function App() {
         }}
         onCancel={() => setLaunchDashboardOpen(false)}
       />
-      <FirstRunNoticeDialog />
       <DeepLinkImportDialog />
     </div>
   );
