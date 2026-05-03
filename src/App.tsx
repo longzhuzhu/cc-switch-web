@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -72,6 +72,13 @@ import HermesHealthBanner from "@/components/hermes/HermesHealthBanner";
 import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
 import { HermesPlaceholderPanel } from "@/components/hermes/HermesPlaceholderPanel";
 import { UpdateBadge } from "@/components/UpdateBadge";
+import { LoginPage } from "@/components/auth/LoginPage";
+import {
+  authHasKey,
+  getAuthToken,
+  clearAuthToken,
+  getWebApiBase,
+} from "@/lib/runtime/client/web";
 
 type View =
   | "providers"
@@ -136,6 +143,53 @@ const getInitialView = (): View => {
 function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+
+  // 认证状态
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getAuthToken());
+  const [needsAuthCheck, setNeedsAuthCheck] = useState(true);
+
+  // 首次加载：检查是否需要认证
+  useEffect(() => {
+    if (!needsAuthCheck) return;
+    authHasKey()
+      .then((res) => {
+        if (!res.hasKey) {
+          setIsAuthenticated(false);
+        } else if (getAuthToken()) {
+          fetch(`${getWebApiBase()}/api/health`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+          })
+            .then((r) => {
+              if (r.ok) {
+                setIsAuthenticated(true);
+              } else {
+                clearAuthToken();
+                setIsAuthenticated(false);
+              }
+            })
+            .catch(() => setIsAuthenticated(false));
+        } else {
+          setIsAuthenticated(false);
+        }
+      })
+      .catch(() => {
+        setIsAuthenticated(true);
+      })
+      .finally(() => setNeedsAuthCheck(false));
+  }, [needsAuthCheck]);
+
+  // 监听 401 事件，自动跳转登录
+  useEffect(() => {
+    const handler = () => {
+      setIsAuthenticated(false);
+    };
+    window.addEventListener("auth:unauthorized", handler);
+    return () => window.removeEventListener("auth:unauthorized", handler);
+  }, []);
+
+  const handleAuthSuccess = useCallback(() => {
+    setIsAuthenticated(true);
+  }, []);
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const [currentView, setCurrentView] = useState<View>(getInitialView);
@@ -766,6 +820,10 @@ function App() {
       </AnimatePresence>
     );
   };
+
+  if (!isAuthenticated) {
+    return <LoginPage onAuthSuccess={handleAuthSuccess} />;
+  }
 
   return (
     <div
