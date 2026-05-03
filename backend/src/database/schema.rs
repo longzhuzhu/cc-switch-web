@@ -338,6 +338,18 @@ impl Database {
             [],
         );
 
+        // 18. Access Key 表（密钥登录认证）
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS access_key (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                key_hash TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
         Ok(())
     }
 
@@ -416,6 +428,11 @@ impl Database {
                         log::info!("迁移数据库从 v9 到 v10（添加 Hermes Agent 支持）");
                         Self::migrate_v9_to_v10(conn)?;
                         Self::set_user_version(conn, 10)?;
+                    }
+                    10 => {
+                        log::info!("迁移数据库从 v10 到 v11（添加密钥登录认证表）");
+                        Self::migrate_v10_to_v11(conn)?;
+                        Self::set_user_version(conn, 11)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1137,6 +1154,23 @@ impl Database {
         }
 
         log::info!("v9 -> v10 迁移完成：已添加 Hermes Agent 支持列");
+        Ok(())
+    }
+
+    /// v10 -> v11 迁移：添加 access_key 表（密钥登录认证）
+    fn migrate_v10_to_v11(conn: &Connection) -> Result<(), AppError> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS access_key (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                key_hash TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        log::info!("v10 -> v11 迁移完成：已添加 access_key 表");
         Ok(())
     }
 
