@@ -533,6 +533,12 @@ async fn auth_middleware(
         return next.run(request).await;
     }
 
+    // 仅对 /api/ 路径执行认证逻辑，静态资源直接放行
+    let path = request.uri().path();
+    if !path.starts_with("/api/") {
+        return next.run(request).await;
+    }
+
     // 白名单免认证路径
     const AUTH_WHITELIST: &[&str] = &[
         "/api/auth/login",
@@ -540,7 +546,6 @@ async fn auth_middleware(
         "/api/auth/setup-key",
         "/api/health",
     ];
-    let path = request.uri().path();
     if AUTH_WHITELIST.iter().any(|p| path == *p) {
         return next.run(request).await;
     }
@@ -1853,18 +1858,8 @@ struct ChangeKeyRequest {
 
 async fn auth_change_key(
     State(state): State<WebApiState>,
-    headers: HeaderMap,
     Json(body): Json<ChangeKeyRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    // 验证当前 token 有效
-    let token = extract_bearer_token(&headers);
-    if !is_token_valid(&state, &token).await {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": "Unauthorized" })),
-        ));
-    }
-
     // 验证旧密钥
     let old_hash = sha256_hex(&body.old_key);
     let valid = state.app_state.db.verify_access_key(&old_hash).unwrap_or(false);

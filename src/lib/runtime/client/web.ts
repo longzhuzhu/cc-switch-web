@@ -1372,6 +1372,7 @@ export async function downloadWebConfigExport(
     {
       headers: {
         Accept: "application/sql,text/plain,*/*",
+        Authorization: `Bearer ${getAuthToken()}`,
       },
     },
   );

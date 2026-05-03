@@ -99,7 +99,13 @@ export function LoginPage({ onAuthSuccess }: LoginPageProps) {
           </h1>
         </div>
 
-        <div className="glass-card rounded-2xl border border-border-default p-6 space-y-4">
+        <form
+          className="glass-card rounded-2xl border border-border-default p-6 space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            isSetup ? handleSetup() : handleLogin();
+          }}
+        >
           <div className="space-y-2">
             <label className="text-sm font-medium">
               {t("auth.accessKey")}
@@ -111,9 +117,6 @@ export function LoginPage({ onAuthSuccess }: LoginPageProps) {
               placeholder={t("auth.keyPlaceholder")}
               autoComplete={isSetup ? "new-password" : "current-password"}
               className="w-full rounded-lg border border-border-default bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !isSetup) handleLogin();
-              }}
             />
           </div>
 
@@ -129,9 +132,6 @@ export function LoginPage({ onAuthSuccess }: LoginPageProps) {
                 placeholder={t("auth.keyPlaceholder")}
                 autoComplete="new-password"
                 className="w-full rounded-lg border border-border-default bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSetup();
-                }}
               />
             </div>
           )}
@@ -151,7 +151,7 @@ export function LoginPage({ onAuthSuccess }: LoginPageProps) {
                 ? t("auth.setupKey")
                 : t("auth.login")}
           </Button>
-        </div>
+        </form>
       </div>
     </div>
   );

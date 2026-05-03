@@ -27,9 +27,8 @@ export function SecurityTab() {
     try {
       await authChangeKey(oldKey, newKey);
       toast.success(t("auth.changeSuccess"));
-      setOldKey("");
-      setNewKey("");
-      setConfirmKey("");
+      clearAuthToken();
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("Wrong") || msg.includes("Unauthorized")) {
