@@ -1845,6 +1845,7 @@ async fn auth_login(
 
 // PUT /api/auth/change-key
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ChangeKeyRequest {
     old_key: String,
     new_key: String,
