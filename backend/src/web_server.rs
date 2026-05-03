@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
-use axum::http::{header, HeaderValue, StatusCode, Uri};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, get_service, post, put};
@@ -15,6 +15,7 @@ use axum::{Json, Router};
 use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
@@ -48,6 +49,7 @@ struct WebApiState {
     app_state: Arc<AppState>,
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+    auth_tokens: Arc<RwLock<HashMap<String, i64>>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -487,6 +489,69 @@ async fn api_request_logger(request: axum::extract::Request, next: Next) -> Resp
     }
 
     response
+}
+
+fn sha256_hex(input: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+const AUTH_TOKEN_EXPIRY_SECS: i64 = 7 * 24 * 3600; // 7 天
+
+fn extract_bearer_token(headers: &HeaderMap) -> String {
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or("")
+        .to_string()
+}
+
+async fn is_token_valid(state: &WebApiState, token: &str) -> bool {
+    if token.is_empty() {
+        return false;
+    }
+    let tokens = state.auth_tokens.read().await;
+    if let Some(expiry) = tokens.get(token) {
+        let now = chrono::Utc::now().timestamp();
+        *expiry > now
+    } else {
+        false
+    }
+}
+
+/// 认证中间件：未设置密钥时放行，已设置密钥时校验 token
+async fn auth_middleware(
+    headers: HeaderMap,
+    State(state): State<WebApiState>,
+    request: axum::extract::Request,
+    next: Next,
+) -> Response {
+    // 未设置密钥 → 全部放行
+    if !state.app_state.db.has_access_key().unwrap_or(false) {
+        return next.run(request).await;
+    }
+
+    // 白名单免认证路径
+    const AUTH_WHITELIST: &[&str] = &[
+        "/api/auth/login",
+        "/api/auth/has-key",
+        "/api/auth/setup-key",
+        "/api/health",
+    ];
+    let path = request.uri().path();
+    if AUTH_WHITELIST.iter().any(|p| path == *p) {
+        return next.run(request).await;
+    }
+
+    // 校验 token
+    let token = extract_bearer_token(&headers);
+    if is_token_valid(&state, &token).await {
+        return next.run(request).await;
+    }
+
+    (StatusCode::UNAUTHORIZED, Json(json!({ "error": "Unauthorized" }))).into_response()
 }
 
 async fn get_mcp_servers(
@@ -1691,6 +1756,144 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         mode: "local-rust-service",
     })
+}
+
+// GET /api/auth/has-key
+async fn auth_has_key(State(state): State<WebApiState>) -> Json<Value> {
+    let has_key = state.app_state.db.has_access_key().unwrap_or(false);
+    Json(json!({ "hasKey": has_key }))
+}
+
+// POST /api/auth/setup-key
+#[derive(Deserialize)]
+struct SetupKeyRequest {
+    key: String,
+}
+
+async fn auth_setup_key(
+    State(state): State<WebApiState>,
+    Json(body): Json<SetupKeyRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if body.key.len() < 6 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Key must be at least 6 characters" })),
+        ));
+    }
+    if state.app_state.db.has_access_key().unwrap_or(false) {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Key already set" })),
+        ));
+    }
+    let hash = sha256_hex(&body.key);
+    state
+        .app_state
+        .db
+        .setup_access_key(&hash)
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            )
+        })?;
+
+    // 自动登录
+    let token = uuid::Uuid::new_v4().to_string();
+    let expiry = chrono::Utc::now().timestamp() + AUTH_TOKEN_EXPIRY_SECS;
+    {
+        let mut tokens = state.auth_tokens.write().await;
+        tokens.insert(token.clone(), expiry);
+    }
+    Ok(Json(json!({ "token": token })))
+}
+
+// POST /api/auth/login
+#[derive(Deserialize)]
+struct LoginRequest {
+    key: String,
+}
+
+async fn auth_login(
+    State(state): State<WebApiState>,
+    Json(body): Json<LoginRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let hash = sha256_hex(&body.key);
+    let valid = state.app_state.db.verify_access_key(&hash).unwrap_or(false);
+    if !valid {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Wrong key" })),
+        ));
+    }
+
+    // 惰性清理过期 token
+    {
+        let now = chrono::Utc::now().timestamp();
+        let mut tokens = state.auth_tokens.write().await;
+        tokens.retain(|_, expiry| *expiry > now);
+    }
+
+    let token = uuid::Uuid::new_v4().to_string();
+    let expiry = chrono::Utc::now().timestamp() + AUTH_TOKEN_EXPIRY_SECS;
+    {
+        let mut tokens = state.auth_tokens.write().await;
+        tokens.insert(token.clone(), expiry);
+    }
+    Ok(Json(json!({ "token": token })))
+}
+
+// PUT /api/auth/change-key
+#[derive(Deserialize)]
+struct ChangeKeyRequest {
+    old_key: String,
+    new_key: String,
+}
+
+async fn auth_change_key(
+    State(state): State<WebApiState>,
+    headers: HeaderMap,
+    Json(body): Json<ChangeKeyRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // 验证当前 token 有效
+    let token = extract_bearer_token(&headers);
+    if !is_token_valid(&state, &token).await {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Unauthorized" })),
+        ));
+    }
+
+    // 验证旧密钥
+    let old_hash = sha256_hex(&body.old_key);
+    let valid = state.app_state.db.verify_access_key(&old_hash).unwrap_or(false);
+    if !valid {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Wrong old key" })),
+        ));
+    }
+
+    if body.new_key.len() < 6 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Key must be at least 6 characters" })),
+        ));
+    }
+
+    let new_hash = sha256_hex(&body.new_key);
+    state
+        .app_state
+        .db
+        .change_access_key(&new_hash)
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            )
+        })?;
+
+    Ok(Json(json!({ "success": true })))
 }
 
 async fn get_settings() -> Json<crate::settings::AppSettings> {
@@ -3141,13 +3344,18 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
     let state = WebApiState {
         copilot_auth_state: app_state.copilot_auth_state.clone(),
         codex_oauth_state: app_state.codex_oauth_state.clone(),
-        app_state,
+        app_state: app_state.clone(),
+        auth_tokens: app_state.auth_tokens.clone(),
     };
     let bind_options = resolve_bind_options(&options)?;
 
     let mut app = Router::new()
         .route("/api", get(root))
         .route("/api/health", get(health))
+        .route("/api/auth/has-key", get(auth_has_key))
+        .route("/api/auth/setup-key", post(auth_setup_key))
+        .route("/api/auth/login", post(auth_login))
+        .route("/api/auth/change-key", put(auth_change_key))
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
@@ -3558,6 +3766,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .layer(middleware::from_fn(api_request_logger))
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
         .layer(CorsLayer::permissive())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
         .with_state(state);
 
     if let Some(dist_dir) = resolve_frontend_dist_dir() {
