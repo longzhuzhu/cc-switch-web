@@ -46,6 +46,7 @@ import { ModelTestConfigPanel } from "@/components/usage/ModelTestConfigPanel";
 import { UsageDashboard } from "@/components/usage/UsageDashboard";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
+import { SecurityTab } from "@/components/settings/SecurityTab";
 import { useSettings } from "@/hooks/useSettings";
 import { useInstalledSkills } from "@/hooks/useSkills";
 import { useImportExport } from "@/hooks/useImportExport";
@@ -225,7 +226,7 @@ export function SettingsPage({
         >
           <div className="sticky top-0 z-20 mb-6 bg-gradient-to-b from-background via-background/96 to-transparent pb-4 pt-1 backdrop-blur-xl">
             <div className="glass-card rounded-[30px] border border-border-default p-2 shadow-xl">
-              <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0 lg:grid-cols-6">
+              <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0 lg:grid-cols-7">
                 <TabsTrigger
                   value="general"
                   className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
@@ -255,6 +256,12 @@ export function SettingsPage({
                   className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
                 >
                   {t("usage.title")}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="security"
+                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
+                >
+                  {t("auth.security")}
                 </TabsTrigger>
                 <TabsTrigger
                   value="about"
@@ -601,6 +608,15 @@ export function SettingsPage({
                   icon={<ScrollText className="h-5 w-5 theme-primary-text" />}
                 />
                 <UsageDashboard />
+              </TabsContent>
+              <TabsContent value="security" className="mt-0">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <SecurityTab />
+                </motion.div>
               </TabsContent>
               <TabsContent value="about" className="space-y-6 mt-0 pb-4">
                 <SettingsIntroCard
