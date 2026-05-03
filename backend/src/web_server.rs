@@ -1893,6 +1893,12 @@ async fn auth_change_key(
             )
         })?;
 
+    // 修改密钥后清除所有 token，强制重新登录
+    {
+        let mut tokens = state.auth_tokens.write().await;
+        tokens.clear();
+    }
+
     Ok(Json(json!({ "success": true })))
 }
 

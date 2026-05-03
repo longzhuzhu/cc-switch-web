@@ -103,7 +103,7 @@ export function SecurityTab() {
             {loading ? t("common.loading") : t("auth.changeKey")}
           </Button>
           <Button variant="outline" onClick={handleLogout}>
-            {t("auth.login")}
+            {t("auth.logout")}
           </Button>
         </div>
       </div>

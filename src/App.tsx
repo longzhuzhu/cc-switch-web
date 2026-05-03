@@ -173,7 +173,8 @@ function App() {
         }
       })
       .catch(() => {
-        setIsAuthenticated(true);
+        // 无法连接后端 → 视为未认证，要求登录
+        setIsAuthenticated(false);
       })
       .finally(() => setNeedsAuthCheck(false));
   }, [needsAuthCheck]);

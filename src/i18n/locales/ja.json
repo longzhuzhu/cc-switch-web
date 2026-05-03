@@ -14,7 +14,8 @@
     "setupTitle": "アクセスキーを設定",
     "loginTitle": "アクセスキーを入力",
     "keyPlaceholder": "キーを入力",
-    "changeSuccess": "キーを変更しました"
+    "changeSuccess": "キーを変更しました",
+    "logout": "ログアウト"
   },
   "app": {
     "title": "CC Switch Web",

@@ -14,7 +14,8 @@
     "setupTitle": "设置访问密钥",
     "loginTitle": "输入访问密钥",
     "keyPlaceholder": "请输入密钥",
-    "changeSuccess": "密钥修改成功"
+    "changeSuccess": "密钥修改成功",
+    "logout": "退出登录"
   },
   "app": {
     "title": "CC Switch Web",

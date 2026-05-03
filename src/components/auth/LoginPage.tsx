@@ -51,6 +51,10 @@ export function LoginPage({ onAuthSuccess }: LoginPageProps) {
 
   const handleLogin = async () => {
     if (!key) return;
+    if (key.length < 6) {
+      setError(t("auth.keyMinLength"));
+      return;
+    }
     setLoading(true);
     setError("");
     try {

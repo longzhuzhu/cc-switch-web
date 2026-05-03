@@ -14,7 +14,8 @@
     "setupTitle": "Set Access Key",
     "loginTitle": "Enter Access Key",
     "keyPlaceholder": "Enter key",
-    "changeSuccess": "Key changed successfully"
+    "changeSuccess": "Key changed successfully",
+    "logout": "Logout"
   },
   "app": {
     "title": "CC Switch Web",
