@@ -1,4 +1,21 @@
 {
+  "auth": {
+    "setupKey": "设置密钥",
+    "login": "登录",
+    "accessKey": "访问密钥",
+    "changeKey": "修改密钥",
+    "oldKey": "旧密钥",
+    "newKey": "新密钥",
+    "confirmKey": "确认密钥",
+    "keyMinLength": "密钥至少需要 6 个字符",
+    "keyMismatch": "两次输入的密钥不一致",
+    "wrongKey": "密钥错误",
+    "security": "安全",
+    "setupTitle": "设置访问密钥",
+    "loginTitle": "输入访问密钥",
+    "keyPlaceholder": "请输入密钥",
+    "changeSuccess": "密钥修改成功"
+  },
   "app": {
     "title": "CC Switch Web",
     "description": "CC Switch 的 Web 分支，采用浏览器界面与本地 Rust 服务"

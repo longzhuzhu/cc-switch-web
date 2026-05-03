@@ -1,4 +1,21 @@
 {
+  "auth": {
+    "setupKey": "Set Key",
+    "login": "Login",
+    "accessKey": "Access Key",
+    "changeKey": "Change Key",
+    "oldKey": "Old Key",
+    "newKey": "New Key",
+    "confirmKey": "Confirm Key",
+    "keyMinLength": "Key must be at least 6 characters",
+    "keyMismatch": "Keys do not match",
+    "wrongKey": "Wrong key",
+    "security": "Security",
+    "setupTitle": "Set Access Key",
+    "loginTitle": "Enter Access Key",
+    "keyPlaceholder": "Enter key",
+    "changeSuccess": "Key changed successfully"
+  },
   "app": {
     "title": "CC Switch Web",
     "description": "CC Switch Web branch with browser UI and local Rust service"
