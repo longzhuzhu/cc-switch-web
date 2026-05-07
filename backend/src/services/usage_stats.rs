@@ -1119,8 +1119,8 @@ pub(crate) fn find_model_pricing_row(
     conn: &Connection,
     model_id: &str,
 ) -> Result<Option<(String, String, String, String)>, AppError> {
-    // 清洗模型名称：去前缀(/)、去后缀(:)、@ 替换为 -
-    // 例如 moonshotai/gpt-5.2-codex@low:v2 → gpt-5.2-codex-low
+    // 清洗模型名称：去前缀(/)、去后缀(:)、@ 替换为 -，再统一转小写。
+    // 例如 OpenAI/GPT-5.5@HIGH:v2 → gpt-5.5-high，能匹配到 seed 中小写的 model_id。
     let cleaned = model_id
         .rsplit_once('/')
         .map_or(model_id, |(_, r)| r)
@@ -1128,7 +1128,8 @@ pub(crate) fn find_model_pricing_row(
         .next()
         .unwrap_or(model_id)
         .trim()
-        .replace('@', "-");
+        .replace('@', "-")
+        .to_ascii_lowercase();
 
     // 精确匹配清洗后的名称
     let exact = conn
@@ -1279,6 +1280,14 @@ mod tests {
         // 测试不存在的模型
         let result = find_model_pricing_row(&conn, "unknown-model-123")?;
         assert!(result.is_none(), "不应该匹配不存在的模型");
+
+        // 大小写不敏感（来自上游 zero-cost 修复）：
+        // OpenAI/GPT-5.2-Codex@LOW → 清洗后 gpt-5.2-codex-low，能命中 seed
+        let result = find_model_pricing_row(&conn, "OpenAI/GPT-5.2-Codex@LOW")?;
+        assert!(
+            result.is_some(),
+            "大小写不一致的模型 OpenAI/GPT-5.2-Codex@LOW 应能命中 gpt-5.2-codex-low"
+        );
 
         Ok(())
     }

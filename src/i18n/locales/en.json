@@ -90,7 +90,12 @@
     "enableTeammates": "Teammates Mode",
     "enableToolSearch": "Enable Tool Search",
     "effortHigh": "High Effort Thinking",
-    "disableAutoUpgrade": "Disable Auto-Upgrade"
+    "disableAutoUpgrade": "Disable Auto-Upgrade",
+    "winEnvDetected": "Windows env-var placeholders detected ({{vars}}); Claude Code will not auto-expand them.",
+    "winEnvUnknown": "{{vars}} not in whitelist, will be kept as-is.",
+    "winEnvConvert": "Expand to absolute paths",
+    "winEnvDone": "Expanded {{count}} placeholder(s)",
+    "winEnvFailed": "Conversion failed: {{error}}"
   },
   "commonConfig": {
     "guideTitle": "About the Common Config Snippet",
@@ -799,6 +804,7 @@
     "fetchModelsNeedConfig": "Please fill in API endpoint and API Key first",
     "fetchModelsNeedEndpoint": "Please fill in API endpoint first",
     "fetchModelsNotSupported": "This provider does not support fetching model list",
+    "fetchModelsEndpointNotFound": "Models endpoint not found (tried root and subpath candidates). Confirm the provider exposes OpenAI-compatible /v1/models.",
     "fetchModelsSuccess": "Found {{count}} models",
     "fetchModelsTimeout": "Request timed out, please check network connection",
     "fetchingModels": "Fetching...",

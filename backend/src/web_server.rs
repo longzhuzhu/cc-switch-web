@@ -166,6 +166,9 @@ struct FetchModelsRequest {
     base_url: String,
     api_key: String,
     is_full_url: Option<bool>,
+    /// 预设级别的 `/models` 端点覆盖。命中时跳过 baseURL 推导直接使用此 URL。
+    /// 用于 DeepSeek 这类把 Anthropic 协议挂在子路径，但 `/models` 在根上的供应商。
+    models_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -829,10 +832,16 @@ async fn fetch_provider_models(
         payload.base_url,
         payload.api_key,
         payload.is_full_url,
+        payload.models_url,
     )
     .await
     .map_err(ApiError::bad_request)?;
     Ok(Json(models))
+}
+
+async fn get_windows_env_paths(
+) -> Result<Json<std::collections::HashMap<String, String>>, ApiError> {
+    Ok(Json(crate::commands::get_windows_env_paths_internal()))
 }
 
 async fn get_custom_endpoints(
@@ -3423,6 +3432,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_stream_check_config).put(set_stream_check_config),
         )
         .route("/api/settings/tool-versions", post(get_tool_versions))
+        .route("/api/settings/windows-env-paths", get(get_windows_env_paths))
         .route("/api/settings/latest-release", get(get_latest_release))
         .route("/api/settings/config-dir/:app", get(get_config_dir))
         .route("/api/omo/local-file", get(get_omo_local_file))

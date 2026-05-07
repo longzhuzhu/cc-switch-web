@@ -18,9 +18,25 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.3.0`.
+The current repository version is `0.3.2`.
 
-`0.3.0` lifts the database schema from `v8` to `v10` to align with the upstream `cc-switch` 3.14 line, resolving the `database version is too new (10), this build only supports 8` startup error seen when `~/.cc-switch/cc-switch.db` is shared with an upstream build that already migrated to `v10`. It adds the `v8 -> v9` pricing-seed refresh migration and the `v9 -> v10` Hermes support migration, introduces `enabled_hermes` columns on `mcp_servers` and `skills`, and keeps the backend `McpApps` / `SkillApps` structs in sync with the existing `hermes` field on the frontend. This release also ships preset updates (Kimi K2.6 direct Moonshot, DDSHub Codex preset), proxy and session fixes (forced streaming for Codex OAuth responses, Gemini session `.project_root` lookup), and a round of UI polish (provider icon hover title, auto-compact latch fix, unified toolbar icon widths, scroll-area layout tweaks).
+`0.3.2` follows up on the two items deferred in `0.3.1`:
+
+- Codex provider-switch history stability (upstream `a1e6c3b6`): after switching Codex providers via CC Switch, `codex resume` previously appeared to "lose" history because Codex filters resume sessions by `model_provider`, and the old behavior let that field drift between custom ids like `rightcode` and `aihubmix`. This release introduces a stable provider-id normalization at provider-driven write boundaries (prefer reusing an existing custom id, otherwise fall back to `ccswitch`), and rewrites matching `[profiles.*]` references in lockstep. Backfill paths reverse the normalization back to the stored template's original id to avoid contaminating it. Comes with 8 new unit tests covering both normalization and backfill restoration.
+- Usage perf (the parts of upstream `f061b777` not reverted by `518d945e`): a new `(app_type, created_at DESC)` covering index for dashboard range queries; default pricing seeds for GPT-5.4 (3 entries) and GPT-5.5 (6 entries), which combine with the 0.3.1 case-insensitive `find_model_pricing_row` fix to further eliminate dashboard ghost-zero-cost rows.
+
+`0.3.1` ports a curated batch of fixes accumulated upstream since the `0.3.0` release, filtered for "direct value to the Web backend":
+
+- Proxy streaming: dedupe duplicate `finish_reason` chunks and defer `message_delta` until `[DONE]` (fixes OpenRouter / Kimi-K2.6 emitting multiple finish reasons and aborting Anthropic clients); preserve full Cloudflare AI Gateway Vertex AI URLs; keep `reasoning_content` on Kimi/Moonshot tool-call paths; harden DashScope / Codex OAuth `usage` parsing against null and partial fields.
+- Auth semantics: `ANTHROPIC_AUTH_TOKEN` → `Authorization: Bearer`, `ANTHROPIC_API_KEY` → `x-api-key`, matching the Anthropic SDK; stream check now reuses the same header logic and no longer emits both, removing health-check false negatives.
+- Providers: DeepSeek / Kimi / Zhipu GLM / MiniMax (Anthropic-compat on a subpath but `/models` at the root) can now fetch model lists via candidate ordering `/anthropic/v1/models` → `/v1/models` → `/models`; GitHub Copilot dash-form Claude ids (`claude-sonnet-4-6[1m]`) get normalized to dot form and resolved against the live `/models` list with family fallback; SiliconFlow international site shows USD; Zhipu weekly tier label fixed.
+- Sessions: Codex explorer / sub-agent sessions are hidden from the main list; summary extraction skips `<environment_context>` injections.
+- Config: `settings.json` keys are written in alphabetical order so config switches no longer churn diffs; MCP imports no longer write back to live app configs.
+- Windows: when JSON config contains whitelisted `%USERPROFILE%`-style placeholders, the editor offers a one-click "expand to absolute paths" action (Claude Code does not auto-expand Windows env vars); non-Windows `try_get_version` now prefers `$SHELL` to load the user's PATH/alias.
+- Claude effort toggle: `effortHigh` now writes `env.CLAUDE_CODE_EFFORT_LEVEL` (the legacy top-level `effortLevel` field is not honored by Claude Code); reading still falls back to the legacy field for migration.
+- Usage robustness: `find_model_pricing_row` is case-insensitive, fixing "ghost zero-cost" rows for model ids like `OpenAI/GPT-5.5@HIGH`; new 7-column covering index `idx_request_logs_dedup_lookup` lays the groundwork for full dedup work coming later.
+
+See `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md` for the per-fix upstream commit references and the items deferred to follow-up tasks (B1 full 7-dim fingerprint dedup / C7 Codex provider-switch history stability / F1 startup cost backfill).
 
 This repository now treats `0.1.0` as its initial Web release baseline. Previous inherited release history has been removed from this repository and should be considered part of the upstream project history.
 
