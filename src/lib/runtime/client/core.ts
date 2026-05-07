@@ -69,6 +69,7 @@ import {
   getWebProviderHealth,
   getWebProviderUsage,
   fetchWebProviderModels,
+  fetchWebWindowsEnvPaths,
   getWebProxyConfig,
   getWebProxyConfigForApp,
   getWebProxyStatus,
@@ -306,7 +307,10 @@ export async function invoke<T>(
         args?.baseUrl as string,
         args?.apiKey as string,
         args?.isFullUrl as boolean | undefined,
+        args?.modelsUrl as string | undefined,
       )) as T;
+    case "get_windows_env_paths":
+      return (await fetchWebWindowsEnvPaths()) as T;
     case "testUsageScript":
       return (await testWebUsageScript(
         args?.app as AppId,

@@ -72,7 +72,12 @@
     "enableTeammates": "Teammates モード",
     "enableToolSearch": "Tool Search を有効化",
     "effortHigh": "高強度思考",
-    "disableAutoUpgrade": "自動アップグレードを無効化"
+    "disableAutoUpgrade": "自動アップグレードを無効化",
+    "winEnvDetected": "Windows 環境変数のプレースホルダー（{{vars}}）を検出しました。Claude Code は自動展開しません。",
+    "winEnvUnknown": "{{vars}} はホワイトリストに含まれないため、そのまま保持されます。",
+    "winEnvConvert": "絶対パスへ展開",
+    "winEnvDone": "{{count}} 件展開しました",
+    "winEnvFailed": "変換に失敗しました：{{error}}"
   },
   "commonConfig": {
     "guideTitle": "共通設定スニペットについて",
@@ -781,6 +786,7 @@
     "fetchModelsNeedConfig": "先に API エンドポイントと API Key を入力してください",
     "fetchModelsNeedEndpoint": "先に API エンドポイントを入力してください",
     "fetchModelsNotSupported": "このプロバイダーはモデル一覧の取得に対応していません",
+    "fetchModelsEndpointNotFound": "モデル一覧エンドポイントが見つかりません（ルートとサブパス両方を試行済み）。OpenAI 互換 /v1/models が公開されているか確認してください。",
     "fetchModelsSuccess": "{{count}}件のモデルを取得",
     "fetchModelsTimeout": "リクエストがタイムアウトしました。ネットワーク接続を確認してください",
     "fetchingModels": "取得中...",

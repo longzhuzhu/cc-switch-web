@@ -2,6 +2,59 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.3.1] - 2026-05-07
+
+跟进 0.3.0 发布之后上游 `cc-switch` 累计的一批修复，按"对 Web 后端有直接价值"筛过后落地。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。
+
+### 代理与流式
+
+- `backend/src/proxy/providers/streaming.rs` 重写 finish_reason 处理：去重重复 finish chunk + `pending_message_delta` 缓存延后到 `[DONE]` 发送，避免 OpenRouter / Kimi-K2.6 这类多次 finish 触发 Anthropic 客户端 abort（上游 `6441bc5c`）。同时在末端 message_delta 没有 usage 时兜底 `{input_tokens:0, output_tokens:0}`，避免下游解析 `output_tokens` 拿到 null（上游 `72ab8a5c`）
+- `backend/src/proxy/providers/claude.rs` 中 `extract_auth` 现在按 env 变量名推断鉴权策略：`ANTHROPIC_AUTH_TOKEN` → `Authorization: Bearer`、`ANTHROPIC_API_KEY` → `x-api-key`，与 Anthropic SDK 原生语义对齐；`get_auth_headers` 拆分 `Anthropic` 分支发 `x-api-key`；`stream_check.rs` 改为复用 `ClaudeAdapter::get_auth_headers`，去掉之前"无条件 Bearer + 条件 x-api-key 双发"导致的健康检查假阴性（上游 `bdc4c1e8`）
+- `backend/src/proxy/providers/transform.rs` / `transform_responses.rs` 在 `anthropic_to_openai` / `anthropic_to_responses` 入口剥离 system 内容首次出现的 `x-anthropic-billing-header` 行，避免每次轮换的 `cch=` token 让上游 prefix prompt cache 失效（上游 `35bce246`）
+- `backend/src/proxy/gemini_url.rs` 新增 `matches_vertex_ai_publisher_model_path` 判定，命中 `/projects/.../locations/.../publishers/google/models/...` 时跳过归一化，保留 Cloudflare AI Gateway 的 Vertex AI 完整 URL 不被压回 `/v1beta/models/*`（上游 `295dd9a9`）
+- `backend/src/proxy/providers/transform.rs` 新增 `anthropic_to_openai_with_reasoning_content` 变体，对 Kimi/Moonshot 路径保留 thinking → `reasoning_content`，通用 OpenAI compat 路径仍不带该非标准字段；`claude.rs::transform_claude_request_for_api_format` 通过 model id / `ANTHROPIC_BASE_URL` / `base_url` / `apiEndpoint` 多源识别 Moonshot/Kimi 后启用（上游 `21e2d68d`）
+- `backend/src/proxy/providers/transform_responses.rs::build_anthropic_usage_from_responses` 全面加强对 null / 缺失 / 空对象 / 部分字段的 usage 处理，新增 OpenAI 字段名 fallback（`prompt_tokens` / `completion_tokens`），保留 cache token 字段；`streaming_responses.rs` 两处调用点改为始终传入 Some+空对象兜底，修复 DashScope / 部分 Codex OAuth 场景下 VSCode 扩展崩 `Cannot read properties of null` 的问题（上游 `693c36a1`）
+
+### Provider 与会话
+
+- `backend/src/services/balance.rs::query_siliconflow` 的 `unit` 与 `plan_name` 跟随 `is_cn` 切换，`api.siliconflow.com` 国际站显示 USD / `SiliconFlow (EN)`，不再被强制标 CNY（上游 `d2556be5`）
+- `backend/src/services/coding_plan.rs` 新增 `parse_zhipu_token_tiers`，把 `data.limits[]` 按 `nextResetTime` 升序后第 0 条标 `five_hour`、第 1 条标 `weekly_limit`，老套餐自然降级到单 `five_hour`；同时把 `TOKENS_LIMIT` 类型匹配改为大小写不敏感（上游 `fafc122d`）
+- `backend/src/services/model_fetch.rs` 重写为候选 URL 列表机制：`baseURL/v1/models` → 剥离已知 Anthropic 兼容子路径（`/anthropic`、`/api/anthropic`、`/apps/anthropic`、`/step_plan` 等）后再拼 `/v1/models` / `/models`，遇 404/405 继续，遇其它非成功状态立即停止；新增 `models_url` 覆盖入口；前端 `lib/api/model-fetch.ts` 透传该字段，`lib/runtime/client/web.ts::fetchWebProviderModels` 同步加 `modelsUrl` 形参；新增三语 `providerForm.fetchModelsEndpointNotFound` 文案。修复 DeepSeek / Kimi / Zhipu GLM / MiniMax 这类把 Anthropic 协议挂在子路径而 `/models` 在根路径的供应商上模型拉取直接 404 的问题（上游 `67dbfc0a`）
+- `backend/src/proxy/providers/copilot_model_map.rs` 新增（374 行）：把客户端 dash 形式的 Claude 4.x model id（`claude-sonnet-4-6`、`claude-sonnet-4-6[1m]`）归一化为 Copilot upstream 接受的 dot 形式（`claude-sonnet-4.6`、`-1m` 后缀），对 live `/models` 列表做 exact match，找不到时按 family（haiku / sonnet / opus）+ 最高版本号 fallback；`forwarder.rs` 在 Copilot 链路上、`anthropic_to_openai` 转换前先调用 `apply_copilot_model_normalization` 与 `apply_copilot_live_model_resolution`（上游 `fcd83ee3`）
+- `backend/src/session_manager/providers/codex.rs::parse_session` 在 `session_meta` 阶段检测 `payload.source.subagent`，命中直接返回 `None`，让 Codex explorer / 子代理产生的会话不再出现在主会话列表（上游 `15497b0e`）；同时在 summary 提取阶段跳过 `<environment_context>` 开头的内容，避免工作目录路径被当成"上次会话最后一条消息"（上游 `1c692694`）
+- `src/components/providers/forms/CommonConfigEditor.tsx` 的 `effortHigh` 开关从写顶层 `effortLevel = "high"` 改为写 `env.CLAUDE_CODE_EFFORT_LEVEL = "high"`（顶层字段在 Claude Code 实际不生效）；读取阶段同时认旧顶层字段以兼容历史数据，写入时仅写 env 并清掉旧字段（参考上游 `064b339b`）
+
+### 配置写出与导入
+
+- `backend/src/config.rs::write_json_file` 现在先把数据序列化成 `Value`、递归按字母序排键、再 pretty print，确保配置切换时 `settings.json` 输出确定性，消除 HashMap 插入顺序导致的噪声 git diff（上游 `8084bfaf`）
+- `backend/src/services/mcp.rs` 五处 `persist_imported_servers` 路径不再触发 `sync_server_to_apps` 反向写回 live 配置，导入操作改为只写数据库（上游 `7965862e`）
+
+### Windows 适配
+
+- `backend/src/commands/misc.rs` 新增 `get_windows_env_paths_internal` 与 HTTP `GET /api/settings/windows-env-paths`，返回当前后端进程能读到的、白名单内（`USERPROFILE` / `APPDATA` / `LOCALAPPDATA` / `PROGRAMFILES(X86)` 等共 14 项）Windows 环境变量；前端新增 `src/lib/windowsEnvPaths.ts` 实现占位符检测与展开，`CommonConfigEditor` 在 Windows 下检测到 JSON 中含 `%USERPROFILE%` 这类占位符时弹黄色提示条，提供"转为绝对路径"一键展开按钮；三语补 `claudeConfig.winEnv*` 文案。修复 Claude Code 不会自动展开 Windows 占位符、原样落到 `settings.json` 后静默加载失败的问题（上游 `68f1f8d3`）
+- `backend/src/commands/misc.rs::try_get_version` 在非 Windows 平台优先读 `$SHELL` 并校验白名单（`sh` / `bash` / `zsh` / `fish` / `dash`），命中则用对应 shell 与 `default_flag_for_shell`，否则回退 `sh -c`；`is_valid_shell` / `default_flag_for_shell` 不再仅 Windows test 下编译，让用户在 zsh / fish 下的 PATH 与 alias 能被 `which claude` 检测到（上游 `4536b95a`）
+
+### Usage 鲁棒性
+
+- `backend/src/services/usage_stats.rs::find_model_pricing_row` 在清洗模型名后追加 `.to_ascii_lowercase()`，让 `OpenAI/GPT-5.2-Codex@LOW` 这类大小写不一致的模型 id 能命中 seed 中小写的定价记录，避免 dashboard 出现 `total_cost = 0` 的"幽灵零成本"行（提取自上游 `f061b777` 中未被 `518d945e` 撤销的非 Hermes 部分）
+- `backend/src/database/schema.rs` 新增 `idx_request_logs_dedup_lookup` 7 列覆盖索引（`app_type` / `data_source` / 4 个 token 计数 / `created_at` / `cache_creation_tokens`），由 `create_request_logs_dedup_index_if_supported` 在列就绪后自动创建，为后续完整的 7 维指纹去重重写打基础（上游 `2ee7cb41` schema 部分）
+
+### 测试
+
+- 本轮新增 ~50 条 cargo 单测覆盖以上修复，包括 SSE message_delta 去重 / 重复 finish_reason / 中途 usage-only chunk / 流截断错误路径、ANTHROPIC env 变量推断、Vertex AI URL 保留、Kimi reasoning_content 保留、DashScope usage 鲁棒性 9 例、smiconflow 国际站币种、zhipu tier 8 例、Codex `<environment_context>` 与 subagent session 跳过、`sort_json_keys` 7 例、Anthropic compat 子路径候选 URL 10 例、copilot model id 归一化与 family fallback 19 例
+
+### 延后到独立任务
+
+- B1 完整 7 维指纹去重需要先扩 Web 端 `TokenUsage` 加 `message_id` / `dedup_request_id`，再重写 `usage_stats.rs` 与 `session_usage_*.rs` 的写入 / 读取 / rollup 三层 filter，跨 7 文件的架构改动不在 0.3.1 补丁批次范围
+- C7 Codex 切换供应商历史稳定（上游 `a1e6c3b6`）涉及上游 270+ 行 `codex_config.rs` 新函数 + `provider/live.rs` + `proxy.rs` 联动 + 322 行集成测试，且 Web 端 `codex_config.rs` 已有自身实现路径，需要单独立项
+- F1 中的 perf / refactor 部分（lib.rs `run_step` helper、启动期 `maybe_backfill_log_costs` 异步 backfill、(app_type, created_at DESC) 覆盖索引、`COALESCE(data_source)` 表达式索引）跨度较大，本轮仅落了核心 zero-cost 修复
+
+### 文档与版本
+
+- 仓库版本提升到 `0.3.1`
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.3.1` 版本说明
+- 新增 `docs-dev/web-parity-post-3.14-2026-05.md` 记录本轮跟进上游 0.3.0 发布之后改动的筛选与落地计划
+
 ## [0.3.0] - 2026-04-24
 
 ### 数据库 schema

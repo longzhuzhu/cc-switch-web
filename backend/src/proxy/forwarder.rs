@@ -766,7 +766,7 @@ impl RequestForwarder {
             super::model_mapper::apply_model_mapping(body.clone(), provider);
 
         // 与 CCH 对齐：请求前不做 thinking 主动改写（仅保留兼容入口）
-        let mapped_body = normalize_thinking_type(mapped_body);
+        let mut mapped_body = normalize_thinking_type(mapped_body);
 
         // 确定有效端点
         // GitHub Copilot API 使用 /chat/completions（无 /v1 前缀）
@@ -776,6 +776,17 @@ impl RequestForwarder {
             .and_then(|m| m.provider_type.as_deref())
             == Some("github_copilot")
             || base_url.contains("githubcopilot.com");
+
+        // Copilot 在格式转换前先做 model ID 归一化与 live /models 解析。
+        // 客户端发的 dash 形式（claude-sonnet-4-6）与 [1m] 后缀必须改写成 dot 形式
+        // 才能被 Copilot upstream 接受，否则直接 400 model_not_supported。
+        if is_copilot {
+            mapped_body =
+                super::providers::copilot_model_map::apply_copilot_model_normalization(mapped_body);
+            self.apply_copilot_live_model_resolution(provider, &mut mapped_body)
+                .await;
+        }
+
         let resolved_claude_api_format = if adapter.name() == "Claude" {
             Some(
                 self.resolve_claude_api_format(provider, &mapped_body, is_copilot)
@@ -1245,6 +1256,45 @@ impl RequestForwarder {
         }
 
         "openai_chat".to_string()
+    }
+
+    /// 用 Copilot live `/models` 列表确认 model ID 真实可用，找不到时按 family 降级。
+    /// 命中缓存后是同步的；首次请求或缓存过期后会触发一次 HTTP。
+    async fn apply_copilot_live_model_resolution(
+        &self,
+        provider: &Provider,
+        body: &mut serde_json::Value,
+    ) {
+        let Some(model_id) = body.get("model").and_then(|v| v.as_str()) else {
+            return;
+        };
+        let model_id = model_id.to_string();
+
+        let copilot_auth = self.copilot_auth_state.read().await;
+        let account_id = provider
+            .meta
+            .as_ref()
+            .and_then(|m| m.managed_account_id_for("github_copilot"));
+
+        let models_result = match account_id.as_deref() {
+            Some(id) => copilot_auth.fetch_models_for_account(id).await,
+            None => copilot_auth.fetch_models().await,
+        };
+
+        let models = match models_result {
+            Ok(m) => m,
+            Err(err) => {
+                log::debug!("[Copilot] live model list unavailable, skip resolution: {err}");
+                return;
+            }
+        };
+
+        if let Some(resolved) =
+            super::providers::copilot_model_map::resolve_against_models(&model_id, &models)
+        {
+            log::info!("[Copilot] live-model resolve: {model_id} → {resolved}");
+            body["model"] = serde_json::Value::String(resolved);
+        }
     }
 
     async fn is_copilot_openai_vendor_model(&self, provider: &Provider, model_id: &str) -> bool {
