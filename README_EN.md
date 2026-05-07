@@ -18,7 +18,12 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.3.1`.
+The current repository version is `0.3.2`.
+
+`0.3.2` follows up on the two items deferred in `0.3.1`:
+
+- Codex provider-switch history stability (upstream `a1e6c3b6`): after switching Codex providers via CC Switch, `codex resume` previously appeared to "lose" history because Codex filters resume sessions by `model_provider`, and the old behavior let that field drift between custom ids like `rightcode` and `aihubmix`. This release introduces a stable provider-id normalization at provider-driven write boundaries (prefer reusing an existing custom id, otherwise fall back to `ccswitch`), and rewrites matching `[profiles.*]` references in lockstep. Backfill paths reverse the normalization back to the stored template's original id to avoid contaminating it. Comes with 8 new unit tests covering both normalization and backfill restoration.
+- Usage perf (the parts of upstream `f061b777` not reverted by `518d945e`): a new `(app_type, created_at DESC)` covering index for dashboard range queries; default pricing seeds for GPT-5.4 (3 entries) and GPT-5.5 (6 entries), which combine with the 0.3.1 case-insensitive `find_model_pricing_row` fix to further eliminate dashboard ghost-zero-cost rows.
 
 `0.3.1` ports a curated batch of fixes accumulated upstream since the `0.3.0` release, filtered for "direct value to the Web backend":
 

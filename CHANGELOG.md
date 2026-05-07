@@ -2,6 +2,37 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.3.2] - 2026-05-07
+
+继续推进 0.3.1 中标记为延后的两项：上游 `a1e6c3b6` 的 Codex 切换历史稳定，以及 `f061b777` 中未被 `518d945e` 撤销的 usage perf 余项。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。
+
+### Codex 切换供应商历史稳定
+
+- `backend/src/codex_config.rs` 新增 stable provider id 归一化机制：常量 `CC_SWITCH_CODEX_MODEL_PROVIDER_ID = "ccswitch"` + 内置 `CODEX_RESERVED_MODEL_PROVIDER_IDS` 白名单（`amazon-bedrock` / `openai` / `ollama` / `lmstudio` / `oss` / `ollama-chat`），辅以 `active_codex_model_provider_id`、`is_custom_codex_model_provider_id`、`stable_codex_model_provider_id_from_config`、`codex_model_provider_id_with_table_from_config` 四个 helper 与核心 `normalize_codex_live_config_model_provider_with_anchors` / `rewrite_codex_profile_model_provider_refs`。所有改动严格保留 `[mcp_servers]` / `[profiles]` 等其他段不被破坏（上游 `a1e6c3b6`）
+- `backend/src/codex_config.rs` 暴露三个公共入口：
+  - `normalize_codex_settings_config_model_provider(settings, anchor)` —— 在 provider 主导的写入边界把 `model_provider` 归一化到稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id；都不可用时回退 `ccswitch`），同步重写匹配的 `[profiles.*]` `model_provider` 引用
+  - `restore_codex_settings_config_model_provider_for_backfill(settings, template_settings)` —— backfill 路径反归一化：把 live config 的稳定 id 还原回 stored provider 模板原始 id 与对应 profile 引用
+  - `write_codex_live_atomic_with_stable_provider(auth, config_text)` —— 在 `write_codex_live_atomic` 之外多一步归一化的 provider-driven 写入入口，restore-from-backup 路径仍走老的 `write_codex_live_atomic` 保留逐字节备份
+- `backend/src/services/provider/live.rs::strip_common_config_from_live_settings` 重构：在 strip common config 之后调用新增的 `restore_live_settings_for_provider_backfill`，让 backfill 链路最终把 live 中的稳定 id 还原回模板原始 id；`write_live_snapshot` 的 Codex 分支改走 `write_codex_live_atomic_with_stable_provider`，写下去之前自动归一化
+- `backend/src/services/proxy.rs` 在更新 Codex backup 前，从 existing backup 读 `config` 作为 anchor，调用 `normalize_codex_settings_config_model_provider` 归一化 effective settings；这样 backup 与 live 共享同一稳定 id，后续 takeover restore 不会让 `model_provider` 漂移
+- 修复用户感知问题：CC Switch 切换 Codex provider 后，`codex resume` 历史看起来"换了一个"——根因是 Codex 按 `model_provider` 字段过滤 resume 历史，旧 CC Switch 在 `rightcode` / `aihubmix` 这类自定义 id 之间漂移。本次修复保证切换前后 live config 中始终是同一个稳定 id（典型场景：第一次切换从 `rightcode` → 复用为稳定 id；后续切换无论 source 是 `vendor_alpha` / `vendor_beta`，最终落到 live 的都是 `rightcode`）
+- 新增 8 条 cargo 单测覆盖：归一化保留当前自定义 id、reserved id 时使用 target、空 config no-op、profile 引用同步重写、不相关 profile 引用保留、连续多次切换稳定性、backfill 反向还原、template 用 reserved id 时 backfill no-op
+
+### Usage perf
+
+- `backend/src/database/schema.rs::create_request_logs_dedup_index_if_supported` 在去重索引之前新增 `(app_type, created_at DESC)` 覆盖索引（`idx_request_logs_app_created_at`），让 dashboard 按 app 类型 + 时间倒序聚合 / 翻页时走 index-only scan，长期累积请求日志的查询性能显著提升（上游 `f061b777`）
+- `backend/src/database/schema.rs::seed_model_pricing` 补齐 GPT-5.4（`gpt-5.4` / `gpt-5.4-mini` / `gpt-5.4-nano`，3 条）与 GPT-5.5 系列（`gpt-5.5` / `-low` / `-medium` / `-high` / `-xhigh` / `-minimal`，6 条）的默认定价；现有用户启动时通过 `ensure_model_pricing_seeded` 的 `INSERT OR IGNORE` 自动补齐，配合 0.3.1 已落地的 `find_model_pricing_row` 大小写不敏感修复，`OpenAI/GPT-5.5@HIGH` 等大小写或前缀变形的 model id 现在能直接命中 seed 并被懒 backfill 重算成本，进一步消除 dashboard 的 ghost-zero-cost 行（上游 `f061b777`）
+
+### 维持延后
+
+- B1 完整 7 维指纹去重需要先扩 Web 端 `TokenUsage` 加 `message_id` / `dedup_request_id`，再重写 `usage_stats.rs` 与 `session_usage_*.rs` 的写入 / 读取 / rollup 三层 filter，跨 7 文件的架构改动，留独立任务；`COALESCE(data_source)` 表达式索引与 `idx_request_logs_dedup_lookup` 的 drop 也跟着 B1 一起做
+- F1 的 `lib.rs run_step` refactor 与 `maybe_backfill_log_costs` 启动期 spawn 不再独立做：Web 已经采用查询时懒 backfill 策略，等价于上游修复且更稳健；`run_step` 是纯 refactor 不影响行为
+
+### 文档与版本
+
+- 仓库版本提升到 `0.3.2`
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.3.2` 版本说明
+
 ## [0.3.1] - 2026-05-07
 
 跟进 0.3.0 发布之后上游 `cc-switch` 累计的一批修复，按"对 Web 后端有直接价值"筛过后落地。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。
