@@ -19,16 +19,72 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::SystemTime;
 
 /// 同步结果
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSyncResult {
     pub imported: u32,
     pub skipped: u32,
     pub files_scanned: u32,
+    #[serde(default)]
+    pub suspected_duplicates: u32,
+    #[serde(default)]
+    pub deferred_files: u32,
     pub errors: Vec<String>,
+}
+
+impl SessionSyncResult {
+    pub fn merge(&mut self, other: SessionSyncResult) {
+        self.imported = self.imported.saturating_add(other.imported);
+        self.skipped = self.skipped.saturating_add(other.skipped);
+        self.files_scanned = self.files_scanned.saturating_add(other.files_scanned);
+        self.suspected_duplicates = self
+            .suspected_duplicates
+            .saturating_add(other.suspected_duplicates);
+        self.deferred_files = self.deferred_files.saturating_add(other.deferred_files);
+        self.errors.extend(other.errors);
+    }
+}
+
+pub fn session_sync_mutex() -> &'static tokio::sync::Mutex<()> {
+    static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+fn merge_sync_step(
+    aggregate: &mut SessionSyncResult,
+    name: &str,
+    step: Result<SessionSyncResult, AppError>,
+) {
+    match step {
+        Ok(result) => aggregate.merge(result),
+        Err(error) => aggregate.errors.push(format!("{name} 同步失败: {error}")),
+    }
+}
+
+/// 调用方必须持有 [`session_sync_mutex`]。
+pub fn sync_all_unlocked(db: &Database) -> SessionSyncResult {
+    let mut result = SessionSyncResult::default();
+    merge_sync_step(&mut result, "Claude", sync_claude_session_logs(db));
+    merge_sync_step(
+        &mut result,
+        "Codex",
+        crate::services::session_usage_codex::sync_codex_usage(db),
+    );
+    merge_sync_step(
+        &mut result,
+        "Gemini",
+        crate::services::session_usage_gemini::sync_gemini_usage(db),
+    );
+    merge_sync_step(
+        &mut result,
+        "Grok Build",
+        crate::services::session_usage_grokbuild::sync_grokbuild_usage(db),
+    );
+    result
 }
 
 /// 数据来源分布
@@ -63,6 +119,7 @@ pub fn sync_claude_session_logs(db: &Database) -> Result<SessionSyncResult, AppE
             skipped: 0,
             files_scanned: 0,
             errors: vec![],
+            ..Default::default()
         });
     }
 
@@ -71,6 +128,7 @@ pub fn sync_claude_session_logs(db: &Database) -> Result<SessionSyncResult, AppE
         skipped: 0,
         files_scanned: 0,
         errors: vec![],
+        ..Default::default()
     };
 
     // 收集所有 .jsonl 文件
@@ -162,12 +220,7 @@ fn sync_single_file(db: &Database, file_path: &Path) -> Result<(u32, u32), AppEr
     // 获取文件元数据
     let metadata = fs::metadata(file_path)
         .map_err(|e| AppError::Config(format!("无法读取文件元数据: {e}")))?;
-    let file_modified = metadata
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+    let file_modified = metadata_modified_nanos(&metadata);
 
     // 检查同步状态
     let (last_modified, last_offset) = get_sync_state(db, &file_path_str)?;
@@ -329,7 +382,10 @@ fn sync_single_file(db: &Database, file_path: &Path) -> Result<(u32, u32), AppEr
 }
 
 /// 获取文件的同步状态
-fn get_sync_state(db: &Database, file_path: &str) -> Result<(i64, i64), AppError> {
+pub(crate) fn get_sync_state(
+    db: &Database,
+    file_path: &str,
+) -> Result<(i64, i64), AppError> {
     let conn = lock_conn!(db.conn);
     let result = conn.query_row(
         "SELECT last_modified, last_line_offset FROM session_log_sync WHERE file_path = ?1",
@@ -340,7 +396,16 @@ fn get_sync_state(db: &Database, file_path: &str) -> Result<(i64, i64), AppError
 }
 
 /// 更新文件的同步状态
-fn update_sync_state(
+pub(crate) fn metadata_modified_nanos(metadata: &fs::Metadata) -> i64 {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos().min(i64::MAX as u128) as i64)
+        .unwrap_or(0)
+}
+
+pub(crate) fn update_sync_state(
     db: &Database,
     file_path: &str,
     last_modified: i64,
@@ -585,6 +650,14 @@ pub fn get_data_source_breakdown(db: &Database) -> Result<Vec<DataSourceSummary>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn session_sync_mutex_serializes_callers() {
+        let first = session_sync_mutex().lock().await;
+        assert!(session_sync_mutex().try_lock().is_err());
+        drop(first);
+        assert!(session_sync_mutex().try_lock().is_ok());
+    }
 
     #[test]
     fn test_parse_usage_from_jsonl_line() {

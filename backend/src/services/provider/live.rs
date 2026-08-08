@@ -7,7 +7,7 @@ use toml_edit::{DocumentMut, Item, TableLike};
 
 use crate::app_config::AppType;
 use crate::codex_config::{get_codex_auth_path, write_codex_live_atomic_with_stable_provider};
-use crate::config::{get_claude_settings_path, read_json_file, write_json_file};
+use crate::config::{get_claude_settings_path, read_json_file, write_json_file, write_text_file};
 use crate::database::Database;
 use crate::error::AppError;
 use crate::provider::Provider;
@@ -39,6 +39,8 @@ pub(crate) fn provider_exists_in_live_config(
         AppType::OpenCode => crate::opencode_config::get_providers()
             .map(|providers| providers.contains_key(provider_id)),
         AppType::OpenClaw => crate::openclaw_config::get_providers()
+            .map(|providers| providers.contains_key(provider_id)),
+        AppType::Hermes => crate::hermes_config::get_providers()
             .map(|providers| providers.contains_key(provider_id)),
         _ => Ok(false),
     }
@@ -302,6 +304,38 @@ fn remove_toml_table_like(target: &mut dyn TableLike, source: &dyn TableLike) {
     }
 }
 
+/// 在编辑器的 config.toml 文本中结构化合并或剥离通用配置片段。
+/// 使用 toml_edit 保留用户注释和键顺序。
+pub fn update_toml_common_config_snippet(
+    config_toml: &str,
+    snippet_toml: &str,
+    enabled: bool,
+) -> Result<String, AppError> {
+    let trimmed = snippet_toml.trim();
+    if trimmed.is_empty() {
+        return Ok(config_toml.to_string());
+    }
+
+    let mut target_doc = if config_toml.trim().is_empty() {
+        DocumentMut::new()
+    } else {
+        config_toml
+            .parse::<DocumentMut>()
+            .map_err(|error| AppError::Message(format!("Invalid Codex config.toml: {error}")))?
+    };
+    let source_doc = trimmed.parse::<DocumentMut>().map_err(|error| {
+        AppError::Message(format!("Invalid Codex common config snippet: {error}"))
+    })?;
+
+    if enabled {
+        merge_toml_table_like(target_doc.as_table_mut(), source_doc.as_table());
+    } else {
+        remove_toml_table_like(target_doc.as_table_mut(), source_doc.as_table());
+    }
+
+    Ok(target_doc.to_string())
+}
+
 fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet: &str) -> bool {
     let trimmed = snippet.trim();
     if trimmed.is_empty() {
@@ -345,7 +379,7 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
             }
             _ => false,
         },
-        AppType::OpenCode | AppType::OpenClaw => false,
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => false,
     }
 }
 
@@ -415,7 +449,9 @@ pub(crate) fn remove_common_config_from_settings(
             }
             Ok(result)
         }
-        AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+            Ok(settings.clone())
+        }
     }
 }
 
@@ -470,7 +506,9 @@ fn apply_common_config_to_settings(
             }
             Ok(result)
         }
-        AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+            Ok(settings.clone())
+        }
     }
 }
 
@@ -561,11 +599,26 @@ fn restore_live_settings_for_provider_backfill(
     provider: &Provider,
     live_settings: Value,
 ) -> Value {
+    if matches!(app_type, AppType::GrokBuild) {
+        let mut settings = live_settings;
+        if let Err(error) = crate::grok_config::strip_grok_mcp_servers_from_settings(&mut settings) {
+            log::warn!(
+                "Failed to strip Grok Build mcp_servers while backfilling '{}': {error}",
+                provider.id
+            );
+        }
+        return settings;
+    }
     if !matches!(app_type, AppType::Codex) {
         return live_settings;
     }
 
     let mut settings = live_settings;
+    if let Err(err) =
+        crate::codex_config::strip_codex_unified_session_bucket_from_settings(&mut settings)
+    {
+        log::warn!("Failed to strip Codex unified history route while backfilling: {err}");
+    }
     if let Err(err) = crate::codex_config::restore_codex_settings_config_model_provider_for_backfill(
         &mut settings,
         &provider.settings_config,
@@ -625,8 +678,13 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             write_json_file(&path, &settings)?;
         }
         AppType::Codex => {
-            let obj = provider
-                .settings_config
+            let mut settings = provider.settings_config.clone();
+            crate::codex_config::apply_codex_unified_session_bucket_to_settings(
+                provider.category.as_deref(),
+                &mut settings,
+            )
+            .map_err(AppError::Config)?;
+            let obj = settings
                 .as_object()
                 .ok_or_else(|| AppError::Config("Codex 供应商配置必须是 JSON 对象".to_string()))?;
             let auth = obj
@@ -636,15 +694,21 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
                 AppError::Config("Codex 供应商配置缺少 'config' 字段或不是字符串".to_string())
             })?;
 
-            // 走 with_stable_provider 路径：写下去之前会先把 model_provider 归一化到
-            // 稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id），
-            // 让 Codex resume history 不会因为切换 provider 漂移。
-            write_codex_live_atomic_with_stable_provider(auth, Some(config_str))?;
+            if crate::proxy::providers::is_codex_official_provider(provider) {
+                // 官方条目不持有凭据；只恢复 config.toml，保留 Codex 原生 ChatGPT 登录。
+                write_text_file(&crate::codex_config::get_codex_config_path(), config_str)?;
+            } else {
+                // 走 with_stable_provider 路径：写下去之前会先把 model_provider 归一化到
+                // 稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id），
+                // 让 Codex resume history 不会因为切换 provider 漂移。
+                write_codex_live_atomic_with_stable_provider(auth, Some(config_str))?;
+            }
         }
         AppType::Gemini => {
             // Delegate to write_gemini_live which handles env file writing correctly
             write_gemini_live(provider)?;
         }
+        AppType::GrokBuild => crate::grok_config::write_grok_provider_live(provider)?,
         AppType::OpenCode => {
             // OpenCode uses additive mode - write provider to config
             use crate::opencode_config;
@@ -745,6 +809,10 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
                 }
             }
         }
+        AppType::Hermes => {
+            crate::hermes_config::set_provider(&provider.id, provider.settings_config.clone())?;
+            log::info!("Hermes provider '{}' written to live config", provider.id);
+        }
     }
     Ok(())
 }
@@ -802,7 +870,7 @@ pub(crate) fn sync_current_provider_for_app_to_live(
         }
     }
 
-    McpService::sync_all_enabled(state)?;
+    McpService::sync_enabled_for_app(state, app_type)?;
 
     Ok(())
 }
@@ -837,8 +905,8 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
         }
     }
 
-    // MCP sync
-    McpService::sync_all_enabled(state)?;
+    // MCP 逐应用同步失败不应跳过后续 Skill 同步，但最终仍需上报结果不完整。
+    let mcp_result = McpService::sync_all_enabled(state);
 
     // Skill sync
     for app_type in AppType::all() {
@@ -848,7 +916,7 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
         }
     }
 
-    Ok(())
+    mcp_result
 }
 
 /// Read current live settings for an app type
@@ -911,6 +979,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
                 "config": config_obj
             }))
         }
+        AppType::GrokBuild => crate::grok_config::read_grok_live_settings(),
         AppType::OpenCode => {
             use crate::opencode_config::{get_opencode_config_path, read_opencode_config};
 
@@ -941,6 +1010,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             let config = read_openclaw_config()?;
             Ok(config)
         }
+        AppType::Hermes => Ok(Value::Object(crate::hermes_config::get_providers()?)),
     }
 }
 
@@ -957,7 +1027,12 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
 
     {
         let providers = state.db.get_all_providers(app_type.as_str())?;
-        if !providers.is_empty() {
+        let has_user_provider = providers.values().any(|provider| {
+            !(matches!(app_type, AppType::GrokBuild)
+                && provider.id == crate::grok_config::OFFICIAL_PROVIDER_ID
+                && provider.category.as_deref() == Some("official"))
+        });
+        if has_user_provider {
             return Ok(false); // 已有供应商，跳过
         }
     }
@@ -1022,8 +1097,18 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
                 "config": config_obj
             })
         }
-        // OpenCode and OpenClaw use additive mode and are handled by early return above
-        AppType::OpenCode | AppType::OpenClaw => {
+        AppType::GrokBuild => {
+            let mut settings = crate::grok_config::read_grok_live_settings()?;
+            let config = settings
+                .get("config")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            crate::grok_config::validate_config_toml(config)?;
+            crate::grok_config::strip_grok_mcp_servers_from_settings(&mut settings)?;
+            settings
+        }
+        // Additive mode apps are handled by the early return above.
+        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
             unreachable!("additive mode apps are handled by early return")
         }
     };
@@ -1268,6 +1353,29 @@ pub fn import_openclaw_providers_from_live(state: &AppState) -> Result<usize, Ap
     Ok(imported)
 }
 
+pub fn import_hermes_providers_from_live(state: &AppState) -> Result<usize, AppError> {
+    let providers = crate::hermes_config::get_providers()?;
+    if providers.is_empty() {
+        return Ok(0);
+    }
+
+    let existing = state.db.get_all_providers("hermes")?;
+    let mut imported = 0;
+    for (id, settings_config) in providers {
+        if existing.contains_key(&id) {
+            continue;
+        }
+        let mut provider = Provider::with_id(id.clone(), id.clone(), settings_config, None);
+        provider
+            .meta
+            .get_or_insert_with(Default::default)
+            .live_config_managed = Some(true);
+        state.db.save_provider("hermes", &provider)?;
+        imported += 1;
+    }
+    Ok(imported)
+}
+
 /// Remove an OpenClaw provider from live config
 ///
 /// This removes a specific provider from ~/.openclaw/openclaw.json
@@ -1287,10 +1395,58 @@ pub fn remove_openclaw_provider_from_live(provider_id: &str) -> Result<(), AppEr
     Ok(())
 }
 
+pub fn remove_hermes_provider_from_live(provider_id: &str) -> Result<(), AppError> {
+    crate::hermes_config::remove_provider(provider_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn update_toml_common_config_preserves_comments_and_key_order() {
+        let config = r#"# user comment
+model = "gpt-5.5"
+model_provider = "custom"
+disable_response_storage = true
+
+[model_providers.custom]
+# provider comment
+name = "Custom"
+base_url = "https://example.com/v1"
+"#;
+        let snippet = "[tui]\nnotifications = true\n";
+
+        let merged = update_toml_common_config_snippet(config, snippet, true).unwrap();
+        assert!(merged.contains("# user comment"));
+        assert!(merged.contains("# provider comment"));
+        assert!(merged.find("model = ").unwrap() < merged.find("model_provider = ").unwrap());
+        assert!(
+            merged.find("model_provider = ").unwrap()
+                < merged.find("disable_response_storage").unwrap()
+        );
+        assert!(merged.contains("[tui]"));
+        assert!(!merged.contains("[model_providers]\n"));
+
+        let removed = update_toml_common_config_snippet(&merged, snippet, false).unwrap();
+        assert!(!removed.contains("[tui]"));
+        assert!(removed.contains("# user comment"));
+    }
+
+    #[test]
+    fn update_toml_common_config_removes_only_matching_values() {
+        let snippet = "[tui]\nnotifications = true\n";
+        let merged =
+            update_toml_common_config_snippet("[tui]\nnotifications = false\n", snippet, true)
+                .unwrap();
+        assert!(merged.contains("notifications = true"));
+
+        let removed =
+            update_toml_common_config_snippet("[tui]\nnotifications = false\n", snippet, false)
+                .unwrap();
+        assert!(removed.contains("notifications = false"));
+    }
 
     #[test]
     fn claude_common_config_apply_and_remove_roundtrip_for_non_overlapping_fields() {
@@ -1413,5 +1569,24 @@ mod tests {
             .map(|value| value.as_str().expect("tool id should be string"))
             .collect();
         assert_eq!(values, vec!["tool2"]);
+    }
+
+    #[test]
+    fn grokbuild_backfill_does_not_persist_projected_mcp_servers() {
+        let provider = Provider::with_id(
+            "grok".to_string(),
+            "Grok".to_string(),
+            json!({ "config": "[models]\ndefault = \"grok\"\n" }),
+            None,
+        );
+        let live = json!({
+            "config": "[models]\ndefault = \"grok\"\n\n[mcp_servers.echo]\ncommand = \"echo\"\n"
+        });
+
+        let restored =
+            restore_live_settings_for_provider_backfill(&AppType::GrokBuild, &provider, live);
+        let config = restored["config"].as_str().expect("config text");
+        assert!(config.contains("default = \"grok\""));
+        assert!(!config.contains("mcp_servers"));
     }
 }

@@ -16,6 +16,7 @@ use super::{
 use crate::database::Database;
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use axum::{
     extract::DefaultBodyLimit,
     routing::{get, post},
@@ -43,6 +44,8 @@ pub struct ProxyState {
     pub copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     /// Codex OAuth 鉴权状态
     pub codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+    /// xAI OAuth 鉴权状态
+    pub xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     /// Gemini Native shadow state，用于 thoughtSignature / tool call 回放
     pub gemini_shadow: Arc<GeminiShadowStore>,
     /// 故障转移切换管理器
@@ -64,6 +67,7 @@ impl ProxyServer {
         db: Arc<Database>,
         copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
         codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+        xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     ) -> Self {
         // 创建共享的 ProviderRouter（熔断器状态将跨所有请求保持）
         let provider_router = Arc::new(ProviderRouter::new(db.clone()));
@@ -79,6 +83,7 @@ impl ProxyServer {
             provider_router,
             copilot_auth_state,
             codex_oauth_state,
+            xai_oauth_state,
             gemini_shadow: Arc::new(GeminiShadowStore::default()),
             failover_manager,
         };
@@ -325,6 +330,10 @@ impl ProxyServer {
             .route("/v1/responses", post(handlers::handle_responses))
             .route("/v1/v1/responses", post(handlers::handle_responses))
             .route("/codex/v1/responses", post(handlers::handle_responses))
+            .route(
+                "/grokbuild/v1/responses",
+                post(handlers::handle_grokbuild_responses),
+            )
             // OpenAI Responses Compact API (Codex CLI 远程压缩，透传)
             .route(
                 "/responses/compact",
@@ -341,6 +350,10 @@ impl ProxyServer {
             .route(
                 "/codex/v1/responses/compact",
                 post(handlers::handle_responses_compact),
+            )
+            .route(
+                "/grokbuild/v1/responses/compact",
+                post(handlers::handle_grokbuild_responses_compact),
             )
             // Gemini API (支持带前缀和不带前缀)
             .route("/v1beta/*path", post(handlers::handle_gemini))

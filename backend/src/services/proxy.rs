@@ -9,6 +9,7 @@ use crate::provider::Provider;
 use crate::proxy::circuit_breaker::CircuitBreakerConfig;
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::proxy::server::ProxyServer;
 use crate::proxy::types::*;
 use crate::services::provider::{
@@ -21,7 +22,7 @@ use tokio::sync::RwLock;
 
 /// 用于接管 Live 配置时的占位符（避免客户端提示缺少 key，同时不泄露真实 Token）
 const PROXY_TOKEN_PLACEHOLDER: &str = "PROXY_MANAGED";
-const PROXY_TAKEOVER_APPS: [&str; 3] = ["claude", "codex", "gemini"];
+const PROXY_TAKEOVER_APPS: [&str; 4] = ["claude", "codex", "gemini", "grokbuild"];
 
 /// 代理接管模式下需要从 Claude Live 配置中移除的"模型覆盖"字段。
 ///
@@ -42,14 +43,12 @@ const CLAUDE_MODEL_OVERRIDE_ENV_KEYS: [&str; 6] = [
 /// - `PreserveExistingOrAuthToken`：普通 API key 供应商。settings 里已有的
 ///   token env 字段都替换成 PROXY_MANAGED；若一个都没有则补一个
 ///   `ANTHROPIC_AUTH_TOKEN`。
-/// - `ManagedAccount`：托管账号供应商（GitHub Copilot / Codex OAuth）。
-///   先把已有的所有 token env 字段全部移除（这类供应商的真实 token 由代理在
-///   出站时通过 OAuth 注入到 `Authorization` 头），仅写入 `ANTHROPIC_API_KEY`
-///   作为客户端可见的占位符，避免客户端因为没有 token 而提示缺 key。
+/// - `ManagedAccount`：托管账号供应商。Codex/xAI 使用 `ANTHROPIC_AUTH_TOKEN`，
+///   Copilot 使用 `ANTHROPIC_API_KEY`；都只保留一个占位符。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ClaudeTakeoverAuthPolicy {
     PreserveExistingOrAuthToken,
-    ManagedAccount,
+    ManagedAccount { keep_auth_token: bool },
 }
 
 #[derive(Clone)]
@@ -57,6 +56,7 @@ pub struct ProxyService {
     db: Arc<Database>,
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+    xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     server: Arc<RwLock<Option<ProxyServer>>>,
 }
 
@@ -69,18 +69,23 @@ impl ProxyService {
         let codex_oauth_state = Arc::new(RwLock::new(CodexOAuthManager::new(
             crate::config::get_app_config_dir(),
         )));
-        Self::new_with_auth(db, copilot_auth_state, codex_oauth_state)
+        let xai_oauth_state = Arc::new(RwLock::new(XaiOAuthManager::new(
+            crate::config::get_app_config_dir(),
+        )));
+        Self::new_with_auth(db, copilot_auth_state, codex_oauth_state, xai_oauth_state)
     }
 
     pub fn new_with_auth(
         db: Arc<Database>,
         copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
         codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+        xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     ) -> Self {
         Self {
             db,
             copilot_auth_state,
             codex_oauth_state,
+            xai_oauth_state,
             server: Arc::new(RwLock::new(None)),
         }
     }
@@ -231,6 +236,7 @@ impl ProxyService {
             self.db.clone(),
             self.copilot_auth_state.clone(),
             self.codex_oauth_state.clone(),
+            self.xai_oauth_state.clone(),
         );
         let info = server
             .start()
@@ -265,6 +271,12 @@ impl ProxyService {
             .await
             .map(|c| c.enabled)
             .unwrap_or(false);
+        let grokbuild_enabled = self
+            .db
+            .get_proxy_config_for_app("grokbuild")
+            .await
+            .map(|c| c.enabled)
+            .unwrap_or(false);
         // OpenCode and OpenClaw don't support proxy features, always return false
         let opencode_enabled = false;
         let openclaw_enabled = false;
@@ -273,6 +285,7 @@ impl ProxyService {
             claude: claude_enabled,
             codex: codex_enabled,
             gemini: gemini_enabled,
+            grokbuild: grokbuild_enabled,
             opencode: opencode_enabled,
             openclaw: openclaw_enabled,
         })
@@ -285,6 +298,16 @@ impl ProxyService {
     pub async fn set_takeover_for_app(&self, app_type: &str, enabled: bool) -> Result<(), String> {
         let app = AppType::from_str(app_type).map_err(|e| format!("无效的应用类型: {e}"))?;
         let app_type_str = app.as_str();
+
+        if enabled && matches!(app, AppType::GrokBuild) {
+            let live_config = self.read_grok_live()?;
+            if !Self::grok_live_config_supports_takeover(&live_config) {
+                return Err(
+                    "Grok Build 当前为官方登录态（无自定义模型表），官方供应商不支持代理接管"
+                        .to_string(),
+                );
+            }
+        }
 
         if enabled {
             // 1) 代理服务未运行则自动启动
@@ -360,8 +383,18 @@ impl ProxyService {
             return Ok(()); // 未接管，幂等返回
         }
 
+        self.disable_takeover_for_app(&app).await
+    }
+
+    /// 无条件恢复指定应用的 Live 配置并清除接管状态。
+    ///
+    /// Profile 切换需要在 DB 标志与 Live 文件不一致时也退出旧代理环境，
+    /// 因此不能使用上面的 enabled 快速返回。
+    pub async fn disable_takeover_for_app(&self, app: &AppType) -> Result<(), String> {
+        let app_type_str = app.as_str();
+
         // 1) 恢复 Live 配置
-        self.restore_live_config_for_app(&app).await?;
+        self.restore_live_config_for_app_with_fallback(app).await?;
 
         // 2) 删除该 app 的备份（避免长期存储敏感 Token）
         self.db
@@ -406,6 +439,7 @@ impl ProxyService {
             AppType::Claude => self.read_claude_live()?,
             AppType::Codex => self.read_codex_live()?,
             AppType::Gemini => self.read_gemini_live()?,
+            AppType::GrokBuild => self.read_grok_live()?,
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features
                 return Err("OpenCode 不支持代理功能".to_string());
@@ -414,6 +448,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
+            AppType::Hermes => return Err("Hermes 不支持代理功能".to_string()),
         };
 
         self.sync_live_config_to_provider(app_type, &live_config)
@@ -633,12 +668,56 @@ impl ProxyService {
                     }
                 }
             }
+            AppType::GrokBuild => {
+                let provider_id = crate::settings::get_effective_current_provider(
+                    &self.db,
+                    &AppType::GrokBuild,
+                )
+                .map_err(|e| format!("获取 Grok Build 当前供应商失败: {e}"))?;
+
+                if let Some(provider_id) = provider_id {
+                    if let Ok(Some(mut provider)) =
+                        self.db.get_provider_by_id(&provider_id, "grokbuild")
+                    {
+                        let live_toml = live_config
+                            .get("config")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        if let Some(token) = crate::grok_config::extract_inline_api_key(live_toml)
+                            .filter(|token| {
+                                !token.is_empty() && token != PROXY_TOKEN_PLACEHOLDER
+                            })
+                        {
+                            let provider_toml = provider
+                                .settings_config
+                                .get("config")
+                                .and_then(Value::as_str)
+                                .ok_or_else(|| {
+                                    "Grok Build Provider 配置缺少 config 字段".to_string()
+                                })?;
+                            let updated = crate::grok_config::update_api_key(provider_toml, &token)
+                                .map_err(|e| format!("更新 Grok Build API Key 失败: {e}"))?;
+                            provider.settings_config["config"] = json!(updated);
+                            self.db
+                                .update_provider_settings_config(
+                                    "grokbuild",
+                                    &provider_id,
+                                    &provider.settings_config,
+                                )
+                                .map_err(|e| {
+                                    format!("同步 Grok Build Token 到数据库失败: {e}")
+                                })?;
+                        }
+                    }
+                }
+            }
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features, skip silently
             }
             AppType::OpenClaw => {
                 // OpenClaw doesn't support proxy features, skip silently
             }
+            AppType::Hermes => {}
         }
 
         Ok(())
@@ -721,6 +800,7 @@ impl ProxyService {
             AppType::Claude => ("claude", self.read_claude_live()?),
             AppType::Codex => ("codex", self.read_codex_live()?),
             AppType::Gemini => ("gemini", self.read_gemini_live()?),
+            AppType::GrokBuild => ("grokbuild", self.read_grok_live()?),
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features
                 return Err("OpenCode 不支持代理功能".to_string());
@@ -729,7 +809,14 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
+            AppType::Hermes => return Err("Hermes 不支持代理功能".to_string()),
         };
+
+        if Self::live_has_proxy_placeholder_for_app(app_type, &config) {
+            return Err(format!(
+                "{app_type_str} Live 已含代理占位符，拒绝覆盖原始配置备份"
+            ));
+        }
 
         let json_str = serde_json::to_string(&config)
             .map_err(|e| format!("序列化 {app_type_str} 配置失败: {e}"))?;
@@ -765,9 +852,32 @@ impl ProxyService {
         Ok((proxy_url, proxy_codex_base_url))
     }
 
+    fn grok_live_config_supports_takeover(config: &Value) -> bool {
+        config
+            .get("config")
+            .and_then(Value::as_str)
+            .and_then(crate::grok_config::extract_model_config)
+            .is_some()
+    }
+
+    fn apply_grok_takeover_fields(config: &mut Value, proxy_base_url: &str) -> Result<(), String> {
+        let config_toml = config
+            .get("config")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "Grok Build 配置缺少 config 字段".to_string())?;
+        let updated = crate::grok_config::apply_proxy_takeover(
+            config_toml,
+            proxy_base_url,
+            PROXY_TOKEN_PLACEHOLDER,
+        )
+        .map_err(|e| format!("更新 Grok Build 接管配置失败: {e}"))?;
+        config["config"] = json!(updated);
+        Ok(())
+    }
+
     /// 根据 provider 类型自动选择 auth policy 并改写 Claude Live 配置。
     ///
-    /// 跟随上游 cc-switch 61e68d75：托管账号供应商（GitHub Copilot / Codex OAuth）
+    /// 跟随上游 cc-switch：托管账号供应商（GitHub Copilot / Codex OAuth / xAI OAuth）
     /// 不应该在 settings 里留 `ANTHROPIC_AUTH_TOKEN` 这类 placeholder，否则
     /// Claude Code 客户端的 auth header 选择顺序会优先用它，发到代理的请求
     /// 就携带 `Bearer PROXY_MANAGED`，进而被 forwarder outbound guard 拒绝
@@ -778,7 +888,9 @@ impl ProxyService {
         provider: &Provider,
     ) {
         let auth_policy = if provider.uses_managed_account_auth() {
-            ClaudeTakeoverAuthPolicy::ManagedAccount
+            ClaudeTakeoverAuthPolicy::ManagedAccount {
+                keep_auth_token: !provider.is_github_copilot(),
+            }
         } else {
             ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken
         };
@@ -826,22 +938,29 @@ impl ProxyService {
                         );
                     }
                 }
-                ClaudeTakeoverAuthPolicy::ManagedAccount => {
-                    // 托管账号：彻底清掉历史 token env，仅写 ANTHROPIC_API_KEY 占位符。
+                ClaudeTakeoverAuthPolicy::ManagedAccount { keep_auth_token } => {
                     for key in token_keys {
                         env.remove(key);
                     }
-                    env.insert(
-                        "ANTHROPIC_API_KEY".to_string(),
-                        json!(PROXY_TOKEN_PLACEHOLDER),
-                    );
+                    let token_key = if keep_auth_token {
+                        "ANTHROPIC_AUTH_TOKEN"
+                    } else {
+                        "ANTHROPIC_API_KEY"
+                    };
+                    env.insert(token_key.to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
                 }
             }
         } else {
             // 没有 env 字段：按 policy 选择占位符字段名建一个新的。
             let token_key = match auth_policy {
                 ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken => "ANTHROPIC_AUTH_TOKEN",
-                ClaudeTakeoverAuthPolicy::ManagedAccount => "ANTHROPIC_API_KEY",
+                ClaudeTakeoverAuthPolicy::ManagedAccount { keep_auth_token } => {
+                    if keep_auth_token {
+                        "ANTHROPIC_AUTH_TOKEN"
+                    } else {
+                        "ANTHROPIC_API_KEY"
+                    }
+                }
             };
             live_config["env"] = json!({
                 "ANTHROPIC_BASE_URL": proxy_url,
@@ -872,6 +991,7 @@ impl ProxyService {
     /// 接管指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
     async fn takeover_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
         let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
+        let proxy_grok_base_url = format!("{}/grokbuild/v1", proxy_url.trim_end_matches('/'));
 
         match app_type {
             // C-Phase0 脚手架：claude-desktop 运行时尚未实现
@@ -893,19 +1013,13 @@ impl ProxyService {
             }
             AppType::Codex => {
                 let mut live_config = self.read_codex_live()?;
-
-                if let Some(auth) = live_config.get_mut("auth").and_then(|v| v.as_object_mut()) {
-                    auth.insert("OPENAI_API_KEY".to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
-                }
-
-                let config_str = live_config
-                    .get("config")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let updated_config = Self::update_toml_base_url(config_str, &proxy_codex_base_url);
-                live_config["config"] = json!(updated_config);
-
-                self.write_codex_live(&live_config)?;
+                let provider = self.require_current_provider_for_app(&AppType::Codex)?;
+                Self::apply_codex_takeover_fields(
+                    &mut live_config,
+                    &proxy_codex_base_url,
+                    &provider,
+                )?;
+                self.write_codex_takeover_live(&live_config)?;
                 log::info!("Codex Live 配置已接管，代理地址: {proxy_codex_base_url}");
             }
             AppType::Gemini => {
@@ -924,6 +1038,18 @@ impl ProxyService {
                 self.write_gemini_live(&live_config)?;
                 log::info!("Gemini Live 配置已接管，代理地址: {proxy_url}");
             }
+            AppType::GrokBuild => {
+                let mut live_config = self.read_grok_live()?;
+                if !Self::grok_live_config_supports_takeover(&live_config) {
+                    return Err(
+                        "Grok Build 当前为官方登录态（无自定义模型表），官方供应商不支持代理接管"
+                            .to_string(),
+                    );
+                }
+                Self::apply_grok_takeover_fields(&mut live_config, &proxy_grok_base_url)?;
+                self.write_grok_live(&live_config)?;
+                log::info!("Grok Build Live 配置已接管，代理地址: {proxy_grok_base_url}");
+            }
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features
                 return Err("OpenCode 不支持代理功能".to_string());
@@ -932,6 +1058,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
+            AppType::Hermes => return Err("Hermes 不支持代理功能".to_string()),
         }
 
         Ok(())
@@ -940,6 +1067,7 @@ impl ProxyService {
     /// 接管指定应用的 Live 配置（尽力而为：配置不存在/读取失败则跳过）
     async fn takeover_live_config_best_effort(&self, app_type: &AppType) -> Result<(), String> {
         let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
+        let proxy_grok_base_url = format!("{}/grokbuild/v1", proxy_url.trim_end_matches('/'));
 
         match app_type {
             // C-Phase0 脚手架：claude-desktop 运行时尚未实现
@@ -974,20 +1102,13 @@ impl ProxyService {
             }
             AppType::Codex => {
                 if let Ok(mut live_config) = self.read_codex_live() {
-                    if let Some(auth) = live_config.get_mut("auth").and_then(|v| v.as_object_mut())
-                    {
-                        auth.insert("OPENAI_API_KEY".to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
-                    }
-
-                    let config_str = live_config
-                        .get("config")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let updated_config =
-                        Self::update_toml_base_url(config_str, &proxy_codex_base_url);
-                    live_config["config"] = json!(updated_config);
-
-                    let _ = self.write_codex_live(&live_config);
+                    let provider = self.require_current_provider_for_app(&AppType::Codex)?;
+                    Self::apply_codex_takeover_fields(
+                        &mut live_config,
+                        &proxy_codex_base_url,
+                        &provider,
+                    )?;
+                    self.write_codex_takeover_live(&live_config)?;
                 }
             }
             AppType::Gemini => {
@@ -1005,12 +1126,28 @@ impl ProxyService {
                     let _ = self.write_gemini_live(&live_config);
                 }
             }
+            AppType::GrokBuild => {
+                if let Ok(mut live_config) = self.read_grok_live() {
+                    if Self::grok_live_config_supports_takeover(&live_config) {
+                        Self::apply_grok_takeover_fields(
+                            &mut live_config,
+                            &proxy_grok_base_url,
+                        )?;
+                        let _ = self.write_grok_live(&live_config);
+                    } else {
+                        log::info!(
+                            "Grok Build Live 处于官方登录态（无自定义模型表），跳过代理接管"
+                        );
+                    }
+                }
+            }
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features, skip silently
             }
             AppType::OpenClaw => {
                 // OpenClaw doesn't support proxy features, skip silently
             }
+            AppType::Hermes => {}
         }
 
         Ok(())
@@ -1049,12 +1186,21 @@ impl ProxyService {
                     log::info!("Gemini Live 配置已恢复");
                 }
             }
+            AppType::GrokBuild => {
+                if let Ok(Some(backup)) = self.db.get_live_backup("grokbuild").await {
+                    let config: Value = serde_json::from_str(&backup.original_config)
+                        .map_err(|e| format!("解析 Grok Build 备份失败: {e}"))?;
+                    self.write_grok_live(&config)?;
+                    log::info!("Grok Build Live 配置已恢复");
+                }
+            }
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features, skip silently
             }
             AppType::OpenClaw => {
                 // OpenClaw doesn't support proxy features, skip silently
             }
+            AppType::Hermes => {}
         }
 
         Ok(())
@@ -1064,7 +1210,12 @@ impl ProxyService {
     async fn restore_live_configs(&self) -> Result<(), String> {
         let mut errors = Vec::new();
 
-        for app_type in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+        for app_type in [
+            AppType::Claude,
+            AppType::Codex,
+            AppType::Gemini,
+            AppType::GrokBuild,
+        ] {
             if let Err(e) = self
                 .restore_live_config_for_app_with_fallback(&app_type)
                 .await
@@ -1095,9 +1246,13 @@ impl ProxyService {
         if let Some(backup) = backup {
             let config: Value = serde_json::from_str(&backup.original_config)
                 .map_err(|e| format!("解析 {app_type_str} 备份失败: {e}"))?;
-            self.write_live_config_for_app(app_type, &config)?;
-            log::info!("{app_type_str} Live 配置已从备份恢复");
-            return Ok(());
+            if Self::live_has_proxy_placeholder_for_app(app_type, &config) {
+                log::warn!("{app_type_str} Live 备份包含代理占位符，跳过并从 SSOT 重建");
+            } else {
+                self.write_live_config_for_app(app_type, &config)?;
+                log::info!("{app_type_str} Live 配置已从备份恢复");
+                return Ok(());
+            }
         }
 
         // 2) 兜底：备份缺失，但 Live 仍包含接管占位符（异常退出/历史 bug 场景）
@@ -1138,6 +1293,8 @@ impl ProxyService {
             AppType::Claude => self.write_claude_live(config),
             AppType::Codex => self.write_codex_live(config),
             AppType::Gemini => self.write_gemini_live(config),
+            AppType::GrokBuild => crate::grok_config::write_grok_live_settings(config)
+                .map_err(|e| format!("写入 Grok Build 配置失败: {e}")),
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features
                 Err("OpenCode 不支持代理功能".to_string())
@@ -1146,6 +1303,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 Err("OpenClaw 不支持代理功能".to_string())
             }
+            AppType::Hermes => Err("Hermes 不支持代理功能".to_string()),
         }
     }
 
@@ -1165,6 +1323,10 @@ impl ProxyService {
                 Ok(config) => Self::is_gemini_live_taken_over(&config),
                 Err(_) => false,
             },
+            AppType::GrokBuild => match self.read_grok_live() {
+                Ok(config) => Self::is_grok_live_taken_over(&config),
+                Err(_) => false,
+            },
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy takeover
                 false
@@ -1173,6 +1335,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy takeover
                 false
             }
+            AppType::Hermes => false,
         }
     }
 
@@ -1214,6 +1377,7 @@ impl ProxyService {
             AppType::Claude => self.cleanup_claude_takeover_placeholders_in_live(),
             AppType::Codex => self.cleanup_codex_takeover_placeholders_in_live(),
             AppType::Gemini => self.cleanup_gemini_takeover_placeholders_in_live(),
+            AppType::GrokBuild => self.cleanup_grok_takeover_placeholders_in_live(),
             AppType::OpenCode => {
                 // OpenCode doesn't support proxy features
                 Ok(())
@@ -1222,6 +1386,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 Ok(())
             }
+            AppType::Hermes => Ok(()),
         }
     }
 
@@ -1283,6 +1448,10 @@ impl ProxyService {
 
         if let Some(cfg_str) = config.get("config").and_then(|v| v.as_str()) {
             let updated = Self::remove_local_toml_base_url(cfg_str);
+            let updated = crate::codex_config::remove_codex_proxy_auth_placeholder(&updated)
+                .map_err(|e| format!("清理 Codex 接管占位符失败: {e}"))?;
+            let updated = crate::codex_config::remove_codex_official_proxy_route(&updated)
+                .map_err(|e| format!("清理 Codex 官方接管路由失败: {e}"))?;
             config["config"] = json!(updated);
         }
 
@@ -1319,10 +1488,23 @@ impl ProxyService {
         Ok(())
     }
 
+    fn cleanup_grok_takeover_placeholders_in_live(&self) -> Result<(), String> {
+        let config = self.read_grok_live()?;
+        let Some(config_toml) = config.get("config").and_then(Value::as_str) else {
+            return Ok(());
+        };
+        if !crate::grok_config::has_proxy_placeholder(config_toml, PROXY_TOKEN_PLACEHOLDER) {
+            return Ok(());
+        }
+        let updated = crate::grok_config::update_api_key(config_toml, "")
+            .map_err(|e| format!("清理 Grok Build 接管占位符失败: {e}"))?;
+        self.write_grok_live(&json!({ "config": updated }))
+    }
+
     /// 检查是否处于 Live 接管模式
     pub async fn is_takeover_active(&self) -> Result<bool, String> {
         let status = self.get_takeover_status().await?;
-        Ok(status.claude || status.codex || status.gemini)
+        Ok(status.claude || status.codex || status.gemini || status.grokbuild)
     }
 
     fn is_claude_live_taken_over(config: &Value) -> bool {
@@ -1346,11 +1528,20 @@ impl ProxyService {
     }
 
     fn is_codex_live_taken_over(config: &Value) -> bool {
-        let auth = match config.get("auth").and_then(|v| v.as_object()) {
-            Some(auth) => auth,
-            None => return false,
-        };
-        auth.get("OPENAI_API_KEY").and_then(|v| v.as_str()) == Some(PROXY_TOKEN_PLACEHOLDER)
+        config
+            .get("auth")
+            .and_then(|v| v.as_object())
+            .and_then(|auth| auth.get("OPENAI_API_KEY"))
+            .and_then(|v| v.as_str())
+            == Some(PROXY_TOKEN_PLACEHOLDER)
+            || config
+                .get("config")
+                .and_then(Value::as_str)
+                .is_some_and(|text| {
+                    crate::codex_config::extract_codex_experimental_bearer_token(text).as_deref()
+                        == Some(PROXY_TOKEN_PLACEHOLDER)
+                        || crate::codex_config::codex_config_has_official_proxy_route(text)
+                })
     }
 
     fn is_gemini_live_taken_over(config: &Value) -> bool {
@@ -1359,6 +1550,25 @@ impl ProxyService {
             None => return false,
         };
         env.get("GEMINI_API_KEY").and_then(|v| v.as_str()) == Some(PROXY_TOKEN_PLACEHOLDER)
+    }
+
+    fn is_grok_live_taken_over(config: &Value) -> bool {
+        config
+            .get("config")
+            .and_then(Value::as_str)
+            .is_some_and(|config_toml| {
+                crate::grok_config::has_proxy_placeholder(config_toml, PROXY_TOKEN_PLACEHOLDER)
+            })
+    }
+
+    fn live_has_proxy_placeholder_for_app(app_type: &AppType, config: &Value) -> bool {
+        match app_type {
+            AppType::Claude => Self::is_claude_live_taken_over(config),
+            AppType::Codex => Self::is_codex_live_taken_over(config),
+            AppType::Gemini => Self::is_gemini_live_taken_over(config),
+            AppType::GrokBuild => Self::is_grok_live_taken_over(config),
+            _ => false,
+        }
     }
 
     /// 从供应商配置更新 Live 备份（用于代理模式下的热切换）
@@ -1396,9 +1606,10 @@ impl ProxyService {
                 .transpose()?;
 
             if let Some(existing_value) = existing_backup_value.as_ref() {
-                Self::preserve_codex_mcp_servers_in_backup(
+                Self::preserve_toml_mcp_servers_in_backup(
                     &mut effective_settings,
                     existing_value,
+                    "Codex",
                 )?;
             }
 
@@ -1414,6 +1625,34 @@ impl ProxyService {
                 anchor_config_text,
             )
             .map_err(|e| format!("归一化 Codex restore backup 失败: {e}"))?;
+            crate::codex_config::apply_codex_unified_session_bucket_to_settings(
+                provider.category.as_deref(),
+                &mut effective_settings,
+            )?;
+        }
+
+        if matches!(app_type_enum, AppType::GrokBuild) {
+            let existing_value = db
+                .get_live_backup(app_type)
+                .await
+                .map_err(|e| format!("读取 {app_type} 现有备份失败: {e}"))?
+                .map(|backup| {
+                    serde_json::from_str::<Value>(&backup.original_config)
+                        .map_err(|e| format!("解析 {app_type} 现有备份失败: {e}"))
+                })
+                .transpose()?
+                .or_else(|| crate::grok_config::read_grok_live_settings().ok());
+            if let Some(existing_value) = existing_value.as_ref() {
+                Self::preserve_toml_mcp_servers_in_backup(
+                    &mut effective_settings,
+                    existing_value,
+                    "Grok Build",
+                )?;
+            }
+        }
+
+        if Self::live_has_proxy_placeholder_for_app(&app_type_enum, &effective_settings) {
+            return Err(format!("{app_type} 备份包含代理占位符，拒绝持久化"));
         }
 
         let backup_json = match app_type_enum {
@@ -1437,7 +1676,9 @@ impl ProxyService {
                 serde_json::to_string(&env_backup)
                     .map_err(|e| format!("序列化 Gemini 配置失败: {e}"))?
             }
-            AppType::OpenCode | AppType::OpenClaw => {
+            AppType::GrokBuild => serde_json::to_string(&effective_settings)
+                .map_err(|e| format!("序列化 Grok Build 配置失败: {e}"))?,
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
                 return Err(format!("未知的应用类型: {app_type}"));
             }
         };
@@ -1450,13 +1691,14 @@ impl ProxyService {
         Ok(())
     }
 
-    fn preserve_codex_mcp_servers_in_backup(
+    fn preserve_toml_mcp_servers_in_backup(
         target_settings: &mut Value,
         existing_backup: &Value,
+        app_name: &str,
     ) -> Result<(), String> {
         let target_obj = target_settings
             .as_object_mut()
-            .ok_or_else(|| "Codex 备份必须是 JSON 对象".to_string())?;
+            .ok_or_else(|| format!("{app_name} 备份必须是 JSON 对象"))?;
 
         let target_config = target_obj
             .get("config")
@@ -1467,7 +1709,7 @@ impl ProxyService {
         } else {
             target_config
                 .parse::<toml_edit::DocumentMut>()
-                .map_err(|e| format!("解析新的 Codex config.toml 失败: {e}"))?
+                .map_err(|e| format!("解析新的 {app_name} config.toml 失败: {e}"))?
         };
 
         let existing_config = existing_backup
@@ -1481,7 +1723,7 @@ impl ProxyService {
 
         let existing_doc = existing_config
             .parse::<toml_edit::DocumentMut>()
-            .map_err(|e| format!("解析现有 Codex 备份失败: {e}"))?;
+            .map_err(|e| format!("解析现有 {app_name} 备份失败: {e}"))?;
 
         if let Some(existing_mcp_servers) = existing_doc.get("mcp_servers") {
             match target_doc.get_mut("mcp_servers") {
@@ -1497,7 +1739,7 @@ impl ProxyService {
                         }
                     } else {
                         log::warn!(
-                            "Codex config contains a non-table mcp_servers section; skipping backup MCP merge"
+                            "{app_name} config contains a non-table mcp_servers section; skipping backup MCP merge"
                         );
                     }
                 }
@@ -1524,6 +1766,20 @@ impl ProxyService {
         let app_type_enum =
             AppType::from_str(app_type).map_err(|_| format!("无效的应用类型: {app_type}"))?;
 
+        let provider = self
+            .db
+            .get_provider_by_id(provider_id, app_type)
+            .map_err(|e| format!("读取供应商失败: {e}"))?
+            .ok_or_else(|| format!("供应商不存在: {provider_id}"))?;
+        if provider.category.as_deref() == Some("official")
+            && !crate::services::provider::official_provider_supports_proxy_takeover(
+                &app_type_enum,
+                &provider,
+            )
+        {
+            return Err("代理接管模式下不能切换到该官方供应商".to_string());
+        }
+
         self.db
             .set_current_provider(app_type_enum.as_str(), provider_id)
             .map_err(|e| format!("更新当前供应商失败: {e}"))?;
@@ -1542,19 +1798,20 @@ impl ProxyService {
             .is_some();
         let live_taken_over = self.detect_takeover_in_live_config_for_app(&app_type_enum);
 
-        if let Ok(Some(provider)) = self.db.get_provider_by_id(provider_id, app_type) {
-            // 同步更新 Live 备份（用于 stop_with_restore 恢复）
-            if has_backup || live_taken_over {
-                self.update_live_backup_from_provider(app_type, &provider)
-                    .await?;
+        // 同步更新 Live 备份（用于 stop_with_restore 恢复）
+        if has_backup || live_taken_over {
+            self.update_live_backup_from_provider(app_type, &provider)
+                .await?;
+            if matches!(app_type_enum, AppType::Codex) {
+                self.reapply_codex_takeover_live().await?;
             }
+        }
 
-            // 同步更新 ProxyStatus.active_targets（用于 UI 立即反映切换目标）
-            if let Some(server) = self.server.read().await.as_ref() {
-                server
-                    .set_active_target(app_type_enum.as_str(), &provider.id, &provider.name)
-                    .await;
-            }
+        // 同步更新 ProxyStatus.active_targets（用于 UI 立即反映切换目标）
+        if let Some(server) = self.server.read().await.as_ref() {
+            server
+                .set_active_target(app_type_enum.as_str(), &provider.id, &provider.name)
+                .await;
         }
 
         log::info!("代理模式：已切换 {app_type} 的目标供应商为 {provider_id}");
@@ -1563,10 +1820,36 @@ impl ProxyService {
 
     // ==================== Live 配置读写辅助方法 ====================
 
-    /// 更新 TOML 字符串中的 base_url（委托给 codex_config 共享实现）
-    fn update_toml_base_url(toml_str: &str, new_url: &str) -> String {
-        crate::codex_config::update_codex_toml_field(toml_str, "base_url", new_url)
-            .unwrap_or_else(|_| toml_str.to_string())
+    fn apply_codex_takeover_fields(
+        settings: &mut Value,
+        proxy_url: &str,
+        provider: &Provider,
+    ) -> Result<(), String> {
+        let config = settings.get("config").and_then(Value::as_str).unwrap_or("");
+        let updated = if crate::proxy::providers::is_codex_official_provider(provider) {
+            crate::codex_config::apply_codex_official_proxy_route(config, proxy_url)?
+        } else {
+            let updated =
+                crate::codex_config::update_codex_toml_field(config, "base_url", proxy_url)?;
+            let updated =
+                crate::codex_config::update_codex_toml_field(&updated, "wire_api", "responses")?;
+            crate::codex_config::apply_codex_proxy_auth_placeholder(&updated)?
+        };
+        settings["config"] = json!(updated);
+        Ok(())
+    }
+
+    fn write_codex_takeover_live(&self, config: &Value) -> Result<(), String> {
+        let config_text = config
+            .get("config")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "Codex 配置缺少 config 字段".to_string())?;
+        crate::config::write_text_file(&crate::codex_config::get_codex_config_path(), config_text)
+            .map_err(|e| format!("写入 Codex config 失败: {e}"))
+    }
+
+    pub(crate) async fn reapply_codex_takeover_live(&self) -> Result<(), String> {
+        self.takeover_live_config_strict(&AppType::Codex).await
     }
 
     fn read_claude_live(&self) -> Result<Value, String> {
@@ -1640,6 +1923,10 @@ impl ProxyService {
         let config_str = config.get("config").and_then(|v| v.as_str());
 
         match (auth, config_str) {
+            (Some(auth), Some(cfg)) if auth.as_object().is_some_and(|obj| obj.is_empty()) => {
+                crate::config::write_text_file(&get_codex_config_path(), cfg)
+                    .map_err(|e| format!("写入 Codex config 失败: {e}"))?;
+            }
             (Some(auth), Some(cfg)) => write_codex_live_atomic(auth, Some(cfg))
                 .map_err(|e| format!("写入 Codex 配置失败: {e}"))?,
             (Some(auth), None) => {
@@ -1676,6 +1963,16 @@ impl ProxyService {
         let env_map = json_to_env(config).map_err(|e| format!("转换 Gemini 配置失败: {e}"))?;
         write_gemini_env_atomic(&env_map).map_err(|e| format!("写入 Gemini env 失败: {e}"))?;
         Ok(())
+    }
+
+    fn read_grok_live(&self) -> Result<Value, String> {
+        crate::grok_config::read_grok_live_settings()
+            .map_err(|e| format!("读取 Grok Build 配置失败: {e}"))
+    }
+
+    fn write_grok_live(&self, config: &Value) -> Result<(), String> {
+        crate::grok_config::write_grok_live_settings(config)
+            .map_err(|e| format!("写入 Grok Build 配置失败: {e}"))
     }
 
     // ==================== 原有方法 ====================
@@ -1733,6 +2030,7 @@ impl ProxyService {
                     self.db.clone(),
                     self.copilot_auth_state.clone(),
                     self.codex_oauth_state.clone(),
+                    self.xai_oauth_state.clone(),
                 );
             new_server
                 .start()
@@ -1759,6 +2057,11 @@ impl ProxyService {
                 }
                 if takeover.gemini {
                     self.takeover_live_config_best_effort(&AppType::Gemini)
+                        .await?;
+                    updated_any = true;
+                }
+                if takeover.grokbuild {
+                    self.takeover_live_config_best_effort(&AppType::GrokBuild)
                         .await?;
                     updated_any = true;
                 }
@@ -1862,6 +2165,115 @@ mod tests {
     }
 
     #[test]
+    fn codex_managed_takeover_keeps_only_auth_token() {
+        let mut provider = Provider::with_id(
+            "codex".to_string(),
+            "Codex".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://chatgpt.com/backend-api/codex"
+                }
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            provider_type: Some("codex_oauth".to_string()),
+            ..Default::default()
+        });
+        let mut live = json!({
+            "env": {
+                "ANTHROPIC_AUTH_TOKEN": "old-token",
+                "ANTHROPIC_API_KEY": "old-key"
+            }
+        });
+
+        ProxyService::apply_claude_takeover_fields_for_provider(
+            &mut live,
+            "http://127.0.0.1:15721",
+            &provider,
+        );
+
+        let env = live["env"].as_object().expect("env object");
+        assert_eq!(
+            env.get("ANTHROPIC_AUTH_TOKEN").and_then(Value::as_str),
+            Some(PROXY_TOKEN_PLACEHOLDER)
+        );
+        assert!(!env.contains_key("ANTHROPIC_API_KEY"));
+    }
+
+    #[test]
+    fn copilot_managed_takeover_keeps_only_api_key() {
+        let mut provider = Provider::with_id(
+            "copilot".to_string(),
+            "Copilot".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.githubcopilot.com"
+                }
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            provider_type: Some("github_copilot".to_string()),
+            ..Default::default()
+        });
+        let mut live = json!({ "env": { "ANTHROPIC_AUTH_TOKEN": "old-token" } });
+
+        ProxyService::apply_claude_takeover_fields_for_provider(
+            &mut live,
+            "http://127.0.0.1:15721",
+            &provider,
+        );
+
+        let env = live["env"].as_object().expect("env object");
+        assert_eq!(
+            env.get("ANTHROPIC_API_KEY").and_then(Value::as_str),
+            Some(PROXY_TOKEN_PLACEHOLDER)
+        );
+        assert!(!env.contains_key("ANTHROPIC_AUTH_TOKEN"));
+    }
+
+    #[test]
+    fn xai_managed_takeover_keeps_only_auth_token() {
+        let mut provider = Provider::with_id(
+            "xai".to_string(),
+            "xAI".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.x.ai/v1"
+                }
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+        let mut live = json!({
+            "env": {
+                "ANTHROPIC_AUTH_TOKEN": "old-token",
+                "ANTHROPIC_API_KEY": "old-key",
+                "OPENAI_API_KEY": "old-openai-key"
+            }
+        });
+
+        ProxyService::apply_claude_takeover_fields_for_provider(
+            &mut live,
+            "http://127.0.0.1:15721",
+            &provider,
+        );
+
+        let env = live["env"].as_object().expect("env object");
+        assert_eq!(
+            env.get("ANTHROPIC_AUTH_TOKEN").and_then(Value::as_str),
+            Some(PROXY_TOKEN_PLACEHOLDER)
+        );
+        assert_eq!(env.len(), 2);
+        assert!(!env.contains_key("ANTHROPIC_API_KEY"));
+        assert!(!env.contains_key("OPENAI_API_KEY"));
+    }
+
+    #[test]
     fn update_toml_base_url_updates_active_model_provider_base_url() {
         let input = r#"
 model_provider = "any"
@@ -1876,7 +2288,8 @@ requires_openai_auth = true
 "#;
 
         let new_url = "http://127.0.0.1:5000/v1";
-        let output = ProxyService::update_toml_base_url(input, new_url);
+        let output = crate::codex_config::update_codex_toml_field(input, "base_url", new_url)
+            .expect("update base_url");
 
         let parsed: toml::Value =
             toml::from_str(&output).expect("updated config should be valid TOML");
@@ -1910,7 +2323,8 @@ model = "gpt-5.1-codex"
 "#;
 
         let new_url = "http://127.0.0.1:5000/v1";
-        let output = ProxyService::update_toml_base_url(input, new_url);
+        let output = crate::codex_config::update_codex_toml_field(input, "base_url", new_url)
+            .expect("update base_url");
 
         let parsed: toml::Value =
             toml::from_str(&output).expect("updated config should be valid TOML");
@@ -1921,6 +2335,54 @@ model = "gpt-5.1-codex"
             .expect("base_url should exist");
 
         assert_eq!(base_url, new_url);
+    }
+
+    #[test]
+    fn codex_takeover_keeps_native_auth_for_official_and_third_party_routes() {
+        let auth = json!({
+            "auth_mode": "chatgpt",
+            "tokens": { "access_token": "oauth-access" }
+        });
+        let mut official = Provider::with_id(
+            crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string(),
+            "OpenAI Official".to_string(),
+            json!({ "auth": {}, "config": "" }),
+            None,
+        );
+        official.category = Some("official".to_string());
+        let mut official_live = json!({ "auth": auth.clone(), "config": "" });
+        ProxyService::apply_codex_takeover_fields(
+            &mut official_live,
+            "http://127.0.0.1:5000/v1",
+            &official,
+        )
+        .expect("apply official route");
+        assert_eq!(official_live["auth"], auth);
+        assert!(crate::codex_config::codex_config_has_official_proxy_route(
+            official_live["config"].as_str().unwrap()
+        ));
+
+        let third_party = Provider::with_id(
+            "third-party".to_string(),
+            "Third Party".to_string(),
+            json!({ "auth": { "OPENAI_API_KEY": "sk-upstream" }, "config": "" }),
+            None,
+        );
+        let mut third_party_live = json!({ "auth": auth.clone(), "config": "" });
+        ProxyService::apply_codex_takeover_fields(
+            &mut third_party_live,
+            "http://127.0.0.1:5000/v1",
+            &third_party,
+        )
+        .expect("apply third-party route");
+        assert_eq!(third_party_live["auth"], auth);
+        assert_eq!(
+            crate::codex_config::extract_codex_experimental_bearer_token(
+                third_party_live["config"].as_str().unwrap()
+            )
+            .as_deref(),
+            Some(PROXY_TOKEN_PLACEHOLDER)
+        );
     }
 
     #[tokio::test]
@@ -2376,5 +2838,88 @@ command = "latest-command"
             Some("latest-command"),
             "new MCP entries should remain in the restore backup"
         );
+    }
+
+    fn grok_provider_config(base_url: &str, api_key: &str) -> Value {
+        json!({
+            "config": format!(
+                "[models]\ndefault = \"grok\"\n\n[model.grok]\nmodel = \"grok-4.5\"\nbase_url = \"{base_url}\"\nname = \"Grok\"\napi_key = \"{api_key}\"\napi_backend = \"responses\"\ncontext_window = 500000\n"
+            )
+        })
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn grok_official_live_rejects_takeover_before_proxy_start() {
+        let _home = TempHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        crate::grok_config::write_grok_live_settings(&json!({ "config": "" }))
+            .expect("write official live");
+        let db = Arc::new(Database::memory().expect("init db"));
+        let service = ProxyService::new(db.clone());
+
+        let error = service
+            .set_takeover_for_app("grokbuild", true)
+            .await
+            .expect_err("official live must reject takeover");
+
+        assert!(error.contains("官方登录态"));
+        assert!(!service.is_running().await);
+        assert!(db
+            .get_live_backup("grokbuild")
+            .await
+            .expect("read backup")
+            .is_none());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn grok_takeover_restore_keeps_hot_switched_provider_and_mcp() {
+        let _home = TempHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let db = Arc::new(Database::memory().expect("init db"));
+        let service = ProxyService::new(db);
+        let mut original = grok_provider_config("https://a.example/v1", "a-key");
+        original["config"] = json!(format!(
+            "{}\n[mcp_servers.echo]\ncommand = \"echo\"\n",
+            original["config"].as_str().expect("original config")
+        ));
+        crate::grok_config::write_grok_live_settings(&original).expect("write original live");
+        service
+            .backup_live_config_strict(&AppType::GrokBuild)
+            .await
+            .expect("backup live");
+
+        let provider_b = Provider::with_id(
+            "grok-b".to_string(),
+            "Grok B".to_string(),
+            grok_provider_config("https://b.example/v1", "b-key"),
+            None,
+        );
+        service
+            .update_live_backup_from_provider("grokbuild", &provider_b)
+            .await
+            .expect("update restore backup");
+        service
+            .takeover_live_config_strict(&AppType::GrokBuild)
+            .await
+            .expect("take over live");
+
+        let taken_over = crate::grok_config::read_grok_live_settings().expect("read takeover");
+        let taken_over = taken_over["config"].as_str().expect("takeover config");
+        assert!(taken_over.contains("http://127.0.0.1:15721/grokbuild/v1"));
+        assert!(taken_over.contains(PROXY_TOKEN_PLACEHOLDER));
+        assert!(taken_over.contains("[mcp_servers.echo]"));
+
+        service
+            .restore_live_config_for_app_with_fallback(&AppType::GrokBuild)
+            .await
+            .expect("restore live");
+        let restored = crate::grok_config::read_grok_live_settings().expect("read restored");
+        let restored = restored["config"].as_str().expect("restored config");
+        assert!(restored.contains("https://b.example/v1"));
+        assert!(restored.contains("b-key"));
+        assert!(restored.contains("[mcp_servers.echo]"));
+        assert!(!restored.contains(PROXY_TOKEN_PLACEHOLDER));
     }
 }

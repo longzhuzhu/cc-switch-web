@@ -8,6 +8,11 @@ import type { Provider, SessionMeta, Settings } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { generateUUID } from "@/utils/uuid";
 import { openclawKeys } from "@/hooks/useOpenClaw";
+import { invalidateHermesProviderCaches } from "@/hooks/useHermes";
+import {
+  CODEX_OFFICIAL_PROVIDER_ID,
+  GROKBUILD_OFFICIAL_PROVIDER_ID,
+} from "@/utils/providerCapabilities";
 
 export const useAddProviderMutation = (appId: AppId) => {
   const queryClient = useQueryClient();
@@ -18,11 +23,32 @@ export const useAddProviderMutation = (appId: AppId) => {
       providerInput: Omit<Provider, "id"> & {
         providerKey?: string;
         addToLive?: boolean;
+        ensureGrokBuildOfficialSeed?: boolean;
+        ensureCodexOfficialSeed?: boolean;
       },
     ) => {
+      const {
+        providerKey: _providerKey,
+        addToLive,
+        ensureGrokBuildOfficialSeed,
+        ensureCodexOfficialSeed,
+        ...rest
+      } = providerInput;
+
+      if (appId === "grokbuild" && ensureGrokBuildOfficialSeed) {
+        await providersApi.importDefault(appId);
+        const officialProvider = (await providersApi.getAll(appId))[
+          GROKBUILD_OFFICIAL_PROVIDER_ID
+        ];
+        if (!officialProvider) {
+          throw new Error("Grok Build official provider was not created");
+        }
+        return officialProvider;
+      }
+
       let id: string;
 
-      if (appId === "opencode" || appId === "openclaw") {
+      if (appId === "opencode" || appId === "openclaw" || appId === "hermes") {
         if (
           providerInput.category === "omo" ||
           providerInput.category === "omo-slim"
@@ -35,11 +61,11 @@ export const useAddProviderMutation = (appId: AppId) => {
           }
           id = providerInput.providerKey;
         }
+      } else if (appId === "codex" && ensureCodexOfficialSeed) {
+        id = CODEX_OFFICIAL_PROVIDER_ID;
       } else {
         id = generateUUID();
       }
-
-      const { providerKey: _providerKey, addToLive, ...rest } = providerInput;
 
       const newProvider: Provider = {
         ...rest,
@@ -73,6 +99,10 @@ export const useAddProviderMutation = (appId: AppId) => {
         await queryClient.invalidateQueries({
           queryKey: openclawKeys.health,
         });
+      }
+
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
       }
 
       toast.success(
@@ -117,6 +147,9 @@ export const useUpdateProviderMutation = (appId: AppId) => {
         await queryClient.invalidateQueries({
           queryKey: openclawKeys.health,
         });
+      }
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
       }
       toast.success(
         t("notifications.updateSuccess", {
@@ -169,6 +202,10 @@ export const useDeleteProviderMutation = (appId: AppId) => {
         await queryClient.invalidateQueries({
           queryKey: openclawKeys.health,
         });
+      }
+
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
       }
 
       toast.success(
@@ -226,7 +263,9 @@ export const useSwitchProviderMutation = (appId: AppId) => {
           queryKey: openclawKeys.health,
         });
       }
-
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
+      }
     },
     onError: (error: Error) => {
       const detail = extractErrorMessage(error) || t("common.unknown");

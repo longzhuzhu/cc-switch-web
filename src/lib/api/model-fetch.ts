@@ -12,13 +12,21 @@ export async function fetchModelsForConfig(
   apiKey: string,
   isFullUrl?: boolean,
   modelsUrlOverride?: string,
+  customUserAgent?: string,
 ): Promise<FetchedModel[]> {
   return invoke<FetchedModel[]>("fetch_models_for_config", {
     baseUrl,
     apiKey,
     isFullUrl,
     modelsUrl: modelsUrlOverride,
+    customUserAgent,
   });
+}
+
+export async function fetchXaiOauthModels(
+  accountId?: string | null,
+): Promise<FetchedModel[]> {
+  return invoke("get_xai_oauth_models", { accountId: accountId || null });
 }
 
 export function showFetchModelsError(

@@ -198,6 +198,99 @@ fn schema_migration_accepts_latest_previous_version_on_current_schema() {
 }
 
 #[test]
+fn schema_v12_adds_grokbuild_skill_and_mcp_flags() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE mcp_servers (
+            id TEXT PRIMARY KEY,
+            enabled_codex BOOLEAN NOT NULL DEFAULT 0
+        );
+        CREATE TABLE skills (
+            id TEXT PRIMARY KEY,
+            enabled_codex BOOLEAN NOT NULL DEFAULT 0
+        );",
+    )
+    .expect("create v11 tables");
+    conn.execute(
+        "INSERT INTO mcp_servers (id, enabled_codex) VALUES ('mcp-1', 1)",
+        [],
+    )
+    .expect("seed mcp");
+    conn.execute(
+        "INSERT INTO skills (id, enabled_codex) VALUES ('skill-1', 1)",
+        [],
+    )
+    .expect("seed skill");
+    Database::set_user_version(&conn, 11).expect("set v11");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate to v12");
+
+    assert!(Database::has_column(&conn, "mcp_servers", "enabled_grokbuild").unwrap());
+    assert!(Database::has_column(&conn, "skills", "enabled_grokbuild").unwrap());
+    let mcp: (i64, i64) = conn
+        .query_row(
+            "SELECT enabled_codex, enabled_grokbuild FROM mcp_servers WHERE id = 'mcp-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    let skill: (i64, i64) = conn
+        .query_row(
+            "SELECT enabled_codex, enabled_grokbuild FROM skills WHERE id = 'skill-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(mcp, (1, 0));
+    assert_eq!(skill, (1, 0));
+}
+
+#[test]
+fn schema_v13_adds_grokbuild_proxy_row_and_preserves_existing_values() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE proxy_config (
+            app_type TEXT PRIMARY KEY CHECK (app_type IN ('claude','codex','gemini')),
+            enabled INTEGER NOT NULL DEFAULT 0,
+            auto_failover_enabled INTEGER NOT NULL DEFAULT 0,
+            max_retries INTEGER NOT NULL DEFAULT 3,
+            streaming_first_byte_timeout INTEGER NOT NULL DEFAULT 60,
+            streaming_idle_timeout INTEGER NOT NULL DEFAULT 120,
+            non_streaming_timeout INTEGER NOT NULL DEFAULT 600,
+            circuit_failure_threshold INTEGER NOT NULL DEFAULT 4,
+            circuit_success_threshold INTEGER NOT NULL DEFAULT 2,
+            circuit_timeout_seconds INTEGER NOT NULL DEFAULT 60,
+            circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
+            circuit_min_requests INTEGER NOT NULL DEFAULT 10
+        );
+        INSERT INTO proxy_config (app_type, enabled, max_retries)
+        VALUES ('codex', 1, 9);",
+    )
+    .expect("create v12 proxy table");
+    Database::set_user_version(&conn, 12).expect("set v12");
+
+    Database::create_tables_on_conn(&conn).expect("startup table initialization");
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate to v13");
+
+    let codex: (i64, i64) = conn
+        .query_row(
+            "SELECT enabled, max_retries FROM proxy_config WHERE app_type = 'codex'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    let grok_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM proxy_config WHERE app_type = 'grokbuild'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(codex, (1, 9));
+    assert_eq!(grok_count, 1);
+}
+
+#[test]
 fn schema_migration_from_v7_preserves_skills_columns() {
     let conn = Connection::open_in_memory().expect("open memory db");
     Database::create_tables_on_conn(&conn).expect("create tables");
@@ -562,11 +655,11 @@ fn migration_from_v3_8_schema_v1_to_current_schema_v3() {
         "skills migration snapshot should preserve legacy app mapping"
     );
 
-    // v3.9+ 新增：proxy_config 三行 seed 必须存在（否则 UI 会查不到默认值）
+    // v3.9+ 新增：proxy_config 各应用的 seed 必须存在（否则 UI 会查不到默认值）
     let proxy_rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM proxy_config", [], |r| r.get(0))
         .expect("count proxy_config rows");
-    assert_eq!(proxy_rows, 3);
+    assert_eq!(proxy_rows, 4);
 
     // model_pricing 应具备默认数据（迁移时会 seed）
     let pricing_rows: i64 = conn
@@ -706,6 +799,43 @@ fn schema_model_pricing_is_seeded_on_init() {
         "应该包含 Gemini 模型定价，实际数量: {}",
         gemini_count
     );
+}
+
+#[test]
+fn schema_model_pricing_contains_current_models() {
+    let db = Database::memory().expect("create memory db");
+    let conn = db.conn.lock().expect("lock conn");
+
+    let expected = [
+        ("claude-opus-5", "5", "25", "0.50", "6.25"),
+        ("gpt-5.6-sol", "5", "30", "0.50", "6.25"),
+        ("gpt-5.6-terra", "2.50", "15", "0.25", "3.125"),
+        ("gpt-5.6-luna", "1", "6", "0.10", "1.25"),
+        ("grok-4.5", "2", "6", "0.50", "0"),
+        ("kimi-k3", "3.00", "15.00", "0.30", "0"),
+    ];
+
+    for (model_id, input, output, cache_read, cache_creation) in expected {
+        let actual: (String, String, String, String) = conn
+            .query_row(
+                "SELECT input_cost_per_million, output_cost_per_million,
+                        cache_read_cost_per_million, cache_creation_cost_per_million
+                 FROM model_pricing WHERE model_id = ?1",
+                [model_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap_or_else(|error| panic!("missing pricing for {model_id}: {error}"));
+        assert_eq!(
+            actual,
+            (
+                input.to_string(),
+                output.to_string(),
+                cache_read.to_string(),
+                cache_creation.to_string(),
+            ),
+            "unexpected pricing for {model_id}",
+        );
+    }
 }
 
 #[test]

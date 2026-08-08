@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { motion } from "framer-motion";
 import {
   Loader2,
@@ -46,7 +52,7 @@ import { ModelTestConfigPanel } from "@/components/usage/ModelTestConfigPanel";
 import { UsageDashboard } from "@/components/usage/UsageDashboard";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
-import { SecurityTab } from "@/components/settings/SecurityTab";
+import { CodexHistorySettings } from "@/components/settings/CodexHistorySettings";
 import { useSettings } from "@/hooks/useSettings";
 import { useInstalledSkills } from "@/hooks/useSkills";
 import { useImportExport } from "@/hooks/useImportExport";
@@ -210,6 +216,24 @@ export function SettingsPage({
     [autoSaveSettings, settings, t, updateSettings],
   );
 
+  const handleConfirmedAutoSave = useCallback(
+    async (updates: Partial<SettingsFormState>): Promise<boolean> => {
+      if (!settings) return false;
+      try {
+        await autoSaveSettings(updates);
+        updateSettings(updates);
+        return true;
+      } catch (error) {
+        console.error(
+          "[SettingsPage] Failed to autosave confirmed setting",
+          error,
+        );
+        return false;
+      }
+    },
+    [autoSaveSettings, settings, updateSettings],
+  );
+
   const isBusy = useMemo(() => isLoading && !settings, [isLoading, settings]);
 
   return (
@@ -226,7 +250,7 @@ export function SettingsPage({
         >
           <div className="sticky top-0 z-20 mb-6 bg-gradient-to-b from-background via-background/96 to-transparent pb-4 pt-1 backdrop-blur-xl">
             <div className="glass-card rounded-[30px] border border-border-default p-2 shadow-xl">
-              <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0 lg:grid-cols-7">
+              <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0 lg:grid-cols-6">
                 <TabsTrigger
                   value="general"
                   className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
@@ -256,12 +280,6 @@ export function SettingsPage({
                   className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
                 >
                   {t("usage.title")}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="security"
-                  className="rounded-2xl px-3 py-3 text-sm data-[state=active]:shadow-sm"
-                >
-                  {t("auth.security")}
                 </TabsTrigger>
                 <TabsTrigger
                   value="about"
@@ -388,6 +406,12 @@ export function SettingsPage({
                   />
 
                   <AuthCenterPanel />
+                  {settings ? (
+                    <CodexHistorySettings
+                      settings={settings}
+                      onChange={handleConfirmedAutoSave}
+                    />
+                  ) : null}
                 </motion.div>
               </TabsContent>
 
@@ -408,7 +432,9 @@ export function SettingsPage({
                         defaultValue:
                           "高级设置聚合了配置目录、导入导出、备份、云同步、日志和模型测试等偏运维能力。",
                       })}
-                      icon={<Database className="h-5 w-5 theme-tertiary-text" />}
+                      icon={
+                        <Database className="h-5 w-5 theme-tertiary-text" />
+                      }
                     />
                     <Accordion
                       type="multiple"
@@ -444,6 +470,7 @@ export function SettingsPage({
                             claudeDir={settings.claudeConfigDir}
                             codexDir={settings.codexConfigDir}
                             geminiDir={settings.geminiConfigDir}
+                            grokDir={settings.grokConfigDir}
                             opencodeDir={settings.opencodeConfigDir}
                             openclawDir={settings.openclawConfigDir}
                             hermesDir={settings.hermesConfigDir}
@@ -609,15 +636,6 @@ export function SettingsPage({
                 />
                 <UsageDashboard />
               </TabsContent>
-              <TabsContent value="security" className="mt-0">
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <SecurityTab />
-                </motion.div>
-              </TabsContent>
               <TabsContent value="about" className="space-y-6 mt-0 pb-4">
                 <SettingsIntroCard
                   eyebrow={t("common.about")}
@@ -635,9 +653,7 @@ export function SettingsPage({
             </div>
 
             {activeTab === "advanced" && settings && (
-              <div
-                className="sticky bottom-0 flex-shrink-0 border-t border-border-default bg-background/90 py-4 backdrop-blur-xl"
-              >
+              <div className="sticky bottom-0 flex-shrink-0 border-t border-border-default bg-background/90 py-4 backdrop-blur-xl">
                 <div className="flex items-center justify-end gap-3 px-1 sm:px-2">
                   <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? (

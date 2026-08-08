@@ -66,7 +66,7 @@ Capabilities already available on the Web branch:
 
 ## Version
 
-The current repository version is `0.8.0`. For per-version change details, the per-fix upstream commit references, and items deferred to follow-up tasks, see `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md`.
+The current repository version is `1.0.0`. For per-version change details, the per-fix upstream commit references, and items deferred to follow-up tasks, see `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md`.
 
 This repository treats `0.1.0` as its initial Web release baseline; previous inherited release history has been removed and should be considered part of the upstream project history.
 
@@ -195,7 +195,36 @@ Script entry layout:
 
    This includes files such as `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
 
+### Access Key (Optional)
+
+Set `CC_SWITCH_WEB_ACCESS_KEY` to protect the Web API. The key must contain at least 16 characters. Leaving it unset or empty preserves the existing unauthenticated mode.
+
+```bash
+CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' ./backend/target/release/cc-switch-web
+```
+
+PowerShell:
+
+```powershell
+$env:CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key'; .\backend\target\release\cc-switch-web.exe
+```
+
+After verification, the browser stores the key only in the current tab's `sessionStorage`. LAN or Internet deployments should still use an HTTPS reverse proxy: the access key provides authentication, not transport encryption.
+
 ### Docker
+
+The release workflow publishes the `linux/amd64` runtime image to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/zuoliangyu/cc-switch-web:latest
+docker run -d --name cc-switch-web \
+  -p 8890:8890 \
+  -e CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' \
+  -v cc-switch-web-data:/data \
+  ghcr.io/zuoliangyu/cc-switch-web:latest
+```
+
+Version tags also publish matching `vX.Y.Z`, `X.Y.Z`, and `X.Y` image tags. The Registry runtime image currently targets `linux/amd64`; arm64 remains available as the standalone static binary package described below.
 
 1. Build the Docker image:
 
@@ -239,6 +268,12 @@ Script entry layout:
    docker compose up -d
    docker compose logs -f
    docker compose down
+   ```
+
+   To enable the access key with Compose:
+
+   ```bash
+   CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' docker compose up -d
    ```
 
 4. Open [http://localhost:8890](http://localhost:8890) or your overridden port. The container serves the embedded frontend and API on the same port. Docker mode keeps `CC_SWITCH_WEB_PORT_SCAN_COUNT=1` by default so that published port mappings stay stable. Persistent data is stored in the `cc-switch-web-data` volume.

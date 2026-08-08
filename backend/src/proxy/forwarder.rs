@@ -22,7 +22,11 @@ use super::{
 };
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
-use crate::{app_config::AppType, provider::Provider};
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
+use crate::{
+    app_config::AppType,
+    provider::{LocalProxyRequestOverrides, Provider},
+};
 use http::Extensions;
 use serde_json::Value;
 use std::sync::Arc;
@@ -32,6 +36,22 @@ use tokio::sync::RwLock;
 /// 避免把 PROXY_MANAGED 字面量带到上游（特别是托管账号上游 `*.githubcopilot.com`
 /// 和 `chatgpt.com/backend-api/codex`）。跟随上游 cc-switch 61e68d75。
 const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
+
+fn validate_codex_official_authorization(headers: &http::HeaderMap) -> Result<(), ProxyError> {
+    match headers
+        .get(http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+    {
+        None | Some("") => Err(ProxyError::AuthError(
+            "Codex 官方登录不可用，请先在 Codex 中完成 ChatGPT 登录".to_string(),
+        )),
+        Some(value) if value.contains(PROXY_AUTH_PLACEHOLDER) => Err(ProxyError::AuthError(
+            "已切换到 OpenAI 官方供应商，请重启 Codex 或新建会话以加载官方登录配置".to_string(),
+        )),
+        Some(_) => Ok(()),
+    }
+}
 
 pub struct ForwardResult {
     pub response: ProxyResponse,
@@ -56,10 +76,14 @@ pub struct RequestForwarder {
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     /// Codex OAuth 鉴权状态
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+    /// xAI OAuth 鉴权状态
+    xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步前端状态）
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
     session_id: String,
+    /// Session ID 是否由客户端提供；生成值不能作为上游缓存身份。
+    session_client_provided: bool,
     /// 整流器配置
     rectifier_config: RectifierConfig,
     /// 优化器配置
@@ -69,6 +93,32 @@ pub struct RequestForwarder {
 }
 
 impl RequestForwarder {
+    fn apply_media_prevention(&self, body: &mut Value, provider: &Provider) -> usize {
+        if !(self.rectifier_config.enabled && self.rectifier_config.request_media_fallback) {
+            return 0;
+        }
+        super::media_sanitizer::replace_images_for_text_only_model(
+            body,
+            provider,
+            self.rectifier_config.request_media_heuristic,
+        )
+    }
+
+    fn media_retry_should_trigger(
+        &self,
+        adapter_name: &str,
+        already_retried: bool,
+        provider_body: &Value,
+        error: &ProxyError,
+    ) -> bool {
+        matches!(adapter_name, "Claude" | "Codex")
+            && self.rectifier_config.enabled
+            && self.rectifier_config.request_media_fallback
+            && !already_retried
+            && super::media_sanitizer::contains_image_blocks(provider_body)
+            && super::media_sanitizer::is_unsupported_image_error(error)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         router: Arc<ProviderRouter>,
@@ -79,8 +129,10 @@ impl RequestForwarder {
         failover_manager: Arc<FailoverSwitchManager>,
         copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
         codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+        xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
         current_provider_id_at_start: String,
         session_id: String,
+        session_client_provided: bool,
         _streaming_first_byte_timeout: u64,
         _streaming_idle_timeout: u64,
         rectifier_config: RectifierConfig,
@@ -94,8 +146,10 @@ impl RequestForwarder {
             failover_manager,
             copilot_auth_state,
             codex_oauth_state,
+            xai_oauth_state,
             current_provider_id_at_start,
             session_id,
+            session_client_provided,
             rectifier_config,
             optimizer_config,
             non_streaming_timeout: std::time::Duration::from_secs(non_streaming_timeout),
@@ -137,6 +191,7 @@ impl RequestForwarder {
         // 整流器重试标记：确保整流最多触发一次
         let mut rectifier_retried = false;
         let mut budget_rectifier_retried = false;
+        let mut media_retried = false;
 
         // 单 Provider 场景下跳过熔断器检查（故障转移关闭时）
         let bypass_circuit_breaker = providers.len() == 1;
@@ -174,6 +229,7 @@ impl RequestForwarder {
                 } else {
                     body.clone()
                 };
+            self.apply_media_prevention(&mut provider_body, provider);
 
             attempted_providers += 1;
 
@@ -255,7 +311,66 @@ impl RequestForwarder {
                         claude_api_format,
                     });
                 }
-                Err(e) => {
+                Err(mut e) => {
+                    if self.media_retry_should_trigger(
+                        adapter.name(),
+                        media_retried,
+                        &provider_body,
+                        &e,
+                    ) {
+                        media_retried = true;
+                        let replaced =
+                            super::media_sanitizer::replace_image_blocks_with_marker(
+                                &mut provider_body,
+                            );
+                        log::info!(
+                            "[{app_type_str}] 图片输入被上游拒绝，替换 {replaced} 个图片块后重试"
+                        );
+                        match self
+                            .forward(
+                                provider,
+                                endpoint,
+                                &provider_body,
+                                &headers,
+                                &extensions,
+                                adapter.as_ref(),
+                                app_type,
+                            )
+                            .await
+                        {
+                            Ok((response, claude_api_format)) => {
+                                let _ = self
+                                    .router
+                                    .record_result(
+                                        &provider.id,
+                                        app_type_str,
+                                        used_half_open_permit,
+                                        true,
+                                        None,
+                                    )
+                                    .await;
+                                self.current_providers.write().await.insert(
+                                    app_type_str.to_string(),
+                                    (provider.id.clone(), provider.name.clone()),
+                                );
+                                let mut status = self.status.write().await;
+                                status.success_requests += 1;
+                                status.last_error = None;
+                                if status.total_requests > 0 {
+                                    status.success_rate = (status.success_requests as f32
+                                        / status.total_requests as f32)
+                                        * 100.0;
+                                }
+                                return Ok(ForwardResult {
+                                    response,
+                                    provider: provider.clone(),
+                                    claude_api_format,
+                                });
+                            }
+                            Err(retry_error) => e = retry_error,
+                        }
+                    }
+
                     // 检测是否需要触发整流器（仅 Claude/ClaudeAuth 供应商）
                     let provider_type = ProviderType::from_app_type_and_config(app_type, provider);
                     let is_anthropic_provider = matches!(
@@ -664,7 +779,7 @@ impl RequestForwarder {
                         .await;
 
                     // 分类错误
-                    let category = self.categorize_proxy_error(&e);
+                    let category = Self::categorize_proxy_error(&e, provider);
 
                     match category {
                         ErrorCategory::Retryable => {
@@ -763,12 +878,15 @@ impl RequestForwarder {
     ) -> Result<(ProxyResponse, Option<String>), ProxyError> {
         // 使用适配器提取 base_url
         let base_url = adapter.extract_base_url(provider)?;
+        let codex_responses_to_anthropic = matches!(app_type, AppType::Codex | AppType::GrokBuild)
+            && super::providers::should_convert_codex_responses_to_anthropic(provider, endpoint);
 
         let is_full_url = provider
             .meta
             .as_ref()
             .and_then(|meta| meta.is_full_url)
-            .unwrap_or(false);
+            .unwrap_or(false)
+            && !provider.is_xai_oauth();
 
         // 应用模型映射（独立于格式转换）
         // Claude Desktop proxy 模式必须先把 Desktop 可见的 claude-* route
@@ -819,10 +937,23 @@ impl RequestForwarder {
         // 跟随上游 cc-switch 1c82b8a3：Codex provider 通过 wire_api=chat /
         // apiFormat=openai_chat / base_url 直指 /chat/completions 等信号决定
         // 是否需要把 Responses 请求改写成 Chat Completions 发到上游。
-        let codex_responses_to_chat = matches!(app_type, AppType::Codex)
+        let codex_responses_to_chat = matches!(app_type, AppType::Codex | AppType::GrokBuild)
             && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
+        let codex_official_auth_passthrough = matches!(app_type, AppType::Codex)
+            && super::providers::is_codex_official_provider(provider);
+        if codex_official_auth_passthrough {
+            validate_codex_official_authorization(headers)?;
+        }
+        let codex_impersonate_claude_code = codex_responses_to_anthropic
+            && provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.impersonate_claude_code)
+                == Some(true);
         let (effective_endpoint, passthrough_query) = if codex_responses_to_chat {
             rewrite_codex_responses_endpoint_to_chat(endpoint)
+        } else if codex_responses_to_anthropic {
+            rewrite_codex_responses_endpoint_to_anthropic(endpoint)
         } else if needs_transform && adapter.name() == "Claude" {
             let api_format = resolved_claude_api_format
                 .as_deref()
@@ -844,18 +975,87 @@ impl RequestForwarder {
                 .trim_end_matches('/')
                 .to_ascii_lowercase()
                 .ends_with("/chat/completions");
+        let codex_anthropic_base_is_full_endpoint = codex_responses_to_anthropic
+            && base_url_is_full_endpoint(&base_url, "/v1/messages");
 
         let url = if matches!(resolved_claude_api_format.as_deref(), Some("gemini_native")) {
             super::gemini_url::resolve_gemini_native_url(&base_url, &effective_endpoint, is_full_url)
-        } else if is_full_url || codex_chat_base_is_full_endpoint {
+        } else if is_full_url
+            || codex_chat_base_is_full_endpoint
+            || codex_anthropic_base_is_full_endpoint
+        {
             append_query_to_full_url(&base_url, passthrough_query.as_deref())
         } else {
             adapter.build_url(&base_url, &effective_endpoint)
         };
 
+        // Grok Build 客户端使用稳定 profile；转发前替换为当前供应商真实模型。
+        if matches!(app_type, AppType::GrokBuild) {
+            super::providers::apply_codex_upstream_model(provider, &mut mapped_body);
+        }
+
         // 转换请求体（如果需要）
-        let request_body = if codex_responses_to_chat {
-            super::providers::transform_codex_chat::responses_to_chat_completions(mapped_body)?
+        let mut codex_anthropic_one_m = false;
+        let mut request_body = if codex_responses_to_chat {
+            let explicit_prompt_cache_key = mapped_body
+                .get("prompt_cache_key")
+                .and_then(Value::as_str)
+                .map(ToString::to_string);
+            super::providers::apply_codex_chat_upstream_model(provider, &mut mapped_body);
+            let reasoning_config =
+                super::providers::resolve_codex_chat_reasoning_config(provider, &mapped_body);
+            let mut chat_body =
+                super::providers::transform_codex_chat::responses_to_chat_completions_with_reasoning(
+                    mapped_body,
+                    reasoning_config.as_ref(),
+                )?;
+            super::providers::inject_codex_chat_prompt_cache_key(
+                provider,
+                &mut chat_body,
+                explicit_prompt_cache_key.as_deref(),
+                self.session_client_provided
+                    .then_some(self.session_id.as_str()),
+            );
+            chat_body
+        } else if codex_responses_to_anthropic {
+            super::providers::apply_codex_upstream_model(provider, &mut mapped_body);
+            if let Some(max_output_tokens) = provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.max_output_tokens)
+                .filter(|value| *value > 0)
+            {
+                mapped_body["max_output_tokens"] = Value::from(max_output_tokens);
+            }
+            let mut anthropic_body =
+                super::providers::transform_codex_anthropic::responses_request_to_anthropic(
+                    mapped_body,
+                    8192,
+                )?;
+            if let Some(model) = anthropic_body
+                .get("model")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+            {
+                let stripped = strip_one_m_suffix(&model);
+                if stripped != model {
+                    codex_anthropic_one_m = true;
+                    anthropic_body["model"] = Value::String(stripped);
+                }
+            }
+            if codex_impersonate_claude_code {
+                prepend_claude_code_system_prompt(&mut anthropic_body);
+            }
+            super::cache_injector::inject(
+                &mut anthropic_body,
+                &super::types::OptimizerConfig {
+                    enabled: true,
+                    thinking_optimizer: false,
+                    cache_injection: self.optimizer_config.cache_injection,
+                    cache_ttl: self.optimizer_config.cache_ttl.clone(),
+                },
+            );
+            anthropic_body
         } else if needs_transform {
             if adapter.name() == "Claude" {
                 let api_format = resolved_claude_api_format
@@ -875,12 +1075,39 @@ impl RequestForwarder {
             mapped_body
         };
 
+        if matches!(app_type, AppType::Codex | AppType::GrokBuild)
+            && !codex_responses_to_chat
+            && !codex_responses_to_anthropic
+            && super::providers::provider_needs_responses_namespace_flatten(provider)
+        {
+            super::providers::transform_codex_responses_namespace::flatten_request_namespaces(
+                &mut request_body,
+            )?;
+            super::providers::transform_codex_responses_xai_sanitize::sanitize_xai_responses_request(
+                &mut request_body,
+            );
+        }
+
         // 过滤私有参数（以 `_` 开头的字段），防止内部信息泄露到上游
         // 默认使用空白名单，过滤所有 _ 前缀字段
-        let filtered_body = filter_private_params_with_whitelist(request_body, &[]);
+        let mut filtered_body = filter_private_params_with_whitelist(request_body, &[]);
+        if !is_copilot {
+            if let Some(overrides) = provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.local_proxy_request_overrides.as_ref())
+            {
+                if apply_local_proxy_body_overrides(&mut filtered_body, overrides) {
+                    filtered_body = filter_private_params_with_whitelist(filtered_body, &[]);
+                }
+            }
+        }
+        let request_is_streaming =
+            should_force_identity_encoding(&effective_endpoint, &filtered_body, headers);
         let force_identity_encoding = needs_transform
             || codex_responses_to_chat
-            || should_force_identity_encoding(&effective_endpoint, &filtered_body, headers);
+            || codex_responses_to_anthropic
+            || request_is_streaming;
 
         let mut codex_oauth_account_id: Option<String> = None;
 
@@ -963,6 +1190,34 @@ impl RequestForwarder {
                     }
                 }
             }
+
+            if auth.strategy == AuthStrategy::XaiOAuth {
+                let xai_auth = self.xai_oauth_state.read().await;
+                let account_id = provider
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.managed_account_id_for("xai_oauth"));
+                let token_result = match &account_id {
+                    Some(id) => xai_auth.get_valid_token_for_account(id).await,
+                    None => xai_auth.get_valid_token().await,
+                };
+
+                match token_result {
+                    Ok(token) => {
+                        auth = AuthInfo::new(token, AuthStrategy::XaiOAuth);
+                        log::debug!(
+                            "[XaiOAuth] 成功获取 access_token (account={})",
+                            account_id.as_deref().unwrap_or("default")
+                        );
+                    }
+                    Err(error) => {
+                        log::error!("[XaiOAuth] 获取 access_token 失败: {error}");
+                        return Err(ProxyError::AuthError(format!(
+                            "xAI OAuth 认证失败: {error}"
+                        )));
+                    }
+                }
+            }
             adapter.get_auth_headers(&auth)
         } else {
             Vec::new()
@@ -974,6 +1229,21 @@ impl RequestForwarder {
                 auth_headers.push((http::HeaderName::from_static("chatgpt-account-id"), hv));
             }
         }
+
+        // Copilot 的指纹 UA 不允许覆盖；其他供应商的非法值在运行时静默忽略。
+        let custom_user_agent = if is_copilot {
+            None
+        } else {
+            provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.custom_user_agent_header().ok().flatten())
+        };
+        let custom_user_agent = if custom_user_agent.is_none() && codex_impersonate_claude_code {
+            Some(http::HeaderValue::from_static(CLAUDE_CODE_USER_AGENT))
+        } else {
+            custom_user_agent
+        };
 
         // Copilot 指纹头名（由 get_auth_headers 注入，需在原始头中去重）
         let copilot_fingerprint_headers: &[&str] = if is_copilot {
@@ -1011,6 +1281,15 @@ impl RequestForwarder {
             } else {
                 CLAUDE_CODE_BETA.to_string()
             })
+        } else if codex_impersonate_claude_code || codex_anthropic_one_m {
+            let mut betas = Vec::new();
+            if codex_impersonate_claude_code {
+                betas.push("claude-code-20250219");
+            }
+            if codex_anthropic_one_m {
+                betas.push("context-1m-2025-08-07");
+            }
+            Some(betas.join(","))
         } else {
             None
         };
@@ -1021,6 +1300,8 @@ impl RequestForwarder {
         let mut ordered_headers = http::HeaderMap::new();
         let mut saw_auth = false;
         let mut saw_accept_encoding = false;
+        let mut saw_accept = false;
+        let mut saw_user_agent = false;
         let mut saw_anthropic_beta = false;
         let mut saw_anthropic_version = false;
 
@@ -1071,11 +1352,36 @@ impl RequestForwarder {
                 continue;
             }
 
+            if codex_responses_to_anthropic && is_codex_client_fingerprint_header(key_str) {
+                continue;
+            }
+
+            if codex_responses_to_anthropic && key_str.eq_ignore_ascii_case("accept") {
+                if !saw_accept {
+                    saw_accept = true;
+                    ordered_headers.append(
+                        http::header::ACCEPT,
+                        http::HeaderValue::from_static("application/json"),
+                    );
+                }
+                continue;
+            }
+
+            if codex_impersonate_claude_code && key_str.eq_ignore_ascii_case("x-app") {
+                continue;
+            }
+
             // --- 认证类 — 用 adapter 提供的认证头替换（在原始位置） ---
             if key_str.eq_ignore_ascii_case("authorization")
                 || key_str.eq_ignore_ascii_case("x-api-key")
                 || key_str.eq_ignore_ascii_case("x-goog-api-key")
             {
+                if codex_official_auth_passthrough && key_str.eq_ignore_ascii_case("authorization")
+                {
+                    saw_auth = true;
+                    ordered_headers.append(key.clone(), value.clone());
+                    continue;
+                }
                 if !saw_auth {
                     saw_auth = true;
                     for (ah_name, ah_value) in &auth_headers {
@@ -1094,6 +1400,19 @@ impl RequestForwarder {
                             http::header::ACCEPT_ENCODING,
                             http::HeaderValue::from_static("identity"),
                         );
+                    } else {
+                        ordered_headers.append(key.clone(), value.clone());
+                    }
+                }
+                continue;
+            }
+
+            // Provider 级 User-Agent 在原始位置替换，缺失时在循环后补入。
+            if !is_copilot && key_str.eq_ignore_ascii_case("user-agent") {
+                if !saw_user_agent {
+                    saw_user_agent = true;
+                    if let Some(ref user_agent) = custom_user_agent {
+                        ordered_headers.append(http::header::USER_AGENT, user_agent.clone());
                     } else {
                         ordered_headers.append(key.clone(), value.clone());
                     }
@@ -1148,6 +1467,21 @@ impl RequestForwarder {
             );
         }
 
+        if codex_responses_to_anthropic && !saw_accept {
+            ordered_headers.append(
+                http::header::ACCEPT,
+                http::HeaderValue::from_static("application/json"),
+            );
+        }
+        if codex_impersonate_claude_code {
+            ordered_headers.append("x-app", http::HeaderValue::from_static("cli"));
+        }
+        if !saw_user_agent {
+            if let Some(ref user_agent) = custom_user_agent {
+                ordered_headers.append(http::header::USER_AGENT, user_agent.clone());
+            }
+        }
+
         // 如果原始请求中没有 anthropic-beta 且有值需要添加，追加
         if !saw_anthropic_beta {
             if let Some(ref beta_val) = anthropic_beta_value {
@@ -1158,7 +1492,9 @@ impl RequestForwarder {
         }
 
         // anthropic-version：仅在缺失时补充默认值
-        if adapter.name() == "Claude" && !saw_anthropic_version {
+        if (adapter.name() == "Claude" || codex_responses_to_anthropic)
+            && !saw_anthropic_version
+        {
             ordered_headers.append(
                 "anthropic-version",
                 http::HeaderValue::from_static("2023-06-01"),
@@ -1177,8 +1513,17 @@ impl RequestForwarder {
             );
         }
 
+        apply_local_proxy_header_overrides(
+            &mut ordered_headers,
+            provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.local_proxy_request_overrides.as_ref()),
+            is_copilot,
+        );
+
         // 跟随上游 cc-switch 61e68d75：出站前最后一道防线 ——
-        // 如果发往托管账号上游（GitHub Copilot / chatgpt.com/backend-api/codex）
+        // 如果发往托管账号上游（GitHub Copilot / Codex OAuth / xAI）
         // 的请求 header 还含有 PROXY_MANAGED 字面量，说明 OAuth 注入失败，
         // 立刻拒绝，避免把占位符泄露到上游 / 留在上游日志里。
         reject_proxy_placeholder_for_managed_account_upstream(&url, &ordered_headers)?;
@@ -1223,9 +1568,9 @@ impl RequestForwarder {
             .map_err(|e| ProxyError::ForwardFailed(format!("Invalid URL '{url}': {e}")))?;
 
         // 发送请求
-        let response = if is_socks_proxy {
-            // SOCKS5 代理：只能走 reqwest（不支持 header case 保留）
-            log::debug!("[Forwarder] Using reqwest for SOCKS5 proxy");
+        let response = if is_socks_proxy || provider.is_xai_oauth() {
+            // xAI 使用标准 header 编码；SOCKS5 代理也只能走 reqwest。
+            log::debug!("[Forwarder] Using reqwest without exact header case preservation");
             let client = super::http_client::get_for_provider(proxy_config);
             let mut request = client.post(&url);
             if !self.non_streaming_timeout.is_zero() {
@@ -1263,6 +1608,14 @@ impl RequestForwarder {
         let status = response.status();
 
         if status.is_success() {
+            let response = if codex_responses_to_anthropic
+                && (!request_is_streaming || response.is_json())
+            {
+                self.validate_codex_anthropic_success_response(response)
+                    .await?
+            } else {
+                response
+            };
             Ok((response, resolved_claude_api_format))
         } else {
             let status_code = status.as_u16();
@@ -1273,6 +1626,21 @@ impl RequestForwarder {
                 body: body_text,
             })
         }
+    }
+
+    async fn validate_codex_anthropic_success_response(
+        &self,
+        response: ProxyResponse,
+    ) -> Result<ProxyResponse, ProxyError> {
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response.bytes().await?;
+        if let Some(message) = codex_anthropic_error_envelope_message(&body) {
+            return Err(ProxyError::TransformError(format!(
+                "Anthropic upstream returned a 2xx failure: {message}"
+            )));
+        }
+        Ok(ProxyResponse::buffered(status, headers, body))
     }
 
     async fn resolve_claude_api_format(
@@ -1370,7 +1738,24 @@ impl RequestForwarder {
         }
     }
 
-    fn categorize_proxy_error(&self, error: &ProxyError) -> ErrorCategory {
+    fn categorize_proxy_error(error: &ProxyError, provider: &Provider) -> ErrorCategory {
+        if super::providers::is_codex_official_provider(provider)
+            && (matches!(error, ProxyError::AuthError(_))
+                || matches!(
+                    error,
+                    ProxyError::UpstreamError {
+                        status: 401 | 403,
+                        ..
+                    }
+                ))
+        {
+            return ErrorCategory::NonRetryable;
+        }
+
+        if provider.is_xai_oauth() && matches!(error, ProxyError::AuthError(_)) {
+            return ErrorCategory::NonRetryable;
+        }
+
         match error {
             // 网络和上游错误：都应该尝试下一个供应商
             ProxyError::Timeout(_) => ErrorCategory::Retryable,
@@ -1553,6 +1938,103 @@ fn rewrite_codex_responses_endpoint_to_chat(endpoint: &str) -> (String, Option<S
     (rewritten, passthrough_query)
 }
 
+const CLAUDE_CODE_USER_AGENT: &str = "claude-cli/1.0.119 (external, cli)";
+const CLAUDE_CODE_SYSTEM_IDENTITY: &str =
+    "You are Claude Code, Anthropic's official CLI for Claude.";
+
+fn prepend_claude_code_system_prompt(body: &mut Value) {
+    let identity = serde_json::json!({ "type": "text", "text": CLAUDE_CODE_SYSTEM_IDENTITY });
+    let mut blocks = vec![identity];
+    match body.get("system") {
+        Some(Value::String(existing)) if !existing.is_empty() => {
+            blocks.push(serde_json::json!({ "type": "text", "text": existing }));
+        }
+        Some(Value::Array(existing)) => {
+            if existing
+                .first()
+                .and_then(|block| block.get("text"))
+                .and_then(Value::as_str)
+                == Some(CLAUDE_CODE_SYSTEM_IDENTITY)
+            {
+                return;
+            }
+            blocks.extend(existing.iter().cloned());
+        }
+        _ => {}
+    }
+    body["system"] = Value::Array(blocks);
+}
+
+fn base_url_is_full_endpoint(base_url: &str, endpoint_suffix: &str) -> bool {
+    let trimmed = base_url.trim();
+    let path = trimmed
+        .split_once(['?', '#'])
+        .map_or(trimmed, |(head, _)| head);
+    path.trim_end_matches('/')
+        .to_ascii_lowercase()
+        .ends_with(endpoint_suffix)
+}
+
+fn is_codex_client_fingerprint_header(key: &str) -> bool {
+    matches!(
+        key,
+        "originator"
+            | "session_id"
+            | "session-id"
+            | "thread-id"
+            | "conversation_id"
+            | "chatgpt-account-id"
+            | "x-openai-subagent"
+            | "x-client-request-id"
+            | "openai-beta"
+            | "openai-organization"
+            | "openai-project"
+    ) || key.starts_with("x-stainless-")
+        || key.starts_with("x-codex-")
+}
+
+fn codex_anthropic_error_envelope_message(body: &[u8]) -> Option<String> {
+    let value: Value = serde_json::from_slice(body).ok()?;
+    if value.get("type").and_then(Value::as_str) != Some("error")
+        && value.get("error").is_none()
+    {
+        return None;
+    }
+    let error = value.get("error").unwrap_or(&value);
+    let error_type = error.get("type").and_then(Value::as_str).unwrap_or("error");
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .or_else(|| error.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| error.to_string());
+    Some(format!("{error_type}: {message}"))
+}
+
+fn strip_one_m_suffix(model: &str) -> String {
+    let trimmed = model.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    for suffix in ["[1m]", "-1m"] {
+        if lower.ends_with(suffix) {
+            return trimmed[..trimmed.len() - suffix.len()].to_string();
+        }
+    }
+    trimmed.to_string()
+}
+
+fn rewrite_codex_responses_endpoint_to_anthropic(
+    endpoint: &str,
+) -> (String, Option<String>) {
+    let (_path, query) = split_endpoint_and_query(endpoint);
+    let passthrough_query = query.map(ToString::to_string);
+    let target_path = "/v1/messages";
+    let rewritten = match passthrough_query.as_deref() {
+        Some(query) if !query.is_empty() => format!("{target_path}?{query}"),
+        _ => target_path.to_string(),
+    };
+    (rewritten, passthrough_query)
+}
+
 fn rewrite_claude_transform_endpoint(
     endpoint: &str,
     api_format: &str,
@@ -1685,13 +2167,138 @@ fn summarize_text_for_log(text: &str, max_chars: usize) -> String {
     format!("{truncated}...")
 }
 
+fn apply_local_proxy_body_overrides(
+    body: &mut Value,
+    overrides: &LocalProxyRequestOverrides,
+) -> bool {
+    let Some(override_body) = overrides.body.as_ref() else {
+        return false;
+    };
+    if !override_body.is_object() {
+        log::warn!("[LocalProxyOverrides] 忽略非对象 Body 覆盖");
+        return false;
+    }
+    merge_json_override_inner(body, override_body, true)
+}
+
+fn merge_json_override_inner(target: &mut Value, patch: &Value, is_top_level: bool) -> bool {
+    match (target, patch) {
+        (Value::Object(target_map), Value::Object(patch_map)) => {
+            let mut changed = false;
+            for (key, patch_value) in patch_map {
+                if is_top_level && key == "stream" {
+                    log::warn!("[LocalProxyOverrides] 忽略受保护的 Body 字段: stream");
+                    continue;
+                }
+                match target_map.get_mut(key) {
+                    Some(target_value) => {
+                        changed |= merge_json_override_inner(target_value, patch_value, false);
+                    }
+                    None => {
+                        target_map.insert(key.clone(), patch_value.clone());
+                        changed = true;
+                    }
+                }
+            }
+            changed
+        }
+        (target_value, patch_value) => {
+            if target_value == patch_value {
+                false
+            } else {
+                *target_value = patch_value.clone();
+                true
+            }
+        }
+    }
+}
+
+fn apply_local_proxy_header_overrides(
+    headers: &mut http::HeaderMap,
+    overrides: Option<&LocalProxyRequestOverrides>,
+    is_copilot: bool,
+) {
+    if is_copilot {
+        return;
+    }
+    let Some(header_overrides) = overrides.map(|overrides| &overrides.headers) else {
+        return;
+    };
+
+    for (raw_name, raw_value) in header_overrides {
+        let header_name = raw_name.trim().to_ascii_lowercase();
+        let Ok(name) = http::HeaderName::from_bytes(header_name.as_bytes()) else {
+            log::warn!("[LocalProxyOverrides] 忽略非法 Header 名: {raw_name}");
+            continue;
+        };
+        if is_protected_local_proxy_override_header(&name) {
+            log::debug!("[LocalProxyOverrides] 忽略受保护的 Header: {name}");
+            continue;
+        }
+        let Ok(value) = http::HeaderValue::from_str(raw_value) else {
+            log::warn!("[LocalProxyOverrides] 忽略非法 Header 值: {name}");
+            continue;
+        };
+        headers.insert(name, value);
+    }
+}
+
+fn is_protected_local_proxy_override_header(name: &http::HeaderName) -> bool {
+    matches!(
+        name.as_str(),
+        "host"
+            | "content-length"
+            | "transfer-encoding"
+            | "connection"
+            | "proxy-authorization"
+            | "proxy-authenticate"
+            | "te"
+            | "trailer"
+            | "upgrade"
+            | "accept-encoding"
+            | "content-type"
+            | "authorization"
+            | "x-api-key"
+            | "x-goog-api-key"
+            | "chatgpt-account-id"
+            | "session_id"
+            | "x-client-request-id"
+            | "x-codex-window-id"
+            | "x-forwarded-host"
+            | "x-forwarded-port"
+            | "x-forwarded-proto"
+            | "forwarded"
+            | "cf-connecting-ip"
+            | "cf-ipcountry"
+            | "cf-ray"
+            | "cf-visitor"
+            | "true-client-ip"
+            | "fastly-client-ip"
+            | "x-azure-clientip"
+            | "x-azure-fdid"
+            | "x-azure-ref"
+            | "akamai-origin-hop"
+            | "x-akamai-config-log-detail"
+            | "x-request-id"
+            | "x-correlation-id"
+            | "x-trace-id"
+            | "x-amzn-trace-id"
+            | "x-b3-traceid"
+            | "x-b3-spanid"
+            | "x-b3-parentspanid"
+            | "x-b3-sampled"
+            | "traceparent"
+            | "tracestate"
+    )
+}
+
 // ---------------------------------------------------------------------------
 // 出站请求 PROXY_MANAGED 占位符防护（跟随上游 cc-switch 61e68d75）
 //
-// 托管账号供应商（GitHub Copilot / Codex OAuth）在 Live config 里只放
+// 托管账号供应商（GitHub Copilot / Codex OAuth / xAI OAuth）在 Live config 里只放
 // `ANTHROPIC_API_KEY=PROXY_MANAGED` 占位符；真实 token 由代理在出站时通过
 // OAuth 注入到 `Authorization` 头。如果注入流程出错（refresh token 过期等），
-// 这里是把请求实际发到 *.githubcopilot.com 或 chatgpt.com/backend-api/codex
+// 这里是把请求实际发到托管账号官方上游
 // 之前的最后一道防线 —— 任何 header value 仍然带 PROXY_MANAGED 都拒发。
 // ---------------------------------------------------------------------------
 
@@ -1721,6 +2328,7 @@ fn is_managed_account_upstream_url(url: &str) -> bool {
     host == "githubcopilot.com"
         || host.ends_with(".githubcopilot.com")
         || (host == "chatgpt.com" && uri.path().starts_with("/backend-api/codex"))
+        || (host == "api.x.ai" && uri.path().starts_with("/v1/"))
 }
 
 fn headers_contain_proxy_placeholder(headers: &http::HeaderMap) -> bool {
@@ -1767,6 +2375,34 @@ mod tests {
     }
 
     #[test]
+    fn xai_oauth_token_auth_failures_are_not_retryable() {
+        let mut provider =
+            Provider::with_id("xai".to_string(), "xAI OAuth".to_string(), json!({}), None);
+        provider.meta = Some(crate::provider::ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(
+            RequestForwarder::categorize_proxy_error(
+                &ProxyError::AuthError("xAI OAuth 认证失败".to_string()),
+                &provider,
+            ),
+            ErrorCategory::NonRetryable
+        );
+        assert_eq!(
+            RequestForwarder::categorize_proxy_error(
+                &ProxyError::UpstreamError {
+                    status: 401,
+                    body: None,
+                },
+                &provider,
+            ),
+            ErrorCategory::Retryable
+        );
+    }
+
+    #[test]
     fn single_provider_has_no_terminal_all_failed_log() {
         assert!(build_terminal_failure_log(1, 1, None).is_none());
     }
@@ -1802,6 +2438,109 @@ mod tests {
         let summary = summarize_text_for_log("line1\n\n line2   line3", 12);
 
         assert_eq!(summary, "line1 line2...");
+    }
+
+    #[test]
+    fn local_proxy_body_overrides_deep_merge_final_body_without_stream() {
+        let mut body = json!({
+            "model": "before",
+            "stream": false,
+            "metadata": { "keep": true, "temperature": 1 },
+            "messages": [{ "role": "user", "content": "hello" }]
+        });
+        let overrides = LocalProxyRequestOverrides {
+            headers: std::collections::HashMap::new(),
+            body: Some(json!({
+                "model": "after",
+                "stream": true,
+                "metadata": { "temperature": 0.2, "top_p": 0.9 },
+                "messages": []
+            })),
+        };
+
+        assert!(apply_local_proxy_body_overrides(&mut body, &overrides));
+        assert_eq!(body["model"], "after");
+        assert_eq!(body["stream"], false);
+        assert_eq!(body["metadata"]["keep"], true);
+        assert_eq!(body["metadata"]["temperature"], 0.2);
+        assert_eq!(body["metadata"]["top_p"], 0.9);
+        assert_eq!(body["messages"], json!([]));
+    }
+
+    #[test]
+    fn local_proxy_header_overrides_replace_allowed_headers_only() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert(
+            http::header::USER_AGENT,
+            http::HeaderValue::from_static("original"),
+        );
+        headers.insert(
+            http::header::AUTHORIZATION,
+            http::HeaderValue::from_static("Bearer good"),
+        );
+        headers.insert(
+            http::header::CONTENT_TYPE,
+            http::HeaderValue::from_static("application/json"),
+        );
+        let overrides = LocalProxyRequestOverrides {
+            headers: std::collections::HashMap::from([
+                ("User-Agent".to_string(), "custom".to_string()),
+                ("X-Test".to_string(), "ok".to_string()),
+                ("Authorization".to_string(), "Bearer bad".to_string()),
+                ("Content-Type".to_string(), "text/plain".to_string()),
+                ("X-Bad".to_string(), "bad\nvalue".to_string()),
+            ]),
+            body: None,
+        };
+
+        apply_local_proxy_header_overrides(&mut headers, Some(&overrides), false);
+        assert_eq!(
+            headers
+                .get(http::header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some("custom")
+        );
+        assert_eq!(
+            headers
+                .get(http::header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer good")
+        );
+        assert_eq!(
+            headers
+                .get(http::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/json")
+        );
+        assert_eq!(
+            headers.get("x-test").and_then(|value| value.to_str().ok()),
+            Some("ok")
+        );
+        assert!(headers.get("x-bad").is_none());
+    }
+
+    #[test]
+    fn local_proxy_header_overrides_are_skipped_for_copilot() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert(
+            http::header::USER_AGENT,
+            http::HeaderValue::from_static("copilot"),
+        );
+        let overrides = LocalProxyRequestOverrides {
+            headers: std::collections::HashMap::from([(
+                "User-Agent".to_string(),
+                "custom".to_string(),
+            )]),
+            body: None,
+        };
+
+        apply_local_proxy_header_overrides(&mut headers, Some(&overrides), true);
+        assert_eq!(
+            headers
+                .get(http::header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some("copilot")
+        );
     }
 
     #[test]
@@ -1944,6 +2683,16 @@ mod tests {
             err,
             ProxyError::AuthError(message) if message.contains("PROXY_MANAGED")
         ));
+
+        let xai_err = reject_proxy_placeholder_for_managed_account_upstream(
+            "https://api.x.ai/v1/responses",
+            &headers,
+        )
+        .expect_err("xAI placeholder should be rejected before upstream");
+        assert!(matches!(
+            xai_err,
+            ProxyError::AuthError(message) if message.contains("PROXY_MANAGED")
+        ));
     }
 
     #[test]
@@ -1979,5 +2728,62 @@ mod tests {
             &headers,
         )
         .expect("guard is scoped to managed-account upstreams");
+    }
+
+    #[test]
+    fn codex_anthropic_routing_helpers_preserve_query_and_strip_fingerprints() {
+        let (endpoint, query) =
+            rewrite_codex_responses_endpoint_to_anthropic("/responses?beta=true");
+        assert_eq!(endpoint, "/v1/messages?beta=true");
+        assert_eq!(query.as_deref(), Some("beta=true"));
+        assert!(base_url_is_full_endpoint(
+            "https://example.com/api/v1/messages?x=1",
+            "/v1/messages"
+        ));
+        assert!(is_codex_client_fingerprint_header("x-stainless-runtime"));
+        assert!(!is_codex_client_fingerprint_header("anthropic-version"));
+        assert_eq!(strip_one_m_suffix("claude-opus-4-6[1m]"), "claude-opus-4-6");
+    }
+
+    #[test]
+    fn anthropic_2xx_error_envelope_is_retryable() {
+        assert_eq!(
+            codex_anthropic_error_envelope_message(
+                br#"{"type":"error","error":{"type":"overloaded_error","message":"busy"}}"#
+            )
+            .as_deref(),
+            Some("overloaded_error: busy")
+        );
+    }
+
+    #[test]
+    fn official_codex_rejects_placeholder_and_auth_failures_do_not_failover() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer PROXY_MANAGED"),
+        );
+        assert!(matches!(
+            validate_codex_official_authorization(&headers),
+            Err(ProxyError::AuthError(message)) if message.contains("重启 Codex")
+        ));
+
+        let mut provider = Provider::with_id(
+            crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string(),
+            "OpenAI Official".to_string(),
+            json!({ "auth": {}, "config": "" }),
+            None,
+        );
+        provider.category = Some("official".to_string());
+        assert_eq!(
+            RequestForwarder::categorize_proxy_error(
+                &ProxyError::UpstreamError {
+                    status: 401,
+                    body: None,
+                },
+                &provider,
+            ),
+            ErrorCategory::NonRetryable
+        );
     }
 }

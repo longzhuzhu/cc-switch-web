@@ -29,6 +29,7 @@ import EndpointSpeedTest from "./EndpointSpeedTest";
 import { ApiKeySection, EndpointField, ModelInputWithFetch } from "./shared";
 import { CopilotAuthSection } from "./CopilotAuthSection";
 import { CodexOAuthSection } from "./CodexOAuthSection";
+import { XaiOAuthSection } from "./XaiOAuthSection";
 import {
   copilotGetModels,
   copilotGetModelsForAccount,
@@ -39,12 +40,17 @@ import {
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
+import { CustomUserAgentField } from "./CustomUserAgentField";
+import { LocalProxyRequestOverridesField } from "./LocalProxyRequestOverridesField";
 import type {
   ProviderCategory,
   ClaudeApiFormat,
   ClaudeApiKeyField,
 } from "@/types";
-import type { TemplateValueConfig } from "@/config/claudeProviderPresets";
+import {
+  providerPresets,
+  type TemplateValueConfig,
+} from "@/config/claudeProviderPresets";
 
 interface EndpointCandidate {
   url: string;
@@ -76,6 +82,11 @@ interface ClaudeFormFieldsProps {
   isCodexOauthAuthenticated?: boolean;
   selectedCodexAccountId?: string | null;
   onCodexAccountSelect?: (accountId: string | null) => void;
+
+  // xAI OAuth
+  isXaiOauthPreset?: boolean;
+  selectedXaiAccountId?: string | null;
+  onXaiAccountSelect?: (accountId: string | null) => void;
 
   // Template Values
   templateValueEntries: Array<[string, TemplateValueConfig]>;
@@ -124,6 +135,13 @@ interface ClaudeFormFieldsProps {
   // Full URL mode
   isFullUrl: boolean;
   onFullUrlChange: (value: boolean) => void;
+
+  customUserAgent: string;
+  onCustomUserAgentChange: (value: string) => void;
+  localProxyHeadersOverride: string;
+  onLocalProxyHeadersOverrideChange: (value: string) => void;
+  localProxyBodyOverride: string;
+  onLocalProxyBodyOverrideChange: (value: string) => void;
 }
 
 export function ClaudeFormFields({
@@ -144,6 +162,9 @@ export function ClaudeFormFields({
   isCodexOauthPreset,
   selectedCodexAccountId,
   onCodexAccountSelect,
+  isXaiOauthPreset,
+  selectedXaiAccountId,
+  onXaiAccountSelect,
   templateValueEntries,
   templateValues,
   templatePresetName,
@@ -170,25 +191,40 @@ export function ClaudeFormFields({
   onApiKeyFieldChange,
   isFullUrl,
   onFullUrlChange,
+  customUserAgent,
+  onCustomUserAgentChange,
+  localProxyHeadersOverride,
+  onLocalProxyHeadersOverrideChange,
+  localProxyBodyOverride,
+  onLocalProxyBodyOverrideChange,
 }: ClaudeFormFieldsProps) {
   const { t } = useTranslation();
+  const hasRequestOverrides = Boolean(
+    localProxyHeadersOverride.trim() || localProxyBodyOverride.trim(),
+  );
   const hasAnyAdvancedValue = !!(
     claudeModel ||
     reasoningModel ||
     defaultHaikuModel ||
     defaultSonnetModel ||
     defaultOpusModel ||
-    apiFormat !== "anthropic" ||
-    apiKeyField !== "ANTHROPIC_AUTH_TOKEN"
+    (!isXaiOauthPreset && apiFormat !== "anthropic") ||
+    apiKeyField !== "ANTHROPIC_AUTH_TOKEN" ||
+    customUserAgent ||
+    hasRequestOverrides
   );
-  const [advancedExpanded, setAdvancedExpanded] = useState(hasAnyAdvancedValue);
+  const [advancedExpanded, setAdvancedExpanded] = useState(
+    isXaiOauthPreset ? false : hasAnyAdvancedValue,
+  );
 
   // 预设填充高级值后自动展开（仅从折叠→展开，不会自动折叠）
   useEffect(() => {
-    if (hasAnyAdvancedValue) {
+    if (isXaiOauthPreset) {
+      setAdvancedExpanded(false);
+    } else if (hasAnyAdvancedValue) {
       setAdvancedExpanded(true);
     }
-  }, [hasAnyAdvancedValue]);
+  }, [hasAnyAdvancedValue, isXaiOauthPreset]);
 
   // Copilot 可用模型列表
   const [copilotModels, setCopilotModels] = useState<CopilotModel[]>([]);
@@ -205,8 +241,14 @@ export function ClaudeFormFields({
       return;
     }
 
+    const modelsUrl = providerPresets.find((preset) => {
+      const env = (preset.settingsConfig as { env?: Record<string, string> })
+        .env;
+      return env?.ANTHROPIC_BASE_URL === baseUrl;
+    })?.modelsUrl;
+
     setIsFetchingModels(true);
-    fetchModelsForConfig(baseUrl, apiKey, isFullUrl)
+    fetchModelsForConfig(baseUrl, apiKey, isFullUrl, modelsUrl, customUserAgent)
       .then((models) => {
         setFetchedModels(models);
         if (models.length === 0) {
@@ -222,7 +264,7 @@ export function ClaudeFormFields({
         showFetchModelsError(error, t);
       })
       .finally(() => setIsFetchingModels(false));
-  }, [apiKey, baseUrl, isFullUrl, t]);
+  }, [apiKey, baseUrl, customUserAgent, isFullUrl, t]);
 
   // 当 Copilot 预设且已认证时，加载可用模型
   useEffect(() => {
@@ -372,6 +414,13 @@ export function ClaudeFormFields({
         />
       )}
 
+      {isXaiOauthPreset && (
+        <XaiOAuthSection
+          selectedAccountId={selectedXaiAccountId}
+          onAccountSelect={onXaiAccountSelect}
+        />
+      )}
+
       {/* API Key 输入框（非 OAuth 预设时显示） */}
       {shouldShowApiKey && !usesOAuth && (
         <ApiKeySection
@@ -435,7 +484,7 @@ export function ClaudeFormFields({
                 ? t("providerForm.apiHintOAI")
                 : apiFormat === "gemini_native"
                   ? t("providerForm.apiHintGeminiNative")
-                : t("providerForm.apiHint")
+                  : t("providerForm.apiHint")
           }
           fullUrlHint={
             apiFormat === "gemini_native"
@@ -443,7 +492,7 @@ export function ClaudeFormFields({
               : undefined
           }
           onManageClick={() => onEndpointModalToggle(true)}
-          showFullUrlToggle={true}
+          showFullUrlToggle={!isXaiOauthPreset}
           isFullUrl={isFullUrl}
           onFullUrlChange={onFullUrlChange}
         />
@@ -490,7 +539,7 @@ export function ClaudeFormFields({
           )}
           <CollapsibleContent className="space-y-4 pt-2">
             {/* API 格式选择（仅非云服务商显示） */}
-            {category !== "cloud_provider" && (
+            {category !== "cloud_provider" && !isXaiOauthPreset && (
               <div className="space-y-2">
                 <FormLabel htmlFor="apiFormat">
                   {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
@@ -662,6 +711,21 @@ export function ClaudeFormFields({
                   t("providerForm.modelPlaceholder", { defaultValue: "" }),
                 )}
               </div>
+            </div>
+
+            <CustomUserAgentField
+              id="claude-custom-user-agent"
+              value={customUserAgent}
+              onChange={onCustomUserAgentChange}
+            />
+
+            <div className="border-t border-border-default pt-3">
+              <LocalProxyRequestOverridesField
+                headersJson={localProxyHeadersOverride}
+                bodyJson={localProxyBodyOverride}
+                onHeadersJsonChange={onLocalProxyHeadersOverrideChange}
+                onBodyJsonChange={onLocalProxyBodyOverrideChange}
+              />
             </div>
           </CollapsibleContent>
         </Collapsible>

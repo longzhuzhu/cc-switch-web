@@ -15,23 +15,23 @@ use axum::{Json, Router};
 use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
 use crate::app_config::{AppType, McpServer};
-use crate::database::Database;
-use crate::database::FailoverQueueItem;
+use crate::database::{Database, FailoverQueueItem, Profile};
 use crate::prompt::Prompt;
 use crate::provider::Provider;
 use crate::proxy::circuit_breaker::CircuitBreakerConfig;
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::proxy::types::{
     AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, ProviderHealth, ProxyConfig,
     ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
 };
 use crate::services::omo::OmoLocalFileData;
+use crate::services::profile::{ProfilePayload, ProfileScope, ProfileService};
 use crate::services::provider::{ProviderSortUpdate, SwitchResult};
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, MigrationResult, SkillBackupEntry, SkillRepo,
@@ -40,6 +40,7 @@ use crate::services::skill::{
 use crate::services::speedtest::EndpointLatency;
 use crate::settings::WebDavSyncSettings;
 use crate::store::AppState;
+use crate::web_auth::WebAccessKey;
 use tokio::sync::RwLock;
 
 static EMBEDDED_FRONTEND_DIST: Dir<'static> = include_dir!("$CC_SWITCH_WEB_EMBED_DIST_DIR");
@@ -49,7 +50,8 @@ struct WebApiState {
     app_state: Arc<AppState>,
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
-    auth_tokens: Arc<RwLock<HashMap<String, i64>>>,
+    xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
+    access_key: WebAccessKey,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,6 +59,12 @@ struct WebApiState {
 struct HealthResponse {
     status: &'static str,
     mode: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WebAuthStatus {
+    required: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -131,6 +139,14 @@ struct ExtractCommonConfigSnippetRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct UpdateTomlCommonConfigSnippetRequest {
+    config_toml: String,
+    snippet_toml: String,
+    enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ProviderIdRequest {
     provider_id: String,
 }
@@ -169,6 +185,13 @@ struct FetchModelsRequest {
     /// 预设级别的 `/models` 端点覆盖。命中时跳过 baseURL 推导直接使用此 URL。
     /// 用于 DeepSeek 这类把 Anthropic 协议挂在子路径，但 `/models` 在根上的供应商。
     models_url: Option<String>,
+    custom_user_agent: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ManagedAccountModelsQuery {
+    account_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -234,6 +257,73 @@ struct ToggleSkillAppByBodyRequest {
     id: String,
     app: String,
     enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateProfileRequest {
+    name: String,
+    scope: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateProfileRequest {
+    name: Option<String>,
+    resnapshot: Option<bool>,
+    scope: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApplyProfileRequest {
+    scope: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileDto {
+    id: String,
+    name: String,
+    payload: ProfilePayload,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    updated_at: Option<i64>,
+}
+
+impl From<Profile> for ProfileDto {
+    fn from(profile: Profile) -> Self {
+        let payload = serde_json::from_str(&profile.payload).unwrap_or_else(|error| {
+            log::warn!(
+                "解析 profile '{}' payload 失败，使用默认值: {error}",
+                profile.id
+            );
+            ProfilePayload::default()
+        });
+        Self {
+            id: profile.id,
+            name: profile.name,
+            payload,
+            created_at: profile.created_at,
+            updated_at: profile.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CurrentProfileIds {
+    claude: Option<String>,
+    claude_desktop: Option<String>,
+    codex: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfilesResponse {
+    profiles: Vec<ProfileDto>,
+    current_ids: CurrentProfileIds,
 }
 
 #[derive(Debug, Deserialize)]
@@ -402,7 +492,7 @@ struct AuthAccountRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CodexOauthQuotaQuery {
+struct ManagedAccountQuotaQuery {
     account_id: Option<String>,
 }
 
@@ -414,6 +504,13 @@ struct UpdateModelPricingPayload {
     output_cost: String,
     cache_read_cost: String,
     cache_creation_cost: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordModelsDevSyncResultPayload {
+    synced_at: Option<i64>,
+    error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -494,72 +591,142 @@ async fn api_request_logger(request: axum::extract::Request, next: Next) -> Resp
     response
 }
 
-fn sha256_hex(input: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(input.as_bytes());
-    format!("{:x}", hasher.finalize())
+fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
+    let (scheme, token) = value.split_once(' ')?;
+    (scheme.eq_ignore_ascii_case("bearer") && !token.trim().is_empty()).then_some(token.trim())
 }
 
-const AUTH_TOKEN_EXPIRY_SECS: i64 = 7 * 24 * 3600; // 7 天
-
-fn extract_bearer_token(headers: &HeaderMap) -> String {
-    headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .unwrap_or("")
-        .to_string()
+fn unauthorized_response() -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(ErrorResponse {
+            error: "invalid or missing access key".to_string(),
+        }),
+    )
+        .into_response()
 }
 
-async fn is_token_valid(state: &WebApiState, token: &str) -> bool {
-    if token.is_empty() {
-        return false;
-    }
-    let tokens = state.auth_tokens.read().await;
-    if let Some(expiry) = tokens.get(token) {
-        let now = chrono::Utc::now().timestamp();
-        *expiry > now
-    } else {
-        false
-    }
-}
-
-/// 认证中间件：未设置密钥时放行，已设置密钥时校验 token
-async fn auth_middleware(
-    headers: HeaderMap,
+async fn require_access_key(
     State(state): State<WebApiState>,
     request: axum::extract::Request,
     next: Next,
 ) -> Response {
-    // 未设置密钥 → 全部放行
-    if !state.app_state.db.has_access_key().unwrap_or(false) {
-        return next.run(request).await;
-    }
-
-    // 仅对 /api/ 路径执行认证逻辑，静态资源直接放行
     let path = request.uri().path();
-    if !path.starts_with("/api/") {
+    if !state.access_key.is_required()
+        || matches!(
+            path,
+            "/api/health" | "/api/auth/status" | "/api/auth/verify"
+        )
+    {
         return next.run(request).await;
     }
 
-    // 白名单免认证路径
-    const AUTH_WHITELIST: &[&str] = &[
-        "/api/auth/login",
-        "/api/auth/has-key",
-        "/api/auth/setup-key",
-        "/api/health",
-    ];
-    if AUTH_WHITELIST.iter().any(|p| path == *p) {
-        return next.run(request).await;
+    if state.access_key.verify(bearer_token(request.headers())) {
+        next.run(request).await
+    } else {
+        unauthorized_response()
     }
+}
 
-    // 校验 token
-    let token = extract_bearer_token(&headers);
-    if is_token_valid(&state, &token).await {
-        return next.run(request).await;
+fn profile_api_error(error: crate::error::AppError) -> ApiError {
+    match error {
+        crate::error::AppError::InvalidInput(_) => ApiError::bad_request(error.to_string()),
+        _ => ApiError::internal(error.to_string()),
     }
+}
 
-    (StatusCode::UNAUTHORIZED, Json(json!({ "error": "Unauthorized" }))).into_response()
+async fn list_profiles(
+    State(state): State<WebApiState>,
+) -> Result<Json<ProfilesResponse>, ApiError> {
+    let profiles = ProfileService::list(state.app_state.as_ref())
+        .map_err(profile_api_error)?
+        .into_iter()
+        .map(ProfileDto::from)
+        .collect();
+    let db = &state.app_state.db;
+    let current_ids = CurrentProfileIds {
+        claude: db
+            .get_current_profile_id(ProfileScope::Claude.as_str())
+            .map_err(profile_api_error)?,
+        claude_desktop: db
+            .get_current_profile_id(ProfileScope::ClaudeDesktop.as_str())
+            .map_err(profile_api_error)?,
+        codex: db
+            .get_current_profile_id(ProfileScope::Codex.as_str())
+            .map_err(profile_api_error)?,
+    };
+    Ok(Json(ProfilesResponse {
+        profiles,
+        current_ids,
+    }))
+}
+
+async fn create_profile(
+    State(state): State<WebApiState>,
+    Json(payload): Json<CreateProfileRequest>,
+) -> Result<Json<ProfileDto>, ApiError> {
+    let scope = ProfileScope::parse(&payload.scope).map_err(profile_api_error)?;
+    ProfileService::create(state.app_state.as_ref(), &payload.name, scope)
+        .map(ProfileDto::from)
+        .map(Json)
+        .map_err(profile_api_error)
+}
+
+async fn update_profile(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<UpdateProfileRequest>,
+) -> Result<Json<ProfileDto>, ApiError> {
+    let scope = payload
+        .scope
+        .as_deref()
+        .map(ProfileScope::parse)
+        .transpose()
+        .map_err(profile_api_error)?;
+    ProfileService::update(
+        state.app_state.as_ref(),
+        &id,
+        payload.name,
+        payload.resnapshot.unwrap_or(false),
+        scope,
+    )
+    .map(ProfileDto::from)
+    .map(Json)
+    .map_err(profile_api_error)
+}
+
+async fn delete_profile(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    ProfileService::delete(state.app_state.as_ref(), &id).map_err(profile_api_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn clear_current_profile(
+    State(state): State<WebApiState>,
+    Path(scope): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let scope = ProfileScope::parse(&scope).map_err(profile_api_error)?;
+    state
+        .app_state
+        .db
+        .set_current_profile_id(scope.as_str(), None)
+        .map_err(profile_api_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn apply_profile(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<ApplyProfileRequest>,
+) -> Result<Json<Vec<String>>, ApiError> {
+    let scope = ProfileScope::parse(&payload.scope).map_err(profile_api_error)?;
+    ProfileService::apply(state.app_state.as_ref(), &id, scope)
+        .await
+        .map(Json)
+        .map_err(profile_api_error)
 }
 
 async fn get_mcp_servers(
@@ -833,9 +1000,23 @@ async fn fetch_provider_models(
         payload.api_key,
         payload.is_full_url,
         payload.models_url,
+        payload.custom_user_agent,
     )
     .await
     .map_err(ApiError::bad_request)?;
+    Ok(Json(models))
+}
+
+async fn fetch_xai_oauth_models(
+    State(state): State<WebApiState>,
+    Query(query): Query<ManagedAccountModelsQuery>,
+) -> Result<Json<Vec<crate::services::model_fetch::FetchedModel>>, ApiError> {
+    let models = crate::commands::fetch_xai_oauth_models_internal(
+        query.account_id,
+        &state.xai_oauth_state,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to fetch xAI models: {e}")))?;
     Ok(Json(models))
 }
 
@@ -1522,7 +1703,17 @@ async fn sync_usage_session_logs(
     State(state): State<WebApiState>,
 ) -> Result<Json<crate::services::session_usage::SessionSyncResult>, ApiError> {
     let result = crate::commands::sync_session_usage_internal(state.app_state.as_ref())
+        .await
         .map_err(|e| ApiError::internal(format!("failed to sync session usage: {e}")))?;
+    Ok(Json(result))
+}
+
+async fn rebuild_codex_usage(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::services::session_usage::SessionSyncResult>, ApiError> {
+    let result = crate::commands::rebuild_codex_usage_internal(state.app_state.as_ref())
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to rebuild Codex usage: {e}")))?;
     Ok(Json(result))
 }
 
@@ -1569,6 +1760,48 @@ async fn update_usage_model_pricing(
         payload.cache_creation_cost,
     )
     .map_err(|e| ApiError::internal(format!("failed to update model pricing: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn update_usage_model_pricing_batch(
+    State(state): State<WebApiState>,
+    Json(entries): Json<Vec<crate::services::model_pricing::ModelPricingInfo>>,
+) -> Result<Json<usize>, ApiError> {
+    let changed = crate::commands::update_model_pricing_batch_internal(
+        state.app_state.as_ref(),
+        entries,
+    )
+    .map_err(|e| ApiError::internal(format!("failed to update model pricing batch: {e}")))?;
+    Ok(Json(changed))
+}
+
+async fn get_models_dev_sync_config(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::services::model_pricing::ModelsDevSyncState>, ApiError> {
+    crate::commands::get_models_dev_sync_config_internal(state.app_state.as_ref())
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to load models.dev sync config: {e}")))
+}
+
+async fn save_models_dev_sync_config(
+    State(state): State<WebApiState>,
+    Json(config): Json<crate::services::model_pricing::ModelsDevSyncConfig>,
+) -> Result<StatusCode, ApiError> {
+    crate::commands::save_models_dev_sync_config_internal(state.app_state.as_ref(), config)
+        .map_err(|e| ApiError::internal(format!("failed to save models.dev sync config: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn record_models_dev_sync_result(
+    State(state): State<WebApiState>,
+    Json(payload): Json<RecordModelsDevSyncResultPayload>,
+) -> Result<StatusCode, ApiError> {
+    crate::commands::record_models_dev_sync_result_internal(
+        state.app_state.as_ref(),
+        payload.synced_at,
+        payload.error,
+    )
+    .map_err(|e| ApiError::internal(format!("failed to record models.dev sync result: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1772,139 +2005,21 @@ async fn health() -> Json<HealthResponse> {
     })
 }
 
-// GET /api/auth/has-key
-async fn auth_has_key(State(state): State<WebApiState>) -> Json<Value> {
-    let has_key = state.app_state.db.has_access_key().unwrap_or(false);
-    Json(json!({ "hasKey": has_key }))
+async fn web_auth_status(State(state): State<WebApiState>) -> Json<WebAuthStatus> {
+    Json(WebAuthStatus {
+        required: state.access_key.is_required(),
+    })
 }
 
-// POST /api/auth/setup-key
-#[derive(Deserialize)]
-struct SetupKeyRequest {
-    key: String,
-}
-
-async fn auth_setup_key(
+async fn verify_web_access_key(
     State(state): State<WebApiState>,
-    Json(body): Json<SetupKeyRequest>,
-) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    if body.key.len() < 6 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Key must be at least 6 characters" })),
-        ));
+    headers: HeaderMap,
+) -> Result<Json<bool>, Response> {
+    if state.access_key.verify(bearer_token(&headers)) {
+        Ok(Json(true))
+    } else {
+        Err(unauthorized_response())
     }
-    if state.app_state.db.has_access_key().unwrap_or(false) {
-        return Err((
-            StatusCode::CONFLICT,
-            Json(json!({ "error": "Key already set" })),
-        ));
-    }
-    let hash = sha256_hex(&body.key);
-    state
-        .app_state
-        .db
-        .setup_access_key(&hash)
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": e.to_string() })),
-            )
-        })?;
-
-    // 自动登录
-    let token = uuid::Uuid::new_v4().to_string();
-    let expiry = chrono::Utc::now().timestamp() + AUTH_TOKEN_EXPIRY_SECS;
-    {
-        let mut tokens = state.auth_tokens.write().await;
-        tokens.insert(token.clone(), expiry);
-    }
-    Ok(Json(json!({ "token": token })))
-}
-
-// POST /api/auth/login
-#[derive(Deserialize)]
-struct LoginRequest {
-    key: String,
-}
-
-async fn auth_login(
-    State(state): State<WebApiState>,
-    Json(body): Json<LoginRequest>,
-) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let hash = sha256_hex(&body.key);
-    let valid = state.app_state.db.verify_access_key(&hash).unwrap_or(false);
-    if !valid {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": "Wrong key" })),
-        ));
-    }
-
-    // 惰性清理过期 token
-    {
-        let now = chrono::Utc::now().timestamp();
-        let mut tokens = state.auth_tokens.write().await;
-        tokens.retain(|_, expiry| *expiry > now);
-    }
-
-    let token = uuid::Uuid::new_v4().to_string();
-    let expiry = chrono::Utc::now().timestamp() + AUTH_TOKEN_EXPIRY_SECS;
-    {
-        let mut tokens = state.auth_tokens.write().await;
-        tokens.insert(token.clone(), expiry);
-    }
-    Ok(Json(json!({ "token": token })))
-}
-
-// PUT /api/auth/change-key
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ChangeKeyRequest {
-    old_key: String,
-    new_key: String,
-}
-
-async fn auth_change_key(
-    State(state): State<WebApiState>,
-    Json(body): Json<ChangeKeyRequest>,
-) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    // 验证旧密钥
-    let old_hash = sha256_hex(&body.old_key);
-    let valid = state.app_state.db.verify_access_key(&old_hash).unwrap_or(false);
-    if !valid {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Wrong old key" })),
-        ));
-    }
-
-    if body.new_key.len() < 6 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Key must be at least 6 characters" })),
-        ));
-    }
-
-    let new_hash = sha256_hex(&body.new_key);
-    state
-        .app_state
-        .db
-        .change_access_key(&new_hash)
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": e.to_string() })),
-            )
-        })?;
-
-    // 修改密钥后清除所有 token，强制重新登录
-    {
-        let mut tokens = state.auth_tokens.write().await;
-        tokens.clear();
-    }
-
-    Ok(Json(json!({ "success": true })))
 }
 
 async fn get_settings() -> Json<crate::settings::AppSettings> {
@@ -2051,11 +2166,25 @@ async fn webdav_sync_fetch_remote_info() -> Result<Json<Value>, ApiError> {
 }
 
 async fn save_settings(
+    State(state): State<WebApiState>,
     Json(settings): Json<crate::settings::AppSettings>,
 ) -> Result<Json<bool>, ApiError> {
-    crate::commands::save_settings_internal(settings)
+    crate::commands::save_settings_internal(state.app_state.as_ref(), settings)
         .map(Json)
         .map_err(|e| ApiError::internal(format!("failed to save settings: {e}")))
+}
+
+async fn has_codex_unify_history_backup() -> Json<bool> {
+    Json(crate::commands::has_codex_unify_history_backup_internal())
+}
+
+async fn restore_codex_unified_history(
+) -> Result<Json<crate::commands::CodexUnifyHistoryRestoreResult>, ApiError> {
+    tokio::task::spawn_blocking(crate::commands::restore_codex_unified_history_internal)
+        .await
+        .map_err(|error| ApiError::internal(format!("Codex history restore task failed: {error}")))?
+        .map(Json)
+        .map_err(|error| ApiError::internal(format!("failed to restore Codex history: {error}")))
 }
 
 async fn get_auto_launch_status() -> Result<Json<bool>, ApiError> {
@@ -2182,6 +2311,18 @@ async fn extract_common_config_snippet(
     }
 }
 
+async fn update_toml_common_config_snippet(
+    Json(payload): Json<UpdateTomlCommonConfigSnippetRequest>,
+) -> Result<Json<String>, ApiError> {
+    crate::services::provider::update_toml_common_config_snippet(
+        &payload.config_toml,
+        &payload.snippet_toml,
+        payload.enabled,
+    )
+    .map(Json)
+    .map_err(|error| ApiError::bad_request(error.to_string()))
+}
+
 async fn sync_current_providers_live(
     State(state): State<WebApiState>,
 ) -> Result<Json<Value>, ApiError> {
@@ -2283,6 +2424,7 @@ async fn auth_start_login(
         &payload.auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to start auth login: {e}")))?;
@@ -2298,6 +2440,7 @@ async fn auth_poll_for_account(
         &payload.device_code,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to poll auth account: {e}")))?;
@@ -2312,6 +2455,7 @@ async fn auth_list_accounts(
         &auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to list auth accounts: {e}")))?;
@@ -2326,6 +2470,7 @@ async fn auth_get_status(
         &auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to load auth status: {e}")))?;
@@ -2341,6 +2486,7 @@ async fn auth_remove_account(
         &payload.account_id,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to remove auth account: {e}")))?;
@@ -2356,6 +2502,7 @@ async fn auth_set_default_account(
         &payload.account_id,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to set default auth account: {e}")))?;
@@ -2370,6 +2517,7 @@ async fn auth_logout(
         &payload.auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to logout auth provider: {e}")))?;
@@ -2466,12 +2614,23 @@ async fn get_subscription_quota(
 
 async fn get_codex_oauth_quota(
     State(state): State<WebApiState>,
-    Query(query): Query<CodexOauthQuotaQuery>,
+    Query(query): Query<ManagedAccountQuotaQuery>,
 ) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
     let quota =
         crate::commands::get_codex_oauth_quota_internal(query.account_id, &state.codex_oauth_state)
             .await
             .map_err(|e| ApiError::internal(format!("failed to load codex oauth quota: {e}")))?;
+    Ok(Json(quota))
+}
+
+async fn get_xai_oauth_quota(
+    State(state): State<WebApiState>,
+    Query(query): Query<ManagedAccountQuotaQuery>,
+) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
+    let quota =
+        crate::commands::get_xai_oauth_quota_internal(query.account_id, &state.xai_oauth_state)
+            .await
+            .map_err(|e| ApiError::internal(format!("failed to load xAI oauth quota: {e}")))?;
     Ok(Json(quota))
 }
 
@@ -3354,6 +3513,7 @@ pub async fn run_web_server() -> Result<(), String> {
 }
 
 pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<(), String> {
+    let access_key = WebAccessKey::from_env()?;
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
     match db.init_default_skill_repos() {
         Ok(count) if count > 0 => {
@@ -3368,25 +3528,51 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         log::warn!("startup periodic maintenance failed: {err}");
     }
     let app_state = Arc::new(AppState::new(db));
+    if let Err(err) =
+        crate::services::provider::ProviderService::scrub_leaked_gemini_common_config(
+            app_state.as_ref(),
+        )
+        .await
+    {
+        log::warn!("startup Gemini common-config credential scrub failed: {err}");
+    }
     crate::services::webdav_auto_sync::start_worker(app_state.db.clone());
+    tokio::task::spawn_blocking(|| {
+        match crate::codex_history_migration::maybe_migrate_codex_official_history() {
+            Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
+                "Codex 官方历史迁移完成: files={}, rows={}",
+                outcome.migrated_jsonl_files,
+                outcome.migrated_state_rows
+            ),
+            Ok(_) => {}
+            Err(error) => log::warn!("Codex 官方历史启动迁移失败: {error}"),
+        }
+    });
     let state = WebApiState {
         copilot_auth_state: app_state.copilot_auth_state.clone(),
         codex_oauth_state: app_state.codex_oauth_state.clone(),
-        app_state: app_state.clone(),
-        auth_tokens: app_state.auth_tokens.clone(),
+        xai_oauth_state: app_state.xai_oauth_state.clone(),
+        access_key,
+        app_state,
     };
     let bind_options = resolve_bind_options(&options)?;
 
     let mut app = Router::new()
         .route("/api", get(root))
         .route("/api/health", get(health))
-        .route("/api/auth/has-key", get(auth_has_key))
-        .route("/api/auth/setup-key", post(auth_setup_key))
-        .route("/api/auth/login", post(auth_login))
-        .route("/api/auth/change-key", put(auth_change_key))
+        .route("/api/auth/status", get(web_auth_status))
+        .route("/api/auth/verify", get(verify_web_access_key))
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
+        .route(
+            "/api/settings/codex-unify-history-backup",
+            get(has_codex_unify_history_backup),
+        )
+        .route(
+            "/api/settings/codex-unify-history-restore",
+            post(restore_codex_unified_history),
+        )
         .route(
             "/api/settings/auto-launch",
             get(get_auto_launch_status).put(set_auto_launch),
@@ -3419,6 +3605,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/settings/common-config/:app/extract",
             post(extract_common_config_snippet),
+        )
+        .route(
+            "/api/settings/common-config/codex/update-toml",
+            post(update_toml_common_config_snippet),
         )
         .route(
             "/api/settings/sync-current-providers-live",
@@ -3474,6 +3664,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             post(auth_set_default_account),
         )
         .route("/api/auth/logout", post(auth_logout))
+        .route("/api/auth/xai_oauth/models", get(fetch_xai_oauth_models))
         .route("/api/copilot/token", get(get_copilot_token))
         .route(
             "/api/copilot/accounts/:account_id/token",
@@ -3490,6 +3681,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_copilot_usage_for_account),
         )
         .route("/api/subscription/codex-oauth", get(get_codex_oauth_quota))
+        .route("/api/subscription/xai-oauth", get(get_xai_oauth_quota))
         .route("/api/subscription/coding-plan", post(get_coding_plan_quota))
         .route("/api/subscription/balance", post(get_balance))
         .route("/api/subscription/:tool", get(get_subscription_quota))
@@ -3506,6 +3698,16 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             axum::routing::delete(delete_db_backup),
         )
         .route("/api/backups/db/:filename/restore", post(restore_db_backup))
+        .route("/api/profiles", get(list_profiles).post(create_profile))
+        .route(
+            "/api/profiles/current/:scope",
+            axum::routing::delete(clear_current_profile),
+        )
+        .route("/api/profiles/:id/apply", post(apply_profile))
+        .route(
+            "/api/profiles/:id",
+            put(update_profile).delete(delete_profile),
+        )
         .route("/api/providers/:app", get(get_providers).post(add_provider))
         .route(
             "/api/providers/:app/sort-order",
@@ -3672,6 +3874,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/usage/provider-stats", get(get_usage_provider_stats))
         .route("/api/usage/model-stats", get(get_usage_model_stats))
         .route("/api/usage/session-sync", post(sync_usage_session_logs))
+        .route("/api/usage/codex/rebuild", post(rebuild_codex_usage))
         .route("/api/usage/data-sources", get(get_usage_data_sources))
         .route("/api/usage/request-logs", post(get_usage_request_logs))
         .route(
@@ -3680,8 +3883,20 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route("/api/usage/model-pricing", get(get_usage_model_pricing))
         .route(
+            "/api/usage/model-pricing/batch",
+            put(update_usage_model_pricing_batch),
+        )
+        .route(
             "/api/usage/model-pricing/:model_id",
             put(update_usage_model_pricing).delete(delete_usage_model_pricing),
+        )
+        .route(
+            "/api/usage/models-dev-sync",
+            get(get_models_dev_sync_config).put(save_models_dev_sync_config),
+        )
+        .route(
+            "/api/usage/models-dev-sync/result",
+            post(record_models_dev_sync_result),
         )
         .route(
             "/api/usage/provider-limits/:app_type/:provider_id",
@@ -3801,12 +4016,12 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_circuit_breaker_config).put(update_circuit_breaker_config),
         )
         .layer(middleware::from_fn(api_request_logger))
-        .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
-        .layer(CorsLayer::permissive())
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            auth_middleware,
+            require_access_key,
         ))
+        .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
+        .layer(CorsLayer::permissive())
         .with_state(state);
 
     if let Some(dist_dir) = resolve_frontend_dist_dir() {

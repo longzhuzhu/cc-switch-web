@@ -8,6 +8,11 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { queryClient } from "@/lib/query";
 import { Toaster } from "@/components/ui/sonner";
 import { UpdateProvider } from "@/contexts/UpdateContext";
+import { AccessKeyGate } from "@/components/AccessKeyGate";
+import {
+  MODELS_DEV_SYNC_CONFIG_QUERY_KEY,
+  syncModelsDevPricingOnStartup,
+} from "@/lib/modelsDevAutoSync";
 
 // 根据平台添加 body class，便于平台特定样式
 try {
@@ -26,10 +31,31 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="cc-switch-theme">
         <UpdateProvider>
-          <App />
+          <AccessKeyGate>
+            <App />
+          </AccessKeyGate>
           <Toaster />
         </UpdateProvider>
       </ThemeProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+void syncModelsDevPricingOnStartup()
+  .then((result) => {
+    if (!result.skipped) {
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["usage"] }),
+        queryClient.invalidateQueries({
+          queryKey: MODELS_DEV_SYNC_CONFIG_QUERY_KEY,
+        }),
+      ]);
+    }
+  })
+  .catch((error) => {
+    // 离线或 models.dev 暂时不可用不应阻塞页面启动。
+    console.warn("[models.dev] startup sync failed", error);
+    void queryClient.invalidateQueries({
+      queryKey: MODELS_DEV_SYNC_CONFIG_QUERY_KEY,
+    });
+  });

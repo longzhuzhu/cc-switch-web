@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -19,18 +19,19 @@ import {
   KeyRound,
   Shield,
   Cpu,
+  LayoutDashboard,
+  MoreHorizontal,
 } from "lucide-react";
 import type { Provider, VisibleApps } from "@/types";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
-import {
-  hermesApi,
-  providersApi,
-  settingsApi,
-  type AppId,
-} from "@/lib/api";
+import { hermesApi, providersApi, settingsApi, type AppId } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
-import { useHermesHealth, useOpenHermesWebUI } from "@/hooks/useHermes";
+import {
+  hermesKeys,
+  useHermesHealth,
+  useOpenHermesWebUI,
+} from "@/hooks/useHermes";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useAutoCompact } from "@/hooks/useAutoCompact";
@@ -40,6 +41,7 @@ import { isTextEditableTarget } from "@/utils/domUtils";
 import { cn } from "@/lib/utils";
 import { isWindows, isLinux } from "@/lib/platform";
 import { AppSwitcher } from "@/components/AppSwitcher";
+import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
 import { EditProviderDialog } from "@/components/providers/EditProviderDialog";
@@ -69,15 +71,14 @@ import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesHealthBanner from "@/components/hermes/HermesHealthBanner";
 import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
-import { HermesPlaceholderPanel } from "@/components/hermes/HermesPlaceholderPanel";
 import { UpdateBadge } from "@/components/UpdateBadge";
-import { LoginPage } from "@/components/auth/LoginPage";
 import {
-  authHasKey,
-  getAuthToken,
-  clearAuthToken,
-  getWebApiBase,
-} from "@/lib/runtime/client/web";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type View =
   | "providers"
@@ -101,6 +102,7 @@ const VALID_APPS: AppId[] = [
   "claude",
   "codex",
   "gemini",
+  "grokbuild",
   "opencode",
   "openclaw",
   "hermes",
@@ -143,54 +145,6 @@ function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  // 认证状态
-  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getAuthToken());
-  const [needsAuthCheck, setNeedsAuthCheck] = useState(true);
-
-  // 首次加载：检查是否需要认证
-  useEffect(() => {
-    if (!needsAuthCheck) return;
-    authHasKey()
-      .then((res) => {
-        if (!res.hasKey) {
-          setIsAuthenticated(false);
-        } else if (getAuthToken()) {
-          fetch(`${getWebApiBase()}/api/health`, {
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
-          })
-            .then((r) => {
-              if (r.ok) {
-                setIsAuthenticated(true);
-              } else {
-                clearAuthToken();
-                setIsAuthenticated(false);
-              }
-            })
-            .catch(() => setIsAuthenticated(false));
-        } else {
-          setIsAuthenticated(false);
-        }
-      })
-      .catch(() => {
-        // 无法连接后端 → 视为未认证，要求登录
-        setIsAuthenticated(false);
-      })
-      .finally(() => setNeedsAuthCheck(false));
-  }, [needsAuthCheck]);
-
-  // 监听 401 事件，自动跳转登录
-  useEffect(() => {
-    const handler = () => {
-      setIsAuthenticated(false);
-    };
-    window.addEventListener("auth:unauthorized", handler);
-    return () => window.removeEventListener("auth:unauthorized", handler);
-  }, []);
-
-  const handleAuthSuccess = useCallback(() => {
-    setIsAuthenticated(true);
-  }, []);
-
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const [currentView, setCurrentView] = useState<View>(getInitialView);
   const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
@@ -207,9 +161,10 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   const visibleApps: VisibleApps = settingsData?.visibleApps ?? {
     claude: true,
-    "claude-desktop": false,
+    "claude-desktop": true,
     codex: true,
     gemini: true,
+    grokbuild: true,
     opencode: true,
     openclaw: true,
     hermes: true,
@@ -217,8 +172,10 @@ function App() {
 
   const getFirstVisibleApp = (): AppId => {
     if (visibleApps.claude) return "claude";
+    if (visibleApps["claude-desktop"]) return "claude-desktop";
     if (visibleApps.codex) return "codex";
     if (visibleApps.gemini) return "gemini";
+    if (visibleApps.grokbuild) return "grokbuild";
     if (visibleApps.opencode) return "opencode";
     if (visibleApps.openclaw) return "openclaw";
     if (visibleApps.hermes) return "hermes";
@@ -237,6 +194,7 @@ function App() {
       currentView === "sessions" &&
       activeApp !== "claude" &&
       activeApp !== "codex" &&
+      activeApp !== "grokbuild" &&
       activeApp !== "opencode" &&
       activeApp !== "openclaw" &&
       activeApp !== "gemini"
@@ -249,7 +207,9 @@ function App() {
     if (
       activeApp === "hermes" &&
       currentView !== "providers" &&
-      currentView !== "hermesMemory"
+      currentView !== "hermesMemory" &&
+      currentView !== "skills" &&
+      currentView !== "mcp"
     ) {
       setCurrentView("providers");
     }
@@ -298,7 +258,9 @@ function App() {
 
         setEnvConflicts((previous) => {
           const existingKeys = new Set(
-            previous.map((conflict) => `${conflict.varName}:${conflict.sourcePath}`),
+            previous.map(
+              (conflict) => `${conflict.varName}:${conflict.sourcePath}`,
+            ),
           );
           const nextConflicts = conflicts.filter(
             (conflict) =>
@@ -360,7 +322,6 @@ function App() {
 
   const { data, isLoading, refetch } = useProvidersQuery(activeApp, {
     isProxyRunning,
-    enabled: activeApp !== "hermes",
   });
   const providers = useMemo(() => data?.providers ?? {}, [data]);
   const currentProviderId = data?.currentProviderId ?? "";
@@ -382,6 +343,7 @@ function App() {
   const hasSessionSupport =
     activeApp === "claude" ||
     activeApp === "codex" ||
+    activeApp === "grokbuild" ||
     activeApp === "opencode" ||
     activeApp === "openclaw" ||
     activeApp === "gemini";
@@ -524,6 +486,10 @@ function App() {
         await queryClient.invalidateQueries({
           queryKey: openclawKeys.health,
         });
+      } else if (activeApp === "hermes") {
+        await queryClient.invalidateQueries({
+          queryKey: hermesKeys.liveProviderIds,
+        });
       }
       toast.success(
         t("notifications.removeFromConfigSuccess", {
@@ -574,7 +540,11 @@ function App() {
       iconColor: provider.iconColor,
     };
 
-    if (activeApp === "opencode" || activeApp === "openclaw") {
+    if (
+      activeApp === "opencode" ||
+      activeApp === "openclaw" ||
+      activeApp === "hermes"
+    ) {
       let liveProviderIds: string[] = [];
       try {
         liveProviderIds =
@@ -583,10 +553,15 @@ function App() {
                 queryKey: ["opencodeLiveProviderIds"],
                 queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
               })
-            : await queryClient.ensureQueryData({
-                queryKey: openclawKeys.liveProviderIds,
-                queryFn: () => providersApi.getOpenClawLiveProviderIds(),
-              });
+            : activeApp === "openclaw"
+              ? await queryClient.ensureQueryData({
+                  queryKey: openclawKeys.liveProviderIds,
+                  queryFn: () => providersApi.getOpenClawLiveProviderIds(),
+                })
+              : await queryClient.ensureQueryData({
+                  queryKey: hermesKeys.liveProviderIds,
+                  queryFn: () => providersApi.getHermesLiveProviderIds(),
+                });
       } catch (error) {
         console.error(
           "[App] Failed to load live provider IDs for duplication",
@@ -740,10 +715,6 @@ function App() {
         case "hermesMemory":
           return <HermesMemoryPanel />;
         default:
-          if (activeApp === "hermes") {
-            return <HermesPlaceholderPanel onOpenWebUI={openHermesWebUI} />;
-          }
-
           return (
             <div className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="flex-1 overflow-y-auto overflow-x-hidden pb-12 px-1">
@@ -774,7 +745,9 @@ function App() {
                         setConfirmAction({ provider, action: "delete" })
                       }
                       onRemoveFromConfig={
-                        activeApp === "opencode" || activeApp === "openclaw"
+                        activeApp === "opencode" ||
+                        activeApp === "openclaw" ||
+                        activeApp === "hermes"
                           ? (provider) =>
                               setConfirmAction({ provider, action: "remove" })
                           : undefined
@@ -795,7 +768,11 @@ function App() {
                       }
                       onCreate={() => setIsAddOpen(true)}
                       onSetAsDefault={
-                        activeApp === "openclaw" ? setAsDefaultModel : undefined
+                        activeApp === "openclaw"
+                          ? setAsDefaultModel
+                          : activeApp === "hermes"
+                            ? switchProvider
+                            : undefined
                       }
                     />
                   </motion.div>
@@ -821,10 +798,6 @@ function App() {
       </AnimatePresence>
     );
   };
-
-  if (!isAuthenticated) {
-    return <LoginPage onAuthSuccess={handleAuthSuccess} />;
-  }
 
   return (
     <div
@@ -865,16 +838,12 @@ function App() {
 
       <header
         className="fixed z-50 w-full transition-all duration-300 bg-background/80 backdrop-blur-md"
-        style={
-          {
-            top: headerTopOffset,
-            height: HEADER_HEIGHT,
-          }
-        }
+        style={{
+          top: headerTopOffset,
+          height: HEADER_HEIGHT,
+        }}
       >
-        <div
-          className="flex h-full items-center justify-between gap-2 px-6"
-        >
+        <div className="flex h-full items-center justify-between gap-2 px-6">
           <div className="flex items-center gap-1">
             {currentView !== "providers" ? (
               <div className="flex items-center gap-2">
@@ -979,6 +948,12 @@ function App() {
                   {settingsData?.enableFailoverToggle && (
                     <FailoverToggle activeApp={activeApp} />
                   )}
+                </div>
+              )}
+            {currentView === "providers" &&
+              (settingsData?.showProfileSwitcher ?? true) && (
+                <div className="flex shrink-0 items-center">
+                  <ProfileSwitcher activeApp={activeApp} />
                 </div>
               )}
             <div
@@ -1096,7 +1071,124 @@ function App() {
                       compact={isToolbarCompact}
                     />
 
-                    <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 md:hidden"
+                          title={t("common.more", "更多")}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-48 md:hidden"
+                      >
+                        {activeApp === "openclaw" ? (
+                          <>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("workspace")}
+                            >
+                              <FolderOpen className="h-4 w-4" />
+                              {t("workspace.manage")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("sessions")}
+                            >
+                              <History className="h-4 w-4" />
+                              {t("sessionManager.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("openclawEnv")}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                              {t("openclaw.env.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("openclawTools")}
+                            >
+                              <Shield className="h-4 w-4" />
+                              {t("openclaw.tools.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                handleViewChange("openclawAgents")
+                              }
+                            >
+                              <Cpu className="h-4 w-4" />
+                              {t("openclaw.agents.title")}
+                            </DropdownMenuItem>
+                          </>
+                        ) : activeApp === "hermes" ? (
+                          <>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("skills")}
+                            >
+                              <Wrench className="h-4 w-4" />
+                              {t("skills.manage")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("hermesMemory")}
+                            >
+                              <Book className="h-4 w-4" />
+                              {t("hermes.memory.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => void openHermesWebUI()}
+                            >
+                              <LayoutDashboard className="h-4 w-4" />
+                              {t("hermes.webui.open")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("mcp")}
+                            >
+                              <McpIcon size={16} />
+                              {t("mcp.title")}
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                            {hasSkillsSupport && (
+                              <DropdownMenuItem
+                                onSelect={() => handleViewChange("skills")}
+                              >
+                                <Wrench className="h-4 w-4" />
+                                {t("skills.manage")}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("prompts")}
+                            >
+                              <Book className="h-4 w-4" />
+                              {t("prompts.manage")}
+                            </DropdownMenuItem>
+                            {hasSessionSupport && (
+                              <DropdownMenuItem
+                                onSelect={() => handleViewChange("sessions")}
+                              >
+                                <History className="h-4 w-4" />
+                                {t("sessionManager.title")}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("mcp")}
+                            >
+                              <McpIcon size={16} />
+                              {t("mcp.title")}
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => setIsAddOpen(true)}>
+                          <Plus className="h-4 w-4" />
+                          {t("header.addProvider")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <div className="hidden items-center gap-1 rounded-xl bg-muted p-1 md:flex">
                       <AnimatePresence mode="wait">
                         <motion.div
                           key={
@@ -1117,9 +1209,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  handleViewChange("workspace")
-                                }
+                                onClick={() => handleViewChange("workspace")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("workspace.manage")}
                               >
@@ -1171,19 +1261,39 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  handleViewChange("hermesMemory")
-                                }
+                                onClick={() => handleViewChange("skills")}
+                                className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
+                                title={t("skills.manage")}
+                              >
+                                <Wrench className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewChange("hermesMemory")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("hermes.memory.title")}
                               >
                                 <Book className="w-4 h-4" />
                               </Button>
-                              <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                                {t("hermes.placeholderToolbar", {
-                                  defaultValue: "Hermes 骨架阶段",
-                                })}
-                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void openHermesWebUI()}
+                                className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
+                                title={t("hermes.webui.open")}
+                              >
+                                <LayoutDashboard className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewChange("mcp")}
+                                className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
+                                title={t("mcp.title")}
+                              >
+                                <McpIcon size={16} />
+                              </Button>
                             </>
                           ) : (
                             <>
@@ -1241,15 +1351,13 @@ function App() {
                       </AnimatePresence>
                     </div>
 
-                    {activeApp !== "hermes" && (
-                      <Button
-                        onClick={() => setIsAddOpen(true)}
-                        size="icon"
-                        className={`ml-2 ${addActionButtonClass}`}
-                      >
-                        <Plus className="w-5 h-5" />
-                      </Button>
-                    )}
+                    <Button
+                      onClick={() => setIsAddOpen(true)}
+                      size="icon"
+                      className={`ml-2 hidden md:inline-flex ${addActionButtonClass}`}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </Button>
                   </>
                 )}
               </div>

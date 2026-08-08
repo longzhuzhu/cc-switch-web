@@ -35,6 +35,8 @@ pub struct VisibleApps {
     #[serde(default = "default_true")]
     pub gemini: bool,
     #[serde(default = "default_true")]
+    pub grokbuild: bool,
+    #[serde(default = "default_true")]
     pub opencode: bool,
     #[serde(default = "default_true")]
     pub openclaw: bool,
@@ -48,6 +50,7 @@ impl Default for VisibleApps {
             claude: true,
             codex: true,
             gemini: true,
+            grokbuild: true,
             opencode: true,
             openclaw: true,
             hermes: true,
@@ -155,6 +158,26 @@ impl WebDavSyncSettings {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexOfficialHistoryUnifyMigration {
+    pub completed_at: String,
+    pub target_provider_id: String,
+    #[serde(default)]
+    pub migrated_jsonl_files: usize,
+    #[serde(default)]
+    pub migrated_state_rows: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_config_dir: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMigrations {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_official_history_unify_v1: Option<CodexOfficialHistoryUnifyMigration>,
+}
+
 /// 应用设置结构
 ///
 /// 存储设备级别设置，保存在本地 `~/.cc-switch/settings.json`，不随数据库同步。
@@ -166,6 +189,12 @@ pub struct AppSettings {
     /// 是否在主页面启用本地代理功能（默认关闭）
     #[serde(default)]
     pub enable_local_proxy: bool,
+    /// 让官方 Codex 与第三方 Provider 共用稳定的 resume history 桶。
+    #[serde(default)]
+    pub unify_codex_session_history: bool,
+    /// 用户选择把已有官方会话迁入统一历史；失败时保留以便启动重试。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unify_codex_migrate_existing: Option<bool>,
     /// User has confirmed the local proxy first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_confirmed: Option<bool>,
@@ -178,6 +207,9 @@ pub struct AppSettings {
     /// Whether to show the failover toggle independently on the main page
     #[serde(default)]
     pub enable_failover_toggle: bool,
+    /// Whether to show the project Profile switcher on the main page
+    #[serde(default = "default_true")]
+    pub show_profile_switcher: bool,
     /// User has confirmed the failover toggle first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failover_confirmed: Option<bool>,
@@ -211,6 +243,8 @@ pub struct AppSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gemini_config_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grok_config_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opencode_config_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub openclaw_config_dir: Option<String>,
@@ -227,6 +261,9 @@ pub struct AppSettings {
     /// 当前 Gemini 供应商 ID（本地存储，优先于数据库 is_current）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_provider_gemini: Option<String>,
+    /// 当前 Grok Build 供应商 ID
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_provider_grokbuild: Option<String>,
     /// 当前 OpenCode 供应商 ID（本地存储，对 OpenCode 可能无意义，但保持结构一致）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_provider_opencode: Option<String>,
@@ -265,16 +302,23 @@ pub struct AppSettings {
     /// - Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_terminal: Option<String>,
+
+    // ===== 后端本地迁移状态 =====
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_migrations: Option<LocalMigrations>,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             enable_local_proxy: false,
+            unify_codex_session_history: false,
+            unify_codex_migrate_existing: None,
             proxy_confirmed: None,
             usage_confirmed: None,
             stream_check_confirmed: None,
             enable_failover_toggle: false,
+            show_profile_switcher: true,
             failover_confirmed: None,
             first_run_notice_confirmed: Some(true),
             common_config_confirmed: None,
@@ -286,12 +330,14 @@ impl Default for AppSettings {
             claude_config_dir: None,
             codex_config_dir: None,
             gemini_config_dir: None,
+            grok_config_dir: None,
             opencode_config_dir: None,
             openclaw_config_dir: None,
             hermes_config_dir: None,
             current_provider_claude: None,
             current_provider_codex: None,
             current_provider_gemini: None,
+            current_provider_grokbuild: None,
             current_provider_opencode: None,
             current_provider_openclaw: None,
             skill_sync_method: SyncMethod::default(),
@@ -301,6 +347,7 @@ impl Default for AppSettings {
             backup_interval_hours: None,
             backup_retain_count: None,
             preferred_terminal: None,
+            local_migrations: None,
         }
     }
 }
@@ -332,6 +379,13 @@ impl AppSettings {
 
         self.gemini_config_dir = self
             .gemini_config_dir
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        self.grok_config_dir = self
+            .grok_config_dir
             .as_ref()
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
@@ -477,6 +531,7 @@ pub fn get_settings_for_frontend() -> AppSettings {
         sync.password.clear();
     }
     settings.webdav_backup = None;
+    settings.local_migrations = None;
     settings
 }
 
@@ -536,10 +591,67 @@ pub fn get_codex_override_dir() -> Option<PathBuf> {
         .map(|p| resolve_override_path(p))
 }
 
+pub fn unify_codex_session_history() -> bool {
+    settings_store()
+        .read()
+        .unwrap_or_else(|e| {
+            log::warn!("设置锁已毒化，使用恢复值: {e}");
+            e.into_inner()
+        })
+        .unify_codex_session_history
+}
+
+pub fn unify_codex_migrate_existing_requested() -> bool {
+    get_settings().unify_codex_migrate_existing.unwrap_or(false)
+}
+
+pub fn is_codex_official_history_unify_migrated_for_dir(codex_dir: &str) -> bool {
+    get_settings()
+        .local_migrations
+        .as_ref()
+        .and_then(|migrations| migrations.codex_official_history_unify_v1.as_ref())
+        .is_some_and(|migration| migration.codex_config_dir.as_deref() == Some(codex_dir))
+}
+
+pub fn mark_codex_official_history_unify_migrated_if_enabled(
+    migration: CodexOfficialHistoryUnifyMigration,
+) -> Result<bool, AppError> {
+    let mut written = false;
+    mutate_settings(|settings| {
+        if settings.unify_codex_session_history
+            && settings.unify_codex_migrate_existing.unwrap_or(false)
+        {
+            settings
+                .local_migrations
+                .get_or_insert_with(Default::default)
+                .codex_official_history_unify_v1 = Some(migration);
+            written = true;
+        }
+    })?;
+    Ok(written)
+}
+
+pub fn clear_codex_official_history_unify_state() -> Result<(), AppError> {
+    mutate_settings(|settings| {
+        settings.unify_codex_migrate_existing = None;
+        if let Some(migrations) = settings.local_migrations.as_mut() {
+            migrations.codex_official_history_unify_v1 = None;
+        }
+    })
+}
+
 pub fn get_gemini_override_dir() -> Option<PathBuf> {
     let settings = settings_store().read().ok()?;
     settings
         .gemini_config_dir
+        .as_ref()
+        .map(|p| resolve_override_path(p))
+}
+
+pub fn get_grok_override_dir() -> Option<PathBuf> {
+    let settings = settings_store().read().ok()?;
+    settings
+        .grok_config_dir
         .as_ref()
         .map(|p| resolve_override_path(p))
 }
@@ -582,8 +694,10 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::ClaudeDesktop => None,
         AppType::Codex => settings.current_provider_codex.clone(),
         AppType::Gemini => settings.current_provider_gemini.clone(),
+        AppType::GrokBuild => settings.current_provider_grokbuild.clone(),
         AppType::OpenCode => settings.current_provider_opencode.clone(),
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
+        AppType::Hermes => None,
     }
 }
 
@@ -600,8 +714,10 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::ClaudeDesktop => {}
         AppType::Codex => settings.current_provider_codex = id.map(|s| s.to_string()),
         AppType::Gemini => settings.current_provider_gemini = id.map(|s| s.to_string()),
+        AppType::GrokBuild => settings.current_provider_grokbuild = id.map(|s| s.to_string()),
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
+        AppType::Hermes => {}
     }
 
     update_settings(settings)
@@ -733,4 +849,15 @@ pub fn update_webdav_sync_status(status: WebDavSyncStatus) -> Result<(), AppErro
             sync.status = status;
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppSettings;
+
+    #[test]
+    fn profile_switcher_is_visible_for_existing_settings() {
+        let settings: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(settings.show_profile_switcher);
+    }
 }

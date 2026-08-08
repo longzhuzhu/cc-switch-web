@@ -2,6 +2,101 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [Unreleased]
+
+### 安全
+
+- 新增可选的 `CC_SWITCH_WEB_ACCESS_KEY` Web 访问密钥；服务端拒绝短于 16 字符的配置，以固定长度摘要比较 Bearer 密钥，并统一保护除健康检查和认证接口外的所有 API。
+- 前端新增访问密钥登录门禁，密钥仅保存在当前标签页的 `sessionStorage`；受保护请求收到 401 时会清除密钥并重新锁定页面。
+
+### 修复
+
+- Web API 默认改为同源 `/api`，Vite 开发环境同步代理到本地 Rust 服务；修复浏览器远程访问 Docker/Linux 服务时错误请求浏览器自身 `127.0.0.1:8890`，导致欢迎弹窗无法确认的问题。
+- 欢迎弹窗仅在设置保存成功后关闭，保存失败会显示可见错误，不再静默失败。
+- 移动端将应用切换和上下文工具收进可访问菜单，修复窄屏下 Skills、提示词、会话、MCP 与新增供应商按钮被裁切且无法操作的问题。
+
+### 发布
+
+- Web Package 流水线新增 GitHub Container Registry 发布，将 `linux/amd64` 运行镜像推送到 `ghcr.io/zuoliangyu/cc-switch-web`，支持版本、`latest` 与短 SHA 标签，并继续保留 Docker image tar 发布附件。
+- Docker Compose 支持通过宿主环境传入可选的 `CC_SWITCH_WEB_ACCESS_KEY`。
+
+## [1.0.0] - 2026-07-30
+
+`v0.9.0` 位于独立同步分支，并非当前 `main` 的祖先。本版本从双方共同的 `v0.8.0` 基线重新追平上游；以下内容按当前 `main` 自 `v0.8.0` 以来的 58 笔提交审计整理，并单列与 `v0.9.0` 的兼容差异。
+
+### 与 v0.9.0 发布分支的兼容差异
+
+- `v0.9.0` 独有的 Codex Goal mode 与远程压缩 UI 开关未进入当前 `main`。
+- 分支专用审计文档 `docs/upstream-sync-0.9.0.md` 不再保留，当前追平记录统一收录在 `docs-dev/`。
+
+### 安全与数据保护
+
+- 从应用导入 MCP 改为逐应用 best-effort 执行并聚合上报错误，不再把坏配置静默伪装成“导入 0 个”。
+- MCP 全量重投影改为逐应用 best-effort；Provider 保存、切换和单应用同步只重投影目标应用，避免无关应用配置损坏阻断已完成的持久化。
+- SQL 备份导入增加 SQLite authorizer，拒绝跨文件操作、虚拟表和危险 PRAGMA。
+- Skill 仓库坐标、归档下载与解压增加路径穿越、压缩炸弹、symlink 自递归和目录字段校验；临时目录改为自动清理。
+- Gemini 通用配置不再保存凭据，并在启动时清理供应商、代理备份和 `.env` 中的历史污染。
+- Codex MCP 与 OpenCode 遇到非法配置结构时归一化或报错，不再覆盖原配置或 panic。
+- Codex 默认模型写入严格转义 TOML 字符串，远端 `/models` 返回的异常模型 ID 不再能注入额外配置行。
+- Codex 通用配置改由后端 `toml_edit` 结构化合并与剥离，保留用户注释和键顺序；异步结果不会覆盖更新的开关操作或手工编辑。
+- 切换 Claude 或 Codex Provider 前会把 live 配置中的共享改动重新提取回通用配置片段，同时尊重用户显式清空状态并继续剥离凭据、端点、模型和 MCP 注入项。
+- 通用配置合并拒绝 `__proto__`、`constructor`、`prototype` 原型链键。
+- Deeplink 确认页完整显示 MCP 参数和用量脚本，标记高风险命令、环境变量及私网端点，支持 URL-safe Base64；导入用量脚本默认关闭。
+- 托管账号接管按类型只写入一个正确的 Claude 认证占位符。
+
+### 代理与用量
+
+- Codex 内置 OpenAI Official 供应商支持使用客户端原生 ChatGPT 登录进行本地代理接管；官方认证头仅透传到固定 ChatGPT 后端，认证失败不会故障转移。第三方 Codex 接管改用 `config.toml` 占位符，不再覆盖原生 `auth.json`。
+- Claude 与 Codex 第三方 Provider 支持自定义本地代理请求 Header 和 Body；覆盖在协议转换后应用，并保护认证、连接、追踪、转发链与 `stream` 等代理管理字段。
+- 对齐 Codex Chat、Responses 与 Anthropic 的请求、响应和 SSE 转换，补齐 reasoning、tool call、媒体降级、缓存路由及 Claude Code 模拟。
+- Codex session 用量同步支持 fork、sub-agent、延迟父会话恢复和疑似重复观测，游标改用纳秒 mtime。
+- 按应用区分缓存 token 语义，避免 Codex、Gemini 和 Grok Build 重复计算缓存输入成本。
+- 托管 OAuth、Codex Chat/Anthropic 和完整 URL 供应商统一标记为需要当前应用路由接管，切换时不再只检查代理进程是否启动。
+- 非 Claude 用量 ID 增加应用与供应商作用域；重复响应幂等忽略，语义冲突使用稳定哈希后缀保存，不再静默覆盖历史用量。
+- 会话用量同步改为串行后台任务；新增 `POST /api/usage/codex/rebuild`，备份数据库后可安全清理并重导 Codex session 用量。
+- Grok Build 官方态从 `updates.jsonl` 导入逐轮用量，支持沉降窗、稳定幂等键、代理接管活动去重和 CLI 自报成本优先。
+- 内置模型定价新增 Claude Opus 5、GPT-5.6 Sol/Terra/Luna（含 effort 别名）、Kimi K3 与 Grok 4.5，避免新模型用量显示为零成本。
+- 模型定价新增 models.dev 手动导入与自动同步，支持按供应商筛选、全量搜索、文本模型过滤、常用模型选择和价格归一化；同步选择、覆盖价格、删除标记及最近结果持久化到服务端本地文件。
+- Codex 的 xAI OAuth Provider 固定使用 xAI 官方 Responses 端点并动态注入托管 token；原生 Responses 路由会展开 Codex namespace 工具、清理 xAI 不支持的私有字段，并在 JSON/SSE 响应中还原工具名。
+
+### 功能与生态
+
+- 设置页新增 Codex 统一会话历史开关；官方 Codex 可与第三方 Provider 共用稳定的恢复历史入口，并可选择在备份 JSONL 与 `state_5.sqlite` 后迁入已有官方会话。关闭时可按账本精确恢复，已有显式路由和同名第三方路由不会被覆盖。
+- 新增项目 Profile 持久化、服务、Web API 与页面入口，支持按 scope 拍摄/自动保存/应用配置快照、创建/切换/重命名/删除项目和隐藏切换器；切换时退出旧代理接管，并以 warning 汇总已删除条目或单项应用失败。
+- 新增 Grok Build 后端应用目标、`~/.grok/config.toml` 配置读写、Provider CRUD/切换/导入和连接检查；官方登录态允许空配置，自定义供应商强制校验模型与凭据，声明的 `env_key` 未设置时不会借用 `XAI_API_KEY`。
+- Grok Build 支持统一 MCP、Skills 与 Prompts：MCP 投影到 `config.toml` 且不会污染 Provider 快照，Skill 同步到 `.grok/skills`，启用 Prompt 写入 `.grok/AGENTS.md`。
+- Grok Build 支持独立代理接管与故障转移队列，通过 `/grokbuild/v1` 复用 Responses/Chat/Anthropic 协议桥；官方登录态禁止接管，备份与恢复会拒绝代理占位符并保留 MCP。
+- Grok Build Session 支持扫描活跃与归档会话、读取消息并在严格路径和 ID 校验后删除会话目录。
+- 前端新增 Grok Build 应用入口，并接入可见性与配置目录设置、MCP/Skills/Prompts、Session、Usage 筛选及代理接管和故障转移队列。
+- Grok Build 新增专用 Provider 表单，支持客户端档位与真实上游模型、Base URL、API Key/`env_key`、协议后端、上下文窗口和原始 TOML 双向编辑；官方登录态允许保留空配置。
+- Grok Build 新增独立 Provider 预设清单，覆盖适用的合作方、聚合站、xAI 与 OpenRouter；官方预设复用固定 seed，Chat/Messages 预设统一参与路由需求判定。
+- A6API Provider 预设覆盖 Claude、Codex、Gemini、Grok Build、OpenCode 与 OpenClaw，并接入三语推广文案和官方图标。
+- PackyCode 主端点切换到 `packyapi.ai`，Claude、Codex、Gemini 增加 Cloudflare、负载均衡和旧域名备用端点。
+- Gemini 新增 Code0 与 Qiniu 预设，默认使用 Gemini 3.6 Flash；Qiniu 支持两个 Vertex 兼容端点。
+- Gemini 预设目录完整对齐上游 23 项最终清单，更新现有供应商域名、默认模型与备用端点，并移除上游已下架条目。
+- OpenCode 预设与模型能力目录完整对齐上游，新增合作方和 OpenCode Go，并更新 GPT、Gemini、Claude、GLM、Kimi 与 StepFun 的默认模型能力。
+- OpenClaw 预设目录完整对齐上游；应用预设时会按实际 Provider Key 重写主模型、回退模型与模型目录引用。
+- Claude 预设目录完整对齐上游 74 项最终清单，补齐 Kimi、Code0、Qiniu、Gemini Native、OpenCode Go 等供应商，并支持预设指定独立模型目录地址。
+- Codex 表单支持保存和编辑预设模型目录、Chat reasoning 能力与 prompt-cache 路由策略，并在编辑时保留原生 Responses 的隐藏模型能力字段。
+- Codex 默认模型支持合并模型映射与远端目录建议、提示并补入缺失映射；凭据或端点变化会清理过期拉取结果，留空保存时回退到映射首行。
+- Codex 将上游格式、模型映射、Chat 推理配置和自定义 User-Agent 收入高级选项；上游协议转换与模型映射开关彼此独立，原生 Responses 供应商也可使用映射。
+- Codex 预设目录完整对齐上游 68 项最终清单，新增 Kimi、Code0、Qiniu、OpenCode Go 等供应商，并对齐 Chat/Responses 格式、默认模型、上下文窗口和推理能力。
+- 新增 Hermes 后端应用目标与 `~/.hermes/config.yaml` Provider 生命周期：支持自定义供应商导入、增删改、切换默认模型和三种 API 模式连通检查；保留未知 YAML 配置，`providers:` 字典条目只读，并接入配置目录、Skills 与 Prompts 路径。
+- Hermes 前端接入 Provider 列表和专属表单，支持 additive 添加/移除、默认模型切换、协议与模型编辑、请求间隔、live ID 锁定，以及 `providers:` overlay 只读提示；工具栏开放 Skills、Memory、Web UI 与 MCP 入口。
+- Hermes 预设目录完整对齐上游 63 项最终清单，覆盖 Chat Completions、Anthropic Messages、Responses 与 Bedrock Converse 协议，并补齐三语预设名称。
+- Provider 从 live 配置导入失败时展示后端返回的具体错误，并刷新列表呈现失败前已经落库的条目。
+- Provider 预设选择器改为等宽网格，支持名称搜索、Ctrl/Cmd+F、A-Z 切换和图标；默认按官方、尊享合作方、赞助商、普通供应商分组，搜索选中后保留查询状态。
+- 新增 Provider 页面收紧预设区顶部间距，并在固定底栏提示选择预设后仍需填写 API Key 等必要字段。
+- OpenClaw Provider 表单接入预设分类和 API Key 获取链接，官方分类也保持凭据输入可用。
+- Claude、Codex 与 Grok Build Provider 支持自定义 User-Agent 和常用预设；代理转发、健康检查及模型拉取共用同一校验与覆盖规则，官方 Provider 和 Copilot 指纹不受污染。
+- xAI OAuth 后端新增 OIDC 设备流、刷新令牌持久化、多账号与默认账号管理和失效重登录标记，并接入统一 Web 认证 API。
+- Claude 与 Claude Desktop 的 xAI OAuth Provider 接入本地代理：固定使用 xAI 官方 Responses 端点，按绑定账号动态刷新并注入 Bearer token，同时阻止代理占位符发往官方上游。
+- 设置页认证中心新增 xAI / Grok 账号管理，支持设备码登录、多账号、默认账号、移除账号，以及失效凭据提示与定时刷新。
+- Claude Code 新增 xAI (Grok) OAuth Provider 预设，固定使用官方 Responses 端点与 Grok 4.5，并支持绑定托管账号和拦截失效账号。
+- Codex 新增 xAI API Key / OAuth 两类 Provider 预设；OAuth 模式支持绑定托管账号、隐藏本地不生效的凭据与端点字段，并使用该账号获取模型目录。
+- xAI 托管账号与 Grok Build 官方登录支持查询 SuperGrok 订阅额度；共享 gRPC-web/protobuf 账单解析，并按周、月或通用额度窗口展示使用率与重置时间。
+- 前端开放 Claude Desktop 应用入口和专属 Provider 表单，支持 71 项预设、直连或四档模型映射、1M 声明、模型拉取，以及 GitHub Copilot / Codex / xAI 托管账号绑定；列表定时检查并提示 profile、路由、token 与地址漂移。
+
 ## [0.8.0] - 2026-05-23
 
 跟随上游 cc-switch 在 0.7.1 之后的 8 个 commit：4 条 B/C 类 bug 修复（P0）、1 条托管账号 proxy 加固（P1）、3 条 Codex Chat Completions 路由特性（P2）。

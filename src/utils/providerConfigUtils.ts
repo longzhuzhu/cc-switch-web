@@ -2,10 +2,24 @@
 
 import type { TemplateValueConfig } from "../config/claudeProviderPresets";
 import { normalizeTomlText } from "@/utils/textNormalization";
-import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+import { parse as parseToml } from "smol-toml";
 
 const isPlainObject = (value: unknown): value is Record<string, any> => {
   return Object.prototype.toString.call(value) === "[object Object]";
+};
+
+const FORBIDDEN_MERGE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+const sanitizeSnippet = (value: any): any => {
+  if (Array.isArray(value)) return value.map(sanitizeSnippet);
+  if (!isPlainObject(value)) return value;
+
+  const cleaned: Record<string, any> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (FORBIDDEN_MERGE_KEYS.has(key)) continue;
+    cleaned[key] = sanitizeSnippet(child);
+  }
+  return cleaned;
 };
 
 const deepMerge = (
@@ -13,6 +27,8 @@ const deepMerge = (
   source: Record<string, any>,
 ): Record<string, any> => {
   Object.entries(source).forEach(([key, value]) => {
+    if (FORBIDDEN_MERGE_KEYS.has(key)) return;
+
     if (isPlainObject(value)) {
       if (!isPlainObject(target[key])) {
         target[key] = {};
@@ -31,6 +47,7 @@ const deepRemove = (
   source: Record<string, any>,
 ) => {
   Object.entries(source).forEach(([key, value]) => {
+    if (FORBIDDEN_MERGE_KEYS.has(key)) return;
     if (!(key in target)) return;
 
     if (isPlainObject(value) && isPlainObject(target[key])) {
@@ -49,9 +66,11 @@ const deepRemove = (
 const isSubset = (target: any, source: any): boolean => {
   if (isPlainObject(source)) {
     if (!isPlainObject(target)) return false;
-    return Object.entries(source).every(([key, value]) =>
-      isSubset(target[key], value),
-    );
+    return Object.entries(source).every(([key, value]) => {
+      if (FORBIDDEN_MERGE_KEYS.has(key)) return false;
+      if (!Object.prototype.hasOwnProperty.call(target, key)) return false;
+      return isSubset(target[key], value);
+    });
   }
 
   if (Array.isArray(source)) {
@@ -70,7 +89,10 @@ const deepClone = <T>(obj: T): T => {
   if (obj instanceof Object) {
     const clonedObj = {} as T;
     for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
+      if (
+        !FORBIDDEN_MERGE_KEYS.has(key) &&
+        Object.prototype.hasOwnProperty.call(obj, key)
+      ) {
         clonedObj[key] = deepClone(obj[key]);
       }
     }
@@ -158,8 +180,10 @@ export const hasCommonConfigSnippet = (
   try {
     if (!snippetString.trim()) return false;
     const config = jsonString ? JSON.parse(jsonString) : {};
-    const snippet = JSON.parse(snippetString);
-    if (!isPlainObject(snippet)) return false;
+    const parsed = JSON.parse(snippetString);
+    if (!isPlainObject(parsed)) return false;
+    const snippet = sanitizeSnippet(parsed);
+    if (Object.keys(snippet).length === 0) return false;
     return isSubset(config, snippet);
   } catch (err) {
     return false;
@@ -359,41 +383,6 @@ export const setApiKeyInConfig = (
 
 // ========== TOML Config Utilities ==========
 
-export interface UpdateTomlCommonConfigResult {
-  updatedConfig: string;
-  error?: string;
-}
-
-// Write/remove common config snippet to/from TOML config (structural merge)
-export const updateTomlCommonConfigSnippet = (
-  tomlString: string,
-  snippetString: string,
-  enabled: boolean,
-): UpdateTomlCommonConfigResult => {
-  if (!snippetString.trim()) {
-    return { updatedConfig: tomlString };
-  }
-
-  try {
-    const config = parseToml(normalizeTomlText(tomlString || ""));
-    const snippet = parseToml(normalizeTomlText(snippetString));
-
-    if (enabled) {
-      const merged = deepMerge(
-        deepClone(config) as Record<string, any>,
-        deepClone(snippet) as Record<string, any>,
-      );
-      return { updatedConfig: stringifyToml(merged) };
-    } else {
-      const result = deepClone(config) as Record<string, any>;
-      deepRemove(result, snippet as Record<string, any>);
-      return { updatedConfig: stringifyToml(result) };
-    }
-  } catch (e) {
-    return { updatedConfig: tomlString, error: String(e) };
-  }
-};
-
 // Check if TOML config already contains the common config snippet (structural subset check)
 export const hasTomlCommonConfigSnippet = (
   tomlString: string,
@@ -403,7 +392,12 @@ export const hasTomlCommonConfigSnippet = (
 
   try {
     const config = parseToml(normalizeTomlText(tomlString || ""));
-    const snippet = parseToml(normalizeTomlText(snippetString));
+    const snippet = sanitizeSnippet(
+      parseToml(normalizeTomlText(snippetString)),
+    );
+    if (!isPlainObject(snippet) || Object.keys(snippet).length === 0) {
+      return false;
+    }
     return isSubset(config, snippet);
   } catch {
     // Fallback to text-based matching if TOML parsing fails
@@ -417,7 +411,10 @@ export const hasTomlCommonConfigSnippet = (
 const TOML_SECTION_HEADER_PATTERN = /^\s*\[([^\]\r\n]+)\]\s*$/;
 const TOML_BASE_URL_PATTERN =
   /^\s*base_url\s*=\s*(["'])([^"'\r\n]+)\1\s*(?:#.*)?$/;
-const TOML_MODEL_PATTERN = /^\s*model\s*=\s*(["'])([^"'\r\n]+)\1\s*(?:#.*)?$/;
+const TOML_MODEL_DOUBLE_QUOTED_PATTERN =
+  /^\s*model\s*=\s*"((?:[^"\\\r\n]|\\.)*)"\s*(?:#.*)?$/;
+const TOML_MODEL_SINGLE_QUOTED_PATTERN =
+  /^\s*model\s*=\s*'([^'\r\n]*)'\s*(?:#.*)?$/;
 const TOML_WIRE_API_PATTERN =
   /^\s*wire_api\s*=\s*(["'])([^"'\r\n]+)\1\s*(?:#.*)?$/;
 const TOML_MODEL_PROVIDER_LINE_PATTERN =
@@ -483,6 +480,43 @@ const getTopLevelEndIndex = (lines: string[]): number => {
   );
   return firstSectionIndex === -1 ? lines.length : firstSectionIndex;
 };
+
+const TOML_BASIC_STRING_ESCAPES: Record<string, string> = {
+  '"': '\\"',
+  "\\": "\\\\",
+  "\b": "\\b",
+  "\t": "\\t",
+  "\n": "\\n",
+  "\f": "\\f",
+  "\r": "\\r",
+};
+
+const tomlBasicString = (value: string): string =>
+  `"${value.replace(/["\\\u0000-\u001f]/g, (character) => {
+    const escaped = TOML_BASIC_STRING_ESCAPES[character];
+    return (
+      escaped ?? `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+    );
+  })}"`;
+
+const TOML_BASIC_STRING_UNESCAPES: Record<string, string> = {
+  '"': '"',
+  "\\": "\\",
+  b: "\b",
+  t: "\t",
+  n: "\n",
+  f: "\f",
+  r: "\r",
+};
+
+const unescapeTomlBasicString = (value: string): string =>
+  value.replace(
+    /\\(?:u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8})|(.))/g,
+    (match, u4, u8, character) => {
+      if (u4 || u8) return String.fromCodePoint(parseInt(u4 || u8, 16));
+      return TOML_BASIC_STRING_UNESCAPES[character] ?? match;
+    },
+  );
 
 const getTomlSectionInsertIndex = (
   lines: string[],
@@ -571,9 +605,9 @@ const isOtherProviderSection = (
 ): boolean =>
   Boolean(
     sectionName &&
-      sectionName !== targetSectionName &&
-      (sectionName === "model_providers" ||
-        sectionName.startsWith("model_providers.")),
+    sectionName !== targetSectionName &&
+    (sectionName === "model_providers" ||
+      sectionName.startsWith("model_providers.")),
   );
 
 const getRecoverableBaseUrlAssignments = (
@@ -625,6 +659,17 @@ export const isCodexChatWireApi = (
   wireApi: string | undefined | null,
 ): boolean =>
   CODEX_CHAT_WIRE_API_VALUES.has((wireApi ?? "").trim().toLowerCase());
+
+export const isCodexAnthropicWireApi = (
+  wireApi: string | undefined | null,
+): boolean =>
+  [
+    "anthropic",
+    "anthropic_messages",
+    "anthropic-messages",
+    "messages",
+    "claude",
+  ].includes((wireApi ?? "").trim().toLowerCase());
 
 // 从 Codex 的 TOML 配置文本中提取 wire_api（支持单/双引号）
 export const extractCodexWireApi = (
@@ -928,7 +973,22 @@ export const setCodexBaseUrl = (
 
 // ========== Codex model name utils ==========
 
-// 从 Codex 的 TOML 配置文本中提取 model 字段（支持单/双引号）
+const findTopLevelModelLineIndex = (
+  lines: string[],
+  topLevelEndIndex: number,
+): number => {
+  for (let index = 0; index < topLevelEndIndex; index += 1) {
+    if (
+      TOML_MODEL_DOUBLE_QUOTED_PATTERN.test(lines[index]) ||
+      TOML_MODEL_SINGLE_QUOTED_PATTERN.test(lines[index])
+    ) {
+      return index;
+    }
+  }
+  return -1;
+};
+
+// 从 Codex 的 TOML 配置文本中提取顶层 model 字段
 export const extractCodexModelName = (
   configText: string | undefined | null,
 ): string | undefined => {
@@ -937,13 +997,14 @@ export const extractCodexModelName = (
     const text = normalizeTomlText(raw);
     if (!text) return undefined;
     const lines = text.split("\n");
-    const topLevelMatch = findTomlAssignmentInRange(
-      lines,
-      TOML_MODEL_PATTERN,
-      0,
-      getTopLevelEndIndex(lines),
-    );
-    return topLevelMatch?.value;
+    const topLevelEndIndex = getTopLevelEndIndex(lines);
+    for (let index = 0; index < topLevelEndIndex; index += 1) {
+      const doubleQuoted = lines[index].match(TOML_MODEL_DOUBLE_QUOTED_PATTERN);
+      if (doubleQuoted) return unescapeTomlBasicString(doubleQuoted[1]);
+      const singleQuoted = lines[index].match(TOML_MODEL_SINGLE_QUOTED_PATTERN);
+      if (singleQuoted) return singleQuoted[1];
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -958,24 +1019,19 @@ export const setCodexModelName = (
   const normalizedText = normalizeTomlText(configText);
   const lines = normalizedText ? normalizedText.split("\n") : [];
   const topLevelEndIndex = getTopLevelEndIndex(lines);
-  const topLevelMatch = findTomlAssignmentInRange(
-    lines,
-    TOML_MODEL_PATTERN,
-    0,
-    topLevelEndIndex,
-  );
+  const modelLineIndex = findTopLevelModelLineIndex(lines, topLevelEndIndex);
 
   if (!trimmed) {
     if (!normalizedText) return normalizedText;
-    if (topLevelMatch) {
-      lines.splice(topLevelMatch.index, 1);
+    if (modelLineIndex !== -1) {
+      lines.splice(modelLineIndex, 1);
     }
     return finalizeTomlText(lines);
   }
 
-  const replacementLine = `model = "${trimmed}"`;
-  if (topLevelMatch) {
-    lines[topLevelMatch.index] = replacementLine;
+  const replacementLine = `model = ${tomlBasicString(trimmed)}`;
+  if (modelLineIndex !== -1) {
+    lines[modelLineIndex] = replacementLine;
     return finalizeTomlText(lines);
   }
 
