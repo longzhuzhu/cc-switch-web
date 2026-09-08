@@ -20,13 +20,16 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::OpenCode => get_opencode_dir(),
         AppType::OpenClaw => get_openclaw_dir(),
         AppType::Hermes => crate::hermes_config::get_hermes_dir(),
+        AppType::Pi => crate::pi_config::get_pi_agent_dir()?,
     };
 
     let filename = match app {
         AppType::Claude | AppType::ClaudeDesktop => "CLAUDE.md",
         AppType::Codex => "AGENTS.md",
         AppType::Gemini => "GEMINI.md",
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => "AGENTS.md",
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => "AGENTS.md",
+        AppType::Hermes => "SOUL.md",
+        AppType::Pi => "AGENTS.md",
     };
 
     Ok(base_dir.join(filename))
@@ -47,4 +50,20 @@ fn get_base_dir_with_fallback(
                 format!("Cannot determine {fallback_dir} config directory: user home not found"),
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn w3_hermes_uses_soul_prompt_file() {
+        assert_eq!(
+            prompt_file_path(&AppType::Hermes)
+                .unwrap()
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("SOUL.md")
+        );
+    }
 }

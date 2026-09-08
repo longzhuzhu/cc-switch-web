@@ -49,6 +49,7 @@ interface EndpointCandidate {
 }
 
 interface CodexFormFieldsProps {
+  appId?: "codex" | "grokbuild";
   providerId?: string;
   isXaiOauthPreset?: boolean;
   isXaiOauthAuthenticated?: boolean;
@@ -120,6 +121,10 @@ function createCatalogRow(seed?: Partial<CodexCatalogModel>): CodexCatalogRow {
     ...(seed?.baseInstructions
       ? { baseInstructions: seed.baseInstructions }
       : {}),
+    ...(seed?.reasoningLevels ? { reasoningLevels: seed.reasoningLevels } : {}),
+    ...(seed?.defaultReasoningLevel
+      ? { defaultReasoningLevel: seed.defaultReasoningLevel }
+      : {}),
   };
 }
 
@@ -138,12 +143,16 @@ function catalogRowsMatchModels(
         (model.supportsParallelToolCalls ?? null) &&
       (row.baseInstructions ?? "") === (model.baseInstructions ?? "") &&
       JSON.stringify(row.inputModalities ?? []) ===
-        JSON.stringify(model.inputModalities ?? [])
+        JSON.stringify(model.inputModalities ?? []) &&
+      JSON.stringify(row.reasoningLevels ?? []) ===
+        JSON.stringify(model.reasoningLevels ?? []) &&
+      (row.defaultReasoningLevel ?? "") === (model.defaultReasoningLevel ?? "")
     );
   });
 }
 
 export function CodexFormFields({
+  appId = "codex",
   providerId,
   isXaiOauthPreset,
   isXaiOauthAuthenticated,
@@ -196,6 +205,7 @@ export function CodexFormFields({
   );
   const lastSentModelsRef = useRef<CodexCatalogModel[]>(catalogModels);
   const isChatFormat = apiFormat === "openai_chat";
+  const isGrokBuild = appId === "grokbuild";
   const canEditCatalog = Boolean(onCatalogModelsChange);
   const hasRequestOverrides = Boolean(
     localProxyHeadersOverride.trim() || localProxyBodyOverride.trim(),
@@ -459,12 +469,20 @@ export function CodexFormFields({
             id="codexModelName"
             value={modelName}
             onChange={onModelNameChange}
-            placeholder={t("codexConfig.defaultModelPlaceholder")}
+            placeholder={t(
+              isGrokBuild
+                ? "grokBuild.defaultModelPlaceholder"
+                : "codexConfig.defaultModelPlaceholder",
+            )}
             fetchedModels={modelSuggestions}
             isLoading={isFetchingModels}
           />
           <p className="text-xs text-muted-foreground">
-            {t("codexConfig.defaultModelHint")}
+            {t(
+              isGrokBuild
+                ? "grokBuild.defaultModelHint"
+                : "codexConfig.defaultModelHint",
+            )}
           </p>
           {isModelOutsideCatalog && (
             <p className="flex flex-wrap items-center gap-x-2 text-xs leading-relaxed text-muted-foreground">
@@ -506,7 +524,11 @@ export function CodexFormFields({
           </CollapsibleTrigger>
           {!advancedExpanded && (
             <p className="mt-1 ml-1 text-xs text-muted-foreground">
-              {t("codexConfig.advancedSectionHint")}
+              {t(
+                isGrokBuild
+                  ? "grokBuild.advancedSectionHint"
+                  : "codexConfig.advancedSectionHint",
+              )}
             </p>
           )}
           <CollapsibleContent className="space-y-3 pt-3">
@@ -619,7 +641,11 @@ export function CodexFormFields({
                       {t("codexConfig.reasoningEffortToggle")}
                     </FormLabel>
                     <p className="text-xs text-muted-foreground">
-                      {t("codexConfig.reasoningEffortHint")}
+                      {t(
+                        isGrokBuild
+                          ? "grokBuild.reasoningEffortHint"
+                          : "codexConfig.reasoningEffortHint",
+                      )}
                     </p>
                   </div>
                   <Switch

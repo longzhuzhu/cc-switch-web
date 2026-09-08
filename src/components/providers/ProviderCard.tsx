@@ -22,6 +22,7 @@ import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
 import {
   providerNeedsRouting,
+  resolveCodexOfficialIdentity,
   supportsOfficialProxyTakeover,
 } from "@/utils/providerCapabilities";
 import { useProviderHealth } from "@/lib/query/failover";
@@ -160,9 +161,14 @@ export function ProviderCard({
   // OMO and OMO Slim share the same card behavior
   const isAnyOmo = isOmo || isOmoSlim;
   const handleDisableAnyOmo = isOmoSlim ? onDisableOmoSlim : onDisableOmo;
-  const isAdditiveMode = appId === "opencode" && !isAnyOmo;
+  const isAdditiveMode =
+    (appId === "opencode" && !isAnyOmo) || appId === "pi";
 
-  const { data: health } = useProviderHealth(provider.id, appId);
+  const { data: health } = useProviderHealth(
+    provider.id,
+    appId,
+    appId !== "pi",
+  );
 
   const fallbackUrlText = t("provider.notConfigured", {
     defaultValue: "未配置接口地址",
@@ -182,7 +188,10 @@ export function ProviderCard({
     return true;
   }, [provider.notes, displayUrl, fallbackUrlText]);
 
-  const usageEnabled = provider.meta?.usage_script?.enabled ?? false;
+  const isBoundCodexOfficial =
+    resolveCodexOfficialIdentity(appId, provider) === "managed_account";
+  const usageEnabled =
+    provider.meta?.usage_script?.enabled ?? isBoundCodexOfficial;
   const isOfficial = isOfficialProvider(provider, appId);
   const isCopilot =
     provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT ||
@@ -190,7 +199,8 @@ export function ProviderCard({
   const isHermesReadOnly =
     appId === "hermes" && isHermesReadOnlyProvider(provider.settingsConfig);
   const isCodexOauth =
-    provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH;
+    provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH ||
+    isBoundCodexOfficial;
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
 
   const needsRouting = providerNeedsRouting(appId, provider);
@@ -202,7 +212,10 @@ export function ProviderCard({
   // 获取用量数据以判断是否有多套餐
   // 累加模式应用（OpenCode/OpenClaw/Hermes）：使用 isInConfig 代替 isCurrent
   const shouldAutoQuery =
-    appId === "opencode" || appId === "openclaw" || appId === "hermes"
+    appId === "opencode" ||
+    appId === "openclaw" ||
+    appId === "hermes" ||
+    appId === "pi"
       ? isInConfig
       : isCurrent;
   const autoQueryInterval = shouldAutoQuery
@@ -210,7 +223,7 @@ export function ProviderCard({
     : 0;
 
   const { data: usage } = useUsageQuery(provider.id, appId, {
-    enabled: usageEnabled,
+    enabled: usageEnabled && !isBoundCodexOfficial,
     autoQueryInterval,
   });
 
@@ -261,6 +274,8 @@ export function ProviderCard({
       ? Boolean(isDefaultModel)
       : appId === "opencode"
         ? false
+        : appId === "pi"
+          ? false
         : isAutoFailoverEnabled
           ? activeProviderId === provider.id
           : isCurrent;
@@ -376,18 +391,6 @@ export function ProviderCard({
                 </span>
               )}
 
-              {provider.category === "third_party" &&
-                provider.meta?.isPartner && (
-                  <span
-                    className="text-amber-500"
-                    title={t("provider.officialPartner", {
-                      defaultValue: "官方合作伙伴",
-                    })}
-                  >
-                    ⭐
-                  </span>
-                )}
-
               {isHermesReadOnly && (
                 <span
                   className="inline-flex items-center rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-700/60 dark:text-slate-200"
@@ -434,11 +437,18 @@ export function ProviderCard({
                   isCurrent={isCurrent}
                 />
               ) : isCodexOauth ? (
-                <CodexOauthQuotaFooter
-                  meta={provider.meta}
-                  inline={true}
-                  isCurrent={isCurrent}
-                />
+                !isBoundCodexOfficial || usageEnabled ? (
+                  <CodexOauthQuotaFooter
+                    meta={provider.meta}
+                    inline={true}
+                    isCurrent={isCurrent}
+                    autoQueryInterval={
+                      isBoundCodexOfficial
+                        ? (provider.meta?.usage_script?.autoQueryInterval ?? 5)
+                        : undefined
+                    }
+                  />
+                ) : null
               ) : isXaiOauth ? (
                 <XaiOauthQuotaFooter
                   meta={provider.meta}
@@ -519,7 +529,10 @@ export function ProviderCard({
                   : undefined
               }
               onConfigureUsage={
-                isOfficial || isCopilot || isCodexOauth || isXaiOauth
+                (isOfficial && !isBoundCodexOfficial) ||
+                isCopilot ||
+                (isCodexOauth && !isBoundCodexOfficial) ||
+                isXaiOauth
                   ? undefined
                   : () => onConfigureUsage(provider)
               }

@@ -3,6 +3,7 @@
 import type { TemplateValueConfig } from "../config/claudeProviderPresets";
 import { normalizeTomlText } from "@/utils/textNormalization";
 import { parse as parseToml } from "smol-toml";
+import type { CodexApiFormat } from "@/types";
 
 const isPlainObject = (value: unknown): value is Record<string, any> => {
   return Object.prototype.toString.call(value) === "[object Object]";
@@ -538,6 +539,38 @@ const getCodexModelProviderName = (configText: string): string | undefined => {
   return providerName || undefined;
 };
 
+const isCodexUnifiedSessionProjection = (configText: string): boolean => {
+  try {
+    const parsed = parseToml(normalizeTomlText(configText)) as Record<
+      string,
+      any
+    >;
+    const custom = parsed.model_providers?.custom;
+    return (
+      parsed.model_provider === "custom" &&
+      isPlainObject(custom) &&
+      Object.keys(custom).length === 4 &&
+      custom.name === "OpenAI" &&
+      custom.requires_openai_auth === true &&
+      custom.supports_websockets === true &&
+      custom.wire_api === "responses"
+    );
+  } catch {
+    return false;
+  }
+};
+
+export const hasExplicitNonOpenAiCodexModelProvider = (
+  configText: string | undefined | null,
+): boolean => {
+  if (typeof configText !== "string") return false;
+  if (isCodexUnifiedSessionProjection(configText)) return false;
+  const providerName = getCodexModelProviderName(configText);
+  return Boolean(
+    providerName && providerName.trim().toLowerCase() !== "openai",
+  );
+};
+
 const getCodexProviderSectionName = (
   configText: string,
 ): string | undefined => {
@@ -670,6 +703,18 @@ export const isCodexAnthropicWireApi = (
     "messages",
     "claude",
   ].includes((wireApi ?? "").trim().toLowerCase());
+
+export const codexApiFormatFromWireApi = (
+  wireApi: string | undefined | null,
+): CodexApiFormat | undefined => {
+  if (isCodexChatWireApi(wireApi)) return "openai_chat";
+  if (isCodexAnthropicWireApi(wireApi)) return undefined;
+  return ["responses", "openai_responses", "openai-responses"].includes(
+    (wireApi ?? "").trim().toLowerCase(),
+  )
+    ? "openai_responses"
+    : undefined;
+};
 
 // 从 Codex 的 TOML 配置文本中提取 wire_api（支持单/双引号）
 export const extractCodexWireApi = (
@@ -842,6 +887,32 @@ export const extractCodexBaseUrl = (
     return fallbackAssignments.length === 1
       ? fallbackAssignments[0].value
       : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const extractCodexExperimentalBearerToken = (
+  configText: string | undefined | null,
+): string | undefined => {
+  try {
+    const text = normalizeTomlText(
+      typeof configText === "string" ? configText : "",
+    );
+    if (!text) return undefined;
+    const parsed = parseToml(text) as Record<string, any>;
+    const providerName =
+      typeof parsed.model_provider === "string"
+        ? parsed.model_provider.trim()
+        : undefined;
+    const providerToken = providerName
+      ? parsed.model_providers?.[providerName]?.experimental_bearer_token
+      : undefined;
+    const value =
+      typeof providerToken === "string"
+        ? providerToken
+        : parsed.experimental_bearer_token;
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
   } catch {
     return undefined;
   }

@@ -4,6 +4,57 @@
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-18
+
+本版本完成 `40cac1a6..fd14f9c4` 共 24 个上游提交的 Web 适配，重点补齐 Provider 模型能力、Codex OAuth 生命周期、Hosted WebSearch 与 Windows CLI 安全检测，并修复第三方 Provider 修改配置后无法检索旧会话的问题。
+
+### 新增
+
+- 同步 Claude、Claude Desktop、Codex、OpenCode、OpenClaw 与 Hermes 的最新 Provider 预设，补齐千帆 Token Plan、Kimi、StepFun、SiliconFlow、ModelScope、OpenCode Zen 等模型目录与逐模型 reasoning 档位。
+- Codex OAuth 托管账号补齐 `id_token`、token 获取时间、重新认证状态、refresh token 采纳与持久化；Follow Login Provider 按配置内容识别任意别名，不再依赖固定 Provider ID。
+- 绑定 Codex OAuth 账号的 Provider 支持独立开启用量查询和配置自动轮询间隔；`0` 表示关闭自动轮询。
+- 完整迁移 Anthropic 与 Responses 之间的 Hosted WebSearch，包括 `server_tool_use`、搜索结果、citation/source、`max_uses`、流式事件和多轮回放；Alpha Search 端点支持安全透传。
+
+### 改进
+
+- Provider 切换、编辑与 Routing 启停按应用串行执行；托管 Codex 切换使用 auth/config/catalog/marker 四文件事务快照，Routing 恢复时动态注入最新认证。
+- Windows CLI 检测合并进程、用户注册表和机器注册表 PATH，补扫独立安装目录与常见包管理器目录，过滤 WindowsApps App Execution Alias，并兼容非 UTF-8 控制台输出。
+- CLI 定位与版本探测统一设置 10 秒超时；Windows 超时终止进程树，非 Windows 终止进程组，Web 请求线程不再被同步探测阻塞。Windows 检测仅处理原生 CLI，不新增 WSL 探测。
+- Provider 表单修复 IME 组合输入提交时序；Usage 趋势图使用完整日期作为 key，跨年数据不再冲突；Grok Build 使用独立模型提示。
+- DeepSeek `prompt_cache_hit_tokens`、Responses usage 与最新模型定价完成对齐。
+
+### 修复
+
+- Codex 第三方 Provider 统一使用稳定的 `custom` 会话桶；启动时从活跃会话、归档会话和 state DB 自动发现旧 `model_provider` 桶，备份后迁移 JSONL、SQLite 索引与旧 Provider 模板，避免修改 `config.toml` 或切换 Provider 后检索不到历史会话。官方 `openai` 历史仍由“统一 Codex 会话历史”开关单独控制。
+- Codex 会话管理补充扫描 `archived_sessions`，归档会话可正常浏览和删除。
+- OAuth 登录完成后会取消旧 device flow，防止过期登录流程复活并覆盖新账号状态。
+- 修复预设目录、模型定价与 Web 相对 API 地址变化后测试断言未同步的问题；补齐 App 集成测试所需的 Profile、环境冲突与 Skill mock。
+- Windows 无符号链接权限时仅对系统错误码 1314 受控跳过对应测试；OpenClaw 临时 HOME 测试接入全局串行锁，避免并发覆盖环境变量。
+- App 集成测试在收集阶段加载完整模块，使默认 5 秒超时只衡量真实交互流程，不再因 Vite 并发转换耗时随机失败。
+
+### 验证
+
+- TypeScript 类型检查通过。
+- 前端 91 个测试文件共 512 项通过、2 项跳过；App 集成流在默认 5 秒超时下连续全量验证通过。
+- Rust 1663 项通过、3 项忽略、0 失败。
+
+## [2.0.0] - 2026-08-16
+
+本版本汇总 `v1.0.0` 以来的变更，完成 Web 版上游能力追平、数据安全加固与浏览器体验收口。Web 数据现与桌面端完全隔离，并可从 `~/.cc-switch/` 只读迁移到 `~/.cc-switch-web/`。
+
+### 新增
+
+- Pi 成为完整应用目标，接入显式 Provider、原生 Prompts、Skills、Sessions 与 JSONL Usage；`/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管继续由 Pi 原生管理。
+- 数据库升级到 Web Schema v14，以持久去重账本保证 Pi 会话文件重写、fork、源文件删除恢复及明细归档后仍不会重复计费。
+- Codex 模型目录补齐 DeepSeek、火山 Agent Plan、腾讯混元 TokenHub 的 native Responses，以及模型级推理档位和最终定价。
+
+### 改进
+
+- Web 数据默认迁入独立的 `~/.cc-switch-web/`；首次启动可从 `~/.cc-switch/` 只读迁移，设置页也支持先备份 Web 数据后手动重新迁移，桌面端数据库不再与 Web 共用或被 Web 原地升级。
+- Provider 目录和表单同步上游最终状态，补齐 PPIO、JieKou AI、XycAi 与火山双 Plan，移除下架预设和合作星标，并统一模型搜索、IME 输入与窄屏布局。
+- MCP、Prompts、Skills、Sessions、Usage 与 Auth Center 的管理体验完成收口，支持搜索、批量启停、导航溢出、浏览器可见性和 Pi 数据筛选。
+- CI 由 Corepack 读取 `packageManager` 中的 pnpm 版本，并补全 Web workflow 路径过滤；纯文档改动不触发前后端重验证。
+
 ### 安全
 
 - 新增可选的 `CC_SWITCH_WEB_ACCESS_KEY` Web 访问密钥；服务端拒绝短于 16 字符的配置，以固定长度摘要比较 Bearer 密钥，并统一保护除健康检查和认证接口外的所有 API。
@@ -11,9 +62,18 @@
 
 ### 修复
 
+- 修复 SQL 备份/恢复、WebDAV 同步与 Windows/WSL 原子替换边界，失败时不发布半成品数据库或 Skills 状态。
+- 修复 Codex/Claude Desktop/Grok Build 会话用量去重、官方登录恢复、Chat 工具调用失败语义、代理响应边界及 Kimi/Zhipu 特例。
+- Skills、Prompts、OMO 和 Codex catalog 写入改为保留未知字段、注释与用户所有权，并拒绝不安全的并发覆盖。
 - Web API 默认改为同源 `/api`，Vite 开发环境同步代理到本地 Rust 服务；修复浏览器远程访问 Docker/Linux 服务时错误请求浏览器自身 `127.0.0.1:8890`，导致欢迎弹窗无法确认的问题。
 - 欢迎弹窗仅在设置保存成功后关闭，保存失败会显示可见错误，不再静默失败。
 - 移动端将应用切换和上下文工具收进可访问菜单，修复窄屏下 Skills、提示词、会话、MCP 与新增供应商按钮被裁切且无法操作的问题。
+- Docker 构建在冻结安装依赖前同步复制 `pnpm-workspace.yaml`，避免 workspace overrides 与 lockfile 配置不一致导致 Linux 打包和 GHCR 发布失败。
+- Release 汇总仅下载 `cc-switch-web-*` 正式产物，排除 Docker Buildx 自动生成的 build record，避免无关 artifact 下载失败阻断发布。
+
+### 文档
+
+- 快速运行改为优先推荐 GitHub Release 预编译包或 GHCR Docker 镜像，并列明 Windows x64、macOS universal、Linux x64 与 Linux ARM64 产物；源码构建移入开发章节，同时修正当前仓库链接。
 
 ### 发布
 

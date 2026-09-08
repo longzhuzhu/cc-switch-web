@@ -22,10 +22,18 @@ import type {
   OpenClawWriteOutcome,
 } from "@/types";
 import type { SessionMessage, SessionMeta } from "@/types";
+import type {
+  PiCurrentState,
+  PiPromptFileKind,
+  PiPromptFileSnapshot,
+  PiPromptTemplate,
+  PiSessionDiscovery,
+} from "@/lib/api/pi";
 import type { AppId } from "@/lib/api";
 import type { Prompt } from "@/lib/api";
 import type {
   BackupEntry,
+  CcSwitchMigrationResult,
   ConfigDownloadResult,
   ConfigTransferResult,
   LogConfig,
@@ -850,6 +858,12 @@ export async function fetchWebProviderModels(
   );
 }
 
+export async function getWebOpenCodeModels(): Promise<
+  import("@/lib/api/model-fetch").OpenCodeModelRef[]
+> {
+  return requestJson("/api/opencode/models");
+}
+
 /// 取后端进程能读到的 Windows 环境变量白名单映射，供前端展开 %USERPROFILE% 类占位符。
 export async function fetchWebWindowsEnvPaths(): Promise<
   Record<string, string>
@@ -1469,6 +1483,13 @@ export async function importWebConfigUpload(
   const formData = new FormData();
   formData.append("file", file, file.name);
   return requestFormData<ConfigTransferResult>("/api/config/import", formData);
+}
+
+export async function migrateWebFromCcSwitch(): Promise<CcSwitchMigrationResult> {
+  return requestWithBody<CcSwitchMigrationResult>(
+    "/api/settings/migrate-from-cc-switch",
+    "POST",
+  );
 }
 
 export async function getWebRectifierConfig(): Promise<RectifierConfig> {
@@ -2183,6 +2204,61 @@ export async function deleteWebSessions(
     items,
   );
 }
+
+export const getWebPiState = (): Promise<PiCurrentState> =>
+  requestJson<PiCurrentState>("/api/pi/state");
+
+export const getWebPiPromptFile = (
+  kind: PiPromptFileKind,
+): Promise<PiPromptFileSnapshot> =>
+  requestJson<PiPromptFileSnapshot>(`/api/pi/prompt-files/${kind}`);
+
+export const saveWebPiPromptFile = (
+  kind: PiPromptFileKind,
+  expectedRevision: string,
+  content: string,
+): Promise<PiPromptFileSnapshot> =>
+  requestWithBody<PiPromptFileSnapshot>(
+    `/api/pi/prompt-files/${kind}`,
+    "PUT",
+    { expectedRevision, content },
+  );
+
+export const deleteWebPiPromptFile = (
+  kind: PiPromptFileKind,
+  expectedRevision: string,
+): Promise<boolean> =>
+  requestWithBody<boolean>(`/api/pi/prompt-files/${kind}`, "DELETE", {
+    expectedRevision,
+  });
+
+export const listWebPiPromptTemplates = (): Promise<PiPromptTemplate[]> =>
+  requestJson<PiPromptTemplate[]>("/api/pi/prompt-templates");
+
+export const saveWebPiPromptTemplate = (
+  slug: string,
+  originalSlug: string | undefined,
+  expectedRevision: string,
+  content: string,
+): Promise<PiPromptTemplate> =>
+  requestWithBody<PiPromptTemplate>(
+    `/api/pi/prompt-templates/${encodeURIComponent(slug)}`,
+    "PUT",
+    { originalSlug, expectedRevision, content },
+  );
+
+export const deleteWebPiPromptTemplate = (
+  slug: string,
+  expectedRevision: string,
+): Promise<boolean> =>
+  requestWithBody<boolean>(
+    `/api/pi/prompt-templates/${encodeURIComponent(slug)}`,
+    "DELETE",
+    { expectedRevision },
+  );
+
+export const getWebPiSessionDiscovery = (): Promise<PiSessionDiscovery> =>
+  requestJson<PiSessionDiscovery>("/api/pi/session-discovery");
 
 export async function getWebUsageSummary(
   startDate?: number,

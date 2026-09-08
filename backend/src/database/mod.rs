@@ -24,6 +24,7 @@
 //! ```
 
 pub(crate) mod backup;
+mod cc_switch_migration;
 mod dao;
 #[cfg(test)]
 mod migration;
@@ -45,7 +46,7 @@ use std::sync::Mutex;
 
 /// 当前 Schema 版本号
 /// 每次修改表结构时递增，并在 schema.rs 中添加相应的迁移逻辑
-pub(crate) const SCHEMA_VERSION: i32 = 13;
+pub(crate) const SCHEMA_VERSION: i32 = 14;
 
 /// Claude Desktop 官方预设供应商 ID（恢复官方配置时识别用）
 pub(crate) const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID: &str = "claude-desktop-official";
@@ -93,8 +94,9 @@ fn register_db_change_hook(conn: &Connection) {
 impl Database {
     /// 初始化数据库连接并创建表
     ///
-    /// 数据库文件位于 `~/.cc-switch/cc-switch.db`
+    /// 数据库文件位于 `~/.cc-switch-web/cc-switch.db`
     pub fn init() -> Result<Self, AppError> {
+        cc_switch_migration::migrate_default_data_dir_if_needed()?;
         let db_path = get_app_config_dir().join("cc-switch.db");
         let db_exists = db_path.exists();
 

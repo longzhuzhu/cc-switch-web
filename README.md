@@ -15,65 +15,83 @@ CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web �
 
 ## 如何使用
 
-CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude、Codex、Gemini、OpenClaw 等多个 AI 编码工具的供应商配置，一键切换。
+CC Switch Web 在本地运行 Rust 服务，可在浏览器中管理 Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes 和 Pi 等 AI 编码工具的供应商配置并一键切换。
 
 当前 Web 分支已具备的能力：
 
-- Claude、Codex、Gemini、OpenClaw 的供应商模型拉取
+- Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes 和 Pi 的 Provider 管理
+- Pi 的 Provider、Prompts、Skills、Sessions 与 Usage；Pi `/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管明确由 Pi 原生管理
 - Claude、Codex、Gemini 的官方订阅额度展示
 - ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
+- Claude → Codex 路由支持内置 WebSearch，Codex 路由支持 Alpha Search 透传
 - 环境变量冲突检测与清理入口
 - 通过 `?deeplink=...` 或手动输入 `ccswitch://...` 导入 Deep Link
 - About 页面可直接打开 GitHub 最新发布页
 - Provider、Settings、Skills、Sessions 已统一为工作台式界面
 
+Pi 的配置所有权、同步规则、模型能力和界面约束见 [Pi 原生契约与实现边界](docs/pi-native-contract-zh.md) 及同目录的 Pi 专题文档。
+
 ### 快速运行
 
-1. 构建嵌入前端资源的 release 二进制：
+#### 方式一：Release 预编译包
 
-   ```bash
-   pnpm install --frozen-lockfile
-   pnpm build
-   ```
+1. 打开 [GitHub Releases](https://github.com/zuoliangyu/cc-switch-web/releases/latest)，按系统下载最新的预编译包：
 
-   （需要 Rust `1.88+`；详细构建/开发选项见下方「开发」一节）
+   | 系统 | 下载文件 |
+   | --- | --- |
+   | Windows x64 | `cc-switch-web-windows-x64.zip` |
+   | macOS（Intel / Apple Silicon） | `cc-switch-web-macos-universal.zip` |
+   | Linux x64 | `cc-switch-web-linux-x64.tar.gz` |
+   | Linux ARM64 | `cc-switch-web-linux-arm64.tar.gz` |
 
-2. 运行二进制，然后打开终端中打印出的最终地址：
-
-   ```bash
-   # Linux/macOS
-   ./backend/target/release/cc-switch-web --backend-port 8890
-   ```
+2. 解压，进入包含二进制的目录后直接运行：
 
    ```powershell
    # Windows
-   .\backend\target\release\cc-switch-web.exe -b 8890
+   .\cc-switch-web.exe
+   ```
+
+   ```bash
+   # Linux/macOS
+   chmod +x ./cc-switch-web
+   ./cc-switch-web
    ```
 
    发布态下前端静态资源与 Web API 共用同一个端口，默认首选 `8890`。如端口被占用或无权限绑定，程序会自动尝试后续端口并输出最终监听地址。
 
-3. 在浏览器打开终端输出的地址即可使用。
+3. 在浏览器打开终端输出的地址即可使用。需要 Docker、systemd 或源码构建时，参见下方「开发」一节。
 
-4. 数据存放位置：本地 Web 服务模式下，数据默认写入 CC Switch 的本地配置根目录：
+4. 数据存放位置：本地 Web 服务模式下，Web 数据默认写入独立目录：
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
+   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储。首次启动且该目录不存在时，如果检测到 `~/.cc-switch/cc-switch.db`，会从中只读迁移；源数据库不会被 Web 修改。如果未检测到 CC Switch 数据库，则跳过迁移并初始化一套全新的 Web 数据。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
 
-> 想用 Docker 跑、或在无桌面服务器上长期托管，见下方「开发」中的 Docker 运行与 Linux systemd 示例。
+#### 方式二：Docker
+
+```bash
+docker pull ghcr.io/zuoliangyu/cc-switch-web:latest
+docker run -d --name cc-switch-web \
+  -p 127.0.0.1:8890:8890 \
+  -v cc-switch-web-data:/data \
+  --restart unless-stopped \
+  ghcr.io/zuoliangyu/cc-switch-web:latest
+```
+
+打开 [http://localhost:8890](http://localhost:8890) 即可使用，Web 数据会持久化在 `cc-switch-web-data` volume 中；新 volume 会直接初始化全新 Web 数据。当前 GHCR 运行镜像仅提供 `linux/amd64`，ARM64 请使用上方 Release 包。容器默认只管理 volume 内的数据；如需迁移 CC Switch 数据、管理宿主机上的 CLI 配置，或部署到局域网/公网，请参见下方「Docker 运行」「访问密钥」和「Linux systemd 示例」。
 
 ## 当前版本
 
-当前仓库版本为 `1.0.0`。逐版变更明细、每条修复对应的上游 commit、被延后到独立任务的项，见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-3.14-2026-05.md`。
+当前仓库版本为 `2.1.0`。本版本补齐上游 Provider 与 reasoning 能力、Codex OAuth 生命周期、Hosted WebSearch、Windows 原生 CLI 安全检测，并修复第三方 Provider 历史会话迁移与全量测试稳定性。逐版变更明细和本轮上游迁移记录见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-40cac1a6-2026-08.md`。
 
 仓库以 `0.1.0` 作为 Web 分支的初始发布基线，此前继承的历史发布记录已移除，更早历史请以上游项目为准。
 
 ## 与上游项目的关系
 
 - 上游项目：[cc-switch](https://github.com/farion1231/cc-switch)
-- 当前 Web 仓库：[zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
+- 当前 Web 仓库：[zuoliangyu/cc-switch-web](https://github.com/zuoliangyu/cc-switch-web)
 - 作者：左岚（[哔哩哔哩](https://space.bilibili.com/27619688)）
 - 当前仓库聚焦于 CC Switch 的 Web 分支方向
 - 如需查看原始 CC Switch 项目或上游发布信息，请直接访问上游仓库
@@ -148,7 +166,7 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
    - Rust 服务终端会打印 Web API 的 method/path/status/耗时
    - 如需手动覆盖，可设置 `VITE_RUNTIME_DEBUG_REQUESTS=0|1` 与 `CC_SWITCH_WEB_DEBUG_API=0|1`
 
-### 本地 Release 二进制
+### 从源码构建 Release 二进制
 
 1. 构建嵌入前端资源的 release 二进制：
 
@@ -187,13 +205,13 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
 
    如端口被占用、被系统排除或无权限绑定，程序会自动尝试后续端口并输出最终监听地址。
 
-4. 在本地 Web 服务模式下，CC Switch Web 自身的数据默认写入 CC Switch 使用的本地配置根目录：
+4. 在本地 Web 服务模式下，CC Switch Web 自身的数据默认写入独立目录：
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
+   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。首次启动且该目录不存在时，会从 `~/.cc-switch` 只读迁移；设置页也可手动重新迁移并先备份 Web 数据。CC Switch 源数据库不会被 Web 修改。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
 
 ### 访问密钥（可选）
 
@@ -332,7 +350,7 @@ docker run -d --name cc-switch-web \
    docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
    ```
 
-   当前示例文件主要面向 Linux 服务器，默认使用 `$HOME` 下的 `.claude`、`.codex`、`.gemini`、`.config/opencode`、`.config/openclaw` 目录。
+   当前示例文件主要面向 Linux 服务器，默认使用 `$HOME` 下的 `.claude`、`.codex`、`.gemini`、`.config/opencode`、`.config/openclaw` 目录。如需首次启动或手动迁移 CC Switch 数据，请取消注释 `${HOME}/.cc-switch:/data/.cc-switch:ro`；迁移来源在容器内仍为只读。
 
 ### Docker 内导出 Linux 包
 

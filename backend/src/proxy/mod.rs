@@ -5,6 +5,7 @@
 pub(crate) mod body_filter;
 pub(crate) mod cache_injector;
 pub(crate) mod circuit_breaker;
+pub(crate) mod content_encoding;
 pub(crate) mod error;
 pub(crate) mod error_mapper;
 pub(crate) mod failover_switch;
@@ -25,6 +26,7 @@ pub(crate) mod response_processor;
 pub(crate) mod server;
 mod session;
 pub(crate) mod sse;
+pub(crate) mod switch_lock;
 pub(crate) mod thinking_budget_rectifier;
 pub(crate) mod thinking_optimizer;
 pub(crate) mod thinking_rectifier;

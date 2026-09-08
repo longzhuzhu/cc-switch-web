@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::error::AppError;
 
@@ -13,7 +13,7 @@ use crate::error::AppError;
 /// - `dirs::home_dir()` 在 Windows 上使用 `SHGetKnownFolderPath(FOLDERID_Profile)`，
 ///   返回的是真实用户目录（类似 `C:\\Users\\Alice`），与 v3.10.2 行为一致。
 /// - 不要直接使用 `HOME` 环境变量：它可能由 Git/Cygwin/MSYS 等第三方工具注入，
-///   且不一定等于用户目录，可能导致 `.cc-switch/cc-switch.db` 路径变化，从而“看起来像数据丢失”。
+///   且不一定等于用户目录，可能导致 `.cc-switch-web/cc-switch.db` 路径变化，从而“看起来像数据丢失”。
 ///
 /// ## 测试隔离
 ///
@@ -31,6 +31,43 @@ pub fn get_home_dir() -> PathBuf {
         log::warn!("无法获取用户主目录，回退到当前目录");
         PathBuf::from(".")
     })
+}
+
+fn normalize_path_lexically(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push(component.as_os_str());
+                }
+            }
+            Component::Normal(part) => normalized.push(part),
+            Component::RootDir | Component::Prefix(_) => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
+fn comparable_path_key(path: &Path) -> String {
+    let mut key = normalize_path_lexically(path).to_string_lossy().to_string();
+    #[cfg(windows)]
+    {
+        key = key.replace('\\', "/");
+        key.make_ascii_lowercase();
+    }
+    while key.len() > 1 && key.ends_with('/') {
+        key.pop();
+    }
+    key
+}
+
+/// 仅做词法路径边界判断；实际打开文件前仍需 canonicalize 后再次校验。
+pub(crate) fn path_is_within(base: &Path, path: &Path) -> bool {
+    let base_key = comparable_path_key(base);
+    let path_key = comparable_path_key(path);
+    path_key == base_key || path_key.starts_with(&format!("{base_key}/"))
 }
 
 /// 获取 Claude Code 配置目录路径
@@ -91,37 +128,25 @@ pub fn get_claude_settings_path() -> PathBuf {
 }
 
 pub fn get_default_app_config_dir() -> PathBuf {
-    let default_dir = get_home_dir().join(".cc-switch");
-
-    // 兼容 v3.10.3：当用户环境存在 `HOME` 且与真实用户目录不同，
-    // v3.10.3 可能在 `HOME/.cc-switch/` 下创建/使用了数据库。
-    // 这里仅在“默认位置没有数据库”时回退到旧位置，避免再次出现“供应商消失”问题，
-    // 同时也避免新安装因为 `HOME` 被设置而写入非预期路径。
-    #[cfg(windows)]
-    {
-        let default_db = default_dir.join("cc-switch.db");
-        if !default_db.exists() {
-            if let Ok(home_env) = std::env::var("HOME") {
-                let trimmed = home_env.trim();
-                if !trimmed.is_empty() {
-                    let legacy_dir = PathBuf::from(trimmed).join(".cc-switch");
-                    if legacy_dir.join("cc-switch.db").exists() {
-                        log::info!(
-                            "Detected v3.10.3 legacy database at {}, using it instead of {}",
-                            legacy_dir.display(),
-                            default_dir.display()
-                        );
-                        return legacy_dir;
-                    }
-                }
-            }
-        }
-    }
-
-    default_dir
+    get_home_dir().join(".cc-switch-web")
 }
 
-/// 获取应用配置目录路径 (~/.cc-switch)
+pub(crate) fn get_cc_switch_source_dir() -> PathBuf {
+    get_home_dir().join(".cc-switch")
+}
+
+pub(crate) fn is_cc_switch_source_path(path: &Path) -> bool {
+    let source = get_cc_switch_source_dir();
+    if path_is_within(&source, path) {
+        return true;
+    }
+    match (fs::canonicalize(&source), fs::canonicalize(path)) {
+        (Ok(source), Ok(path)) => path_is_within(&source, &path),
+        _ => false,
+    }
+}
+
+/// 获取应用配置目录路径 (~/.cc-switch-web)
 pub fn get_app_config_dir() -> PathBuf {
     if let Some(custom) = crate::app_store::get_app_config_dir_override() {
         return custom;
@@ -134,6 +159,17 @@ pub fn get_app_config_dir() -> PathBuf {
 #[cfg(test)]
 pub fn get_app_config_path() -> PathBuf {
     get_app_config_dir().join("config.json")
+}
+
+/// 清理供应商名称，确保可安全用于文件名。
+pub fn sanitize_provider_name(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '-',
+            _ => c,
+        })
+        .collect::<String>()
+        .to_lowercase()
 }
 
 /// 读取 JSON 配置文件
@@ -165,8 +201,11 @@ fn sort_json_keys(value: &Value) -> Value {
     }
 }
 
-/// 写入 JSON 配置文件（键按字母排序，确保确定性输出）
-pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), AppError> {
+/// 写入 JSON 配置文件并返回实际写入的字节。
+pub fn write_json_file_with_contents<T: Serialize>(
+    path: &Path,
+    data: &T,
+) -> Result<Vec<u8>, AppError> {
     // 确保目录存在
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
@@ -177,7 +216,14 @@ pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), AppErr
     let json = serde_json::to_string_pretty(&sorted_value)
         .map_err(|e| AppError::JsonSerialize { source: e })?;
 
-    atomic_write(path, json.as_bytes())
+    let contents = json.into_bytes();
+    atomic_write(path, &contents)?;
+    Ok(contents)
+}
+
+/// 写入 JSON 配置文件（键按字母排序，确保确定性输出）
+pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), AppError> {
+    write_json_file_with_contents(path, data).map(|_| ())
 }
 
 /// 原子写入文本文件（用于 TOML/纯文本）
@@ -190,6 +236,21 @@ pub fn write_text_file(path: &Path, data: &str) -> Result<(), AppError> {
 
 /// 原子写入：写入临时文件后 rename 替换，避免半写状态
 pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), AppError> {
+    atomic_write_with_unix_mode(path, data, None)
+}
+
+/// 原子写入包含凭据的文件。Unix 上固定使用 0600。
+pub fn atomic_write_private(path: &Path, data: &[u8]) -> Result<(), AppError> {
+    atomic_write_with_unix_mode(path, data, Some(0o600))
+}
+
+fn atomic_write_with_unix_mode(
+    path: &Path,
+    data: &[u8],
+    unix_mode: Option<u32>,
+) -> Result<(), AppError> {
+    #[cfg(not(unix))]
+    let _ = unix_mode;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
     }
@@ -218,7 +279,10 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), AppError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = fs::metadata(path) {
+        if let Some(mode) = unix_mode {
+            fs::set_permissions(&tmp, fs::Permissions::from_mode(mode))
+                .map_err(|e| AppError::io(&tmp, e))?;
+        } else if let Ok(meta) = fs::metadata(path) {
             let perm = meta.permissions().mode();
             let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(perm));
         }
@@ -226,14 +290,77 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), AppError> {
 
     #[cfg(windows)]
     {
-        // Windows 上 rename 目标存在会失败，先移除再重命名（尽量接近原子性）
-        if path.exists() {
-            let _ = fs::remove_file(path);
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::{
+            Foundation::ERROR_NOT_SUPPORTED, Storage::FileSystem::ReplaceFileW,
+        };
+
+        let replaced: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let replacement: Vec<u16> = tmp
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut completed = false;
+        let mut last_error = None;
+
+        for _ in 0..3 {
+            // SAFETY: both buffers are NUL-terminated UTF-16 and remain alive for the call.
+            let replaced_ok = unsafe {
+                ReplaceFileW(
+                    replaced.as_ptr(),
+                    replacement.as_ptr(),
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                )
+            };
+            if replaced_ok != 0 {
+                completed = true;
+                break;
+            }
+
+            let replace_error = std::io::Error::last_os_error();
+            let replace_not_supported =
+                replace_error.raw_os_error() == Some(ERROR_NOT_SUPPORTED as i32);
+            if replace_error.kind() != std::io::ErrorKind::NotFound && !replace_not_supported {
+                last_error = Some(replace_error);
+                break;
+            }
+
+            match fs::rename(&tmp, path) {
+                Ok(()) => {
+                    completed = true;
+                    break;
+                }
+                Err(source)
+                    if matches!(
+                        source.kind(),
+                        std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::PermissionDenied
+                    ) =>
+                {
+                    last_error = Some(source);
+                }
+                Err(source) => {
+                    last_error = Some(source);
+                    break;
+                }
+            }
         }
-        fs::rename(&tmp, path).map_err(|e| AppError::IoContext {
-            context: format!("原子替换失败: {} -> {}", tmp.display(), path.display()),
-            source: e,
-        })?;
+
+        if !completed {
+            let source = last_error.unwrap_or_else(std::io::Error::last_os_error);
+            let _ = fs::remove_file(&tmp);
+            return Err(AppError::IoContext {
+                context: format!("原子替换失败: {} -> {}", tmp.display(), path.display()),
+                source,
+            });
+        }
     }
 
     #[cfg(not(windows))]
@@ -249,6 +376,32 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn atomic_write_replaces_existing_file_without_temp_residue() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("atomic-write-contract.json");
+        std::fs::write(&path, b"old contents").unwrap();
+
+        atomic_write(&path, b"new contents").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"new contents");
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("atomic-write-contract.json.tmp.")
+            })
+            .map(|entry| entry.path())
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temporary files remain: {leftovers:?}"
+        );
+    }
 
     #[test]
     fn derive_mcp_path_from_override_preserves_folder_name() {

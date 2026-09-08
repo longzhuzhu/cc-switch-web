@@ -152,7 +152,8 @@ export type CodexChatEffortValueMode =
   | "passthrough"
   | "low_high"
   | "deepseek"
-  | "openrouter";
+  | "openrouter"
+  | "zen";
 
 export type CodexChatReasoningOutputFormat =
   | "auto"
@@ -266,6 +267,8 @@ export interface CodexCatalogModel {
   supportsParallelToolCalls?: boolean;
   inputModalities?: string[];
   baseInstructions?: string;
+  reasoningLevels?: string[];
+  defaultReasoningLevel?: string;
 }
 
 // Claude 认证字段类型
@@ -281,6 +284,7 @@ export interface VisibleApps {
   opencode: boolean;
   openclaw: boolean;
   hermes: boolean;
+  pi: boolean;
 }
 
 // WebDAV 同步状态
@@ -322,7 +326,7 @@ export interface RemoteSnapshotInfo {
 }
 
 // 应用设置类型（用于设置页与本地 Web API）
-// 存储在本地 ~/.cc-switch/settings.json，不随数据库同步
+// 存储在本地 ~/.cc-switch-web/settings.json，不随数据库同步
 export interface Settings {
   // ===== 设备级 UI 设置 =====
   // 是否启用主页面本地代理功能（默认关闭）
@@ -376,6 +380,8 @@ export interface Settings {
   openclawConfigDir?: string;
   // 覆盖 Hermes 配置目录（可选）
   hermesConfigDir?: string;
+  // 覆盖 Pi Agent 配置目录（可选）
+  piConfigDir?: string;
 
   // ===== 当前供应商 ID（设备级）=====
   // 当前 Claude 供应商 ID（优先于数据库 is_current）

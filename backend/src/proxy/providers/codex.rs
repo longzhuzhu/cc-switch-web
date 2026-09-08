@@ -14,10 +14,91 @@ use toml::Value as TomlValue;
 /// Codex 适配器
 pub struct CodexAdapter;
 
-/// 只有固定的内置官方条目可以复用 Codex 客户端携带的 ChatGPT 登录。
+fn has_explicit_codex_third_party_upstream(provider: &Provider) -> bool {
+    let non_empty_setting = |key: &str| {
+        provider
+            .settings_config
+            .get(key)
+            .and_then(JsonValue::as_str)
+            .is_some_and(|value| !value.trim().is_empty())
+    };
+    let config = provider
+        .settings_config
+        .get("config")
+        .and_then(JsonValue::as_str)
+        .map(|text| {
+            crate::codex_config::strip_codex_unified_session_bucket(text)
+                .unwrap_or_else(|_| text.to_string())
+        });
+    let config = config.as_deref();
+
+    ["baseUrl", "baseURL", "base_url"]
+        .into_iter()
+        .any(non_empty_setting)
+        || config
+            .and_then(crate::codex_config::extract_codex_experimental_bearer_token)
+            .is_some()
+        || config
+            .and_then(crate::codex_config::extract_codex_base_url)
+            .is_some()
+        || config
+            .and_then(|text| text.parse::<TomlValue>().ok())
+            .and_then(|document| {
+                document
+                    .get("model_provider")
+                    .and_then(TomlValue::as_str)
+                    .map(str::trim)
+                    .filter(|provider_id| !provider_id.is_empty())
+                    .map(str::to_string)
+            })
+            .is_some_and(|provider_id| !provider_id.eq_ignore_ascii_case("openai"))
+}
+
+/// 判断该 Codex 条目是否沿用 ChatGPT 登录。
+///
+/// 除固定内置条目外，也允许用户创建多个官方 Follow Login 别名；内容上明确配置
+/// 第三方上游或 API Key 的条目不会被误判。
 pub fn is_codex_official_provider(provider: &Provider) -> bool {
-    provider.id == crate::database::CODEX_OFFICIAL_PROVIDER_ID
-        && provider.category.as_deref() == Some("official")
+    let is_fixed_official_id = provider.id == crate::database::CODEX_OFFICIAL_PROVIDER_ID;
+    if is_fixed_official_id && provider.category.as_deref() == Some("official") {
+        return true;
+    }
+
+    let has_auth_object = provider
+        .settings_config
+        .get("auth")
+        .is_some_and(JsonValue::is_object);
+    let has_valid_config_shape = provider
+        .settings_config
+        .get("config")
+        .is_none_or(|config| config.is_null() || config.is_string());
+    if !has_auth_object || !has_valid_config_shape {
+        return false;
+    }
+    if has_explicit_codex_third_party_upstream(provider) {
+        return false;
+    }
+
+    let has_managed_account = provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.managed_account_id_for("codex_oauth"))
+        .is_some_and(|account_id| !account_id.trim().is_empty());
+    if has_managed_account {
+        return true;
+    }
+
+    let has_stored_api_key = provider
+        .settings_config
+        .get("auth")
+        .and_then(|auth| auth.get("OPENAI_API_KEY"))
+        .and_then(JsonValue::as_str)
+        .is_some_and(|key| !key.trim().is_empty());
+    if has_stored_api_key {
+        return false;
+    }
+
+    is_fixed_official_id || provider.category.as_deref() == Some("official")
 }
 
 // ---------------------------------------------------------------------------
@@ -198,10 +279,7 @@ pub fn codex_provider_uses_anthropic(provider: &Provider) -> bool {
         .unwrap_or(false)
 }
 
-pub fn should_convert_codex_responses_to_anthropic(
-    provider: &Provider,
-    endpoint: &str,
-) -> bool {
+pub fn should_convert_codex_responses_to_anthropic(provider: &Provider, endpoint: &str) -> bool {
     let path = endpoint
         .split_once('?')
         .map_or(endpoint, |(path, _query)| path);
@@ -215,6 +293,27 @@ pub fn should_convert_codex_responses_to_anthropic(
 /// 原生 Responses 上游是否需要展开 Codex 私有 namespace 工具。
 pub fn provider_needs_responses_namespace_flatten(provider: &Provider) -> bool {
     provider.is_xai_oauth()
+}
+
+/// 使用与代理路由相同的判定生成 Codex model catalog，避免目录声明的工具形态
+/// 与实际转换协议不一致。
+pub fn resolve_codex_catalog_tool_profile(
+    provider: &Provider,
+) -> crate::codex_config::CodexCatalogToolProfile {
+    use crate::codex_config::CodexCatalogToolProfile;
+
+    if is_codex_official_provider(provider) || provider.is_xai_oauth() {
+        return CodexCatalogToolProfile::NativeResponses;
+    }
+    if codex_provider_uses_anthropic(provider) {
+        return CodexCatalogToolProfile::Anthropic;
+    }
+    CodexCatalogToolProfile::from_api_format(
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.api_format.as_deref()),
+    )
 }
 
 /// 提取 Codex 供应商实际使用的上游模型。
@@ -261,15 +360,57 @@ pub fn resolve_codex_chat_reasoning_config(
     provider: &Provider,
     body: &JsonValue,
 ) -> Option<CodexChatReasoningConfig> {
-    if let Some(config) = provider
+    let mut config = if let Some(config) = provider
         .meta
         .as_ref()
         .and_then(|meta| meta.codex_chat_reasoning.clone())
     {
-        return Some(normalize_codex_chat_reasoning_config(config));
+        normalize_codex_chat_reasoning_config(config)
+    } else {
+        infer_codex_chat_reasoning_config(provider, body)?
+    };
+
+    // zen 的合法 effort 档位是逐模型的（models.dev：glm-5.2 仅 high|max、
+    // kimi-k3 仅 max、qwen/glm-5.1 等为 toggle 型无 effort），opencode 客户端
+    // 也严格按模型声明发值。按请求模型从 modelCatalog 的 reasoningLevels
+    // （#6228 引入的逐模型声明）查表附上；查不到（模型未收录 / 条目未声明
+    // effort）→ None，转换层将完全不发 reasoning_effort。
+    if config.effort_value_mode.as_deref() == Some("zen") {
+        config.effort_levels = zen_catalog_effort_levels(provider, body);
     }
 
-    infer_codex_chat_reasoning_config(provider, body)
+    Some(config)
+}
+
+/// 按请求模型从供应商 modelCatalog 查 Zen 合法 effort 档位（逐模型数据镜像
+/// models.dev 的 reasoning_options effort values）。仅做档位查表，不参与平台
+/// 判定——平台身份仍只由 name/base_url 决定（见 infer_aggregator_platform_config）。
+/// DB SSOT 为 camelCase，手写/旧数据可能为 snake_case，双格式兼容（与表单加载侧一致）。
+fn zen_catalog_effort_levels(provider: &Provider, body: &JsonValue) -> Option<Vec<String>> {
+    let model = body.get("model")?.as_str()?.trim();
+    if model.is_empty() {
+        return None;
+    }
+    let entries = provider
+        .settings_config
+        .get("modelCatalog")?
+        .get("models")?
+        .as_array()?;
+    let entry = entries.iter().find(|entry| {
+        entry
+            .get("model")
+            .and_then(|value| value.as_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case(model))
+    })?;
+    let levels_value = entry
+        .get("reasoningLevels")
+        .or_else(|| entry.get("reasoning_levels"))?;
+    let levels: Vec<String> = levels_value
+        .as_array()?
+        .iter()
+        .filter_map(|level| level.as_str().map(str::to_string))
+        .collect();
+    (!levels.is_empty()).then_some(levels)
 }
 
 fn normalize_codex_chat_reasoning_config(
@@ -325,20 +466,29 @@ fn infer_codex_chat_reasoning_config(
             effort_param: Some("reasoning_effort".to_string()),
             effort_value_mode: Some("deepseek".to_string()),
             output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
         });
     }
 
-    // StepFun：仅 step-3.5-flash-2603 这一版支持 reasoning effort（low/high 两档），
-    // 其余 step 模型不暴露 effort，故 supports_effort 仅对含 "2603" 的模型置真。
+    // StepFun：step-3.5-flash-2603 支持 low/high；step-3.7-flash 支持
+    // low/medium/high。3.7 必须透传，否则 medium 会被 low_high 映射压成 high。
     // 第二个 OR 分支覆盖「经中转/聚合跑该模型、但平台 name/base_url 不含 stepfun」的情况。
     if haystack.contains("stepfun") || haystack.contains("step-3.5-flash-2603") {
         return Some(CodexChatReasoningConfig {
             supports_thinking: Some(true),
-            supports_effort: Some(model.contains("2603")),
+            supports_effort: Some(model.contains("2603") || model.contains("step-3.7-flash")),
             thinking_param: Some("none".to_string()),
             effort_param: Some("reasoning_effort".to_string()),
-            effort_value_mode: Some("low_high".to_string()),
+            effort_value_mode: Some(
+                if model.contains("2603") {
+                    "low_high"
+                } else {
+                    "passthrough"
+                }
+                .to_string(),
+            ),
             output_format: Some("reasoning".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -350,6 +500,7 @@ fn infer_codex_chat_reasoning_config(
             effort_param: Some("none".to_string()),
             effort_value_mode: None,
             output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -361,6 +512,7 @@ fn infer_codex_chat_reasoning_config(
             effort_param: Some("none".to_string()),
             effort_value_mode: None,
             output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -372,6 +524,7 @@ fn infer_codex_chat_reasoning_config(
             effort_param: Some("none".to_string()),
             effort_value_mode: None,
             output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -383,6 +536,7 @@ fn infer_codex_chat_reasoning_config(
             effort_param: Some("none".to_string()),
             effort_value_mode: None,
             output_format: Some("reasoning_details".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -394,6 +548,7 @@ fn infer_codex_chat_reasoning_config(
             effort_param: Some("none".to_string()),
             effort_value_mode: None,
             output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -423,6 +578,7 @@ fn infer_aggregator_platform_config(
             effort_param: Some("reasoning.effort".to_string()),
             effort_value_mode: Some("openrouter".to_string()),
             output_format: Some("auto".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -437,6 +593,40 @@ fn infer_aggregator_platform_config(
             effort_param: Some("none".to_string()),
             effort_value_mode: None,
             output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
+        });
+    }
+
+    // ModelScope 与 SiliconFlow 同样使用平台级 enable_thinking；不能因为
+    // 托管的是 GLM 模型而误发智谱官方端点的 thinking:{type} 方言。
+    if platform.contains("modelscope") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("enable_thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
+        });
+    }
+
+    // OpenCode Zen（opencode.ai 网关，issue #6112）：其自家客户端对该传输发顶层
+    // `reasoning_effort`（provider/transform.ts），平台归一参数；不发厂商原生
+    // thinking 形状（glm 模型走 zen 时套智谱 thinking:{type} 网关不认）。
+    // 合法档位逐模型（models.dev 的 reasoning_options，opencode 客户端同样严格
+    // 按模型声明发值）：具体档位表见供应商 modelCatalog 各条目的 reasoningLevels，
+    // 代理由此按请求模型查表钳制（resolve 处附上 effort_levels），无表不发字段。
+    // 匹配域名而非裸 "opencode"，避免误伤名字含 opencode 的无关供应商。
+    if platform.contains("opencode.ai") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(true),
+            thinking_param: Some("none".to_string()),
+            effort_param: Some("reasoning_effort".to_string()),
+            effort_value_mode: Some("zen".to_string()),
+            output_format: Some("reasoning_content".to_string()),
+            effort_levels: None,
         });
     }
 
@@ -839,7 +1029,10 @@ context_window = 500000
             adapter.extract_base_url(&provider).unwrap(),
             "https://relay.example.com/v1"
         );
-        assert_eq!(adapter.extract_auth(&provider).unwrap().api_key, "grok-secret");
+        assert_eq!(
+            adapter.extract_auth(&provider).unwrap().api_key,
+            "grok-secret"
+        );
         assert_eq!(
             codex_provider_upstream_model(&provider).as_deref(),
             Some("upstream-grok-model")
@@ -978,6 +1171,19 @@ wire_api = "chat"
     }
 
     #[test]
+    fn catalog_profile_uses_same_anthropic_detection_as_proxy() {
+        let provider = create_provider(json!({
+            "apiFormat": "anthropic",
+            "base_url": "https://example.com/v1/messages"
+        }));
+
+        assert_eq!(
+            resolve_codex_catalog_tool_profile(&provider),
+            crate::codex_config::CodexCatalogToolProfile::Anthropic
+        );
+    }
+
+    #[test]
     fn prompt_cache_key_uses_explicit_key_then_client_session() {
         let provider = create_provider(json!({
             "base_url": "https://api.openai.com/v1"
@@ -1015,6 +1221,73 @@ wire_api = "chat"
     }
 
     #[test]
+    fn stepfun_reasoning_effort_is_resolved_per_model() {
+        let provider = create_provider(json!({
+            "base_url": "https://api.stepfun.com/step_plan/v1"
+        }));
+
+        let v37 =
+            resolve_codex_chat_reasoning_config(&provider, &json!({"model": "step-3.7-flash"}))
+                .unwrap();
+        assert_eq!(v37.supports_effort, Some(true));
+        assert_eq!(v37.effort_value_mode.as_deref(), Some("passthrough"));
+
+        let v35 = resolve_codex_chat_reasoning_config(
+            &provider,
+            &json!({"model": "step-3.5-flash-2603"}),
+        )
+        .unwrap();
+        assert_eq!(v35.supports_effort, Some(true));
+        assert_eq!(v35.effort_value_mode.as_deref(), Some("low_high"));
+
+        let legacy =
+            resolve_codex_chat_reasoning_config(&provider, &json!({"model": "step-3.5-flash"}))
+                .unwrap();
+        assert_eq!(legacy.supports_effort, Some(false));
+    }
+
+    #[test]
+    fn modelscope_platform_overrides_glm_vendor_dialect() {
+        let provider = create_provider(json!({
+            "base_url": "https://api-inference.modelscope.cn/v1"
+        }));
+
+        let config =
+            resolve_codex_chat_reasoning_config(&provider, &json!({"model": "ZhipuAI/GLM-5.2"}))
+                .unwrap();
+        assert_eq!(config.thinking_param.as_deref(), Some("enable_thinking"));
+        assert_eq!(config.supports_effort, Some(false));
+        assert_eq!(config.output_format.as_deref(), Some("reasoning_content"));
+    }
+
+    #[test]
+    fn opencode_zen_uses_platform_dialect_and_model_levels() {
+        let provider = create_provider(json!({
+            "base_url": "https://opencode.ai/zen/go/v1",
+            "modelCatalog": {
+                "models": [
+                    {"model": "glm-5.2", "reasoningLevels": ["high", "max"]},
+                    {"model": "glm-5.1"}
+                ]
+            }
+        }));
+
+        let config =
+            resolve_codex_chat_reasoning_config(&provider, &json!({"model": "GLM-5.2"})).unwrap();
+        assert_eq!(config.thinking_param.as_deref(), Some("none"));
+        assert_eq!(config.effort_param.as_deref(), Some("reasoning_effort"));
+        assert_eq!(config.effort_value_mode.as_deref(), Some("zen"));
+        assert_eq!(
+            config.effort_levels,
+            Some(vec!["high".to_string(), "max".to_string()])
+        );
+
+        let toggle =
+            resolve_codex_chat_reasoning_config(&provider, &json!({"model": "glm-5.1"})).unwrap();
+        assert!(toggle.effort_levels.is_none());
+    }
+
+    #[test]
     fn official_provider_uses_fixed_chatgpt_backend_without_stored_key() {
         let mut provider = create_provider(json!({ "auth": {}, "config": "" }));
         provider.id = crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string();
@@ -1027,5 +1300,40 @@ wire_api = "chat"
             crate::proxy::providers::CHATGPT_CODEX_BASE_URL
         );
         assert!(adapter.extract_auth(&provider).is_none());
+    }
+
+    #[test]
+    fn follow_login_aliases_are_identified_by_provider_content() {
+        let mut native_alias = create_provider(json!({ "auth": {}, "config": "" }));
+        native_alias.id = "work-account".to_string();
+        native_alias.category = Some("official".to_string());
+        assert!(is_codex_official_provider(&native_alias));
+
+        let mut managed_alias = create_provider(json!({ "auth": {}, "config": "" }));
+        managed_alias.id = "team-chatgpt".to_string();
+        managed_alias.category = Some("custom".to_string());
+        managed_alias.meta = Some(crate::provider::ProviderMeta {
+            auth_binding: Some(crate::provider::AuthBinding {
+                source: crate::provider::AuthBindingSource::ManagedAccount,
+                auth_provider: Some("codex_oauth".to_string()),
+                account_id: Some("account-one".to_string()),
+            }),
+            ..Default::default()
+        });
+        assert!(is_codex_official_provider(&managed_alias));
+    }
+
+    #[test]
+    fn follow_login_detection_rejects_explicit_third_party_credentials() {
+        for settings in [
+            json!({ "auth": {}, "base_url": "https://relay.example/v1" }),
+            json!({ "auth": { "OPENAI_API_KEY": "sk-third-party" }, "config": "" }),
+            json!({ "auth": {}, "config": "experimental_bearer_token = \"relay-token\"" }),
+            json!({ "auth": {}, "config": "model_provider = \"custom\"" }),
+        ] {
+            let mut provider = create_provider(settings);
+            provider.category = Some("official".to_string());
+            assert!(!is_codex_official_provider(&provider));
+        }
     }
 }

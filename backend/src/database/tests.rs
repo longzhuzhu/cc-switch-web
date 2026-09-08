@@ -54,7 +54,7 @@ const LEGACY_SCHEMA_SQL: &str = r#"
 
 // v3.8.x（schema v1）的真实表结构快照：用于验证从 v3.8.* 升级到当前版本的迁移链路
 // 参考：tag v3.8.3 的 backend/src/database/schema.rs
-const V3_8_SCHEMA_V1_SQL: &str = r#"
+pub(crate) const V3_8_SCHEMA_V1_SQL: &str = r#"
     CREATE TABLE providers (
         id TEXT NOT NULL,
         app_type TEXT NOT NULL,
@@ -296,8 +296,7 @@ fn schema_migration_from_v7_preserves_skills_columns() {
     Database::create_tables_on_conn(&conn).expect("create tables");
     Database::set_user_version(&conn, 7).expect("set user_version=7");
 
-    Database::apply_schema_migrations_on_conn(&conn)
-        .expect("apply migrations from v7 to current");
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations from v7 to current");
 
     assert_eq!(
         Database::get_user_version(&conn).expect("version after migration"),
@@ -655,7 +654,7 @@ fn migration_from_v3_8_schema_v1_to_current_schema_v3() {
         "skills migration snapshot should preserve legacy app mapping"
     );
 
-    // v3.9+ 新增：proxy_config 各应用的 seed 必须存在（否则 UI 会查不到默认值）
+    // 当前支持的四个代理应用 seed 必须存在（否则 UI 会查不到默认值）
     let proxy_rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM proxy_config", [], |r| r.get(0))
         .expect("count proxy_config rows");
@@ -809,9 +808,9 @@ fn schema_model_pricing_contains_current_models() {
     let expected = [
         ("claude-opus-5", "5", "25", "0.50", "6.25"),
         ("gpt-5.6-sol", "5", "30", "0.50", "6.25"),
-        ("gpt-5.6-terra", "2.50", "15", "0.25", "3.125"),
-        ("gpt-5.6-luna", "1", "6", "0.10", "1.25"),
-        ("grok-4.5", "2", "6", "0.50", "0"),
+        ("gpt-5.6-terra", "2", "12", "0.20", "2.50"),
+        ("gpt-5.6-luna", "0.20", "1.20", "0.02", "0.25"),
+        ("grok-4.5", "2", "6", "0.30", "0"),
         ("kimi-k3", "3.00", "15.00", "0.30", "0"),
     ];
 
@@ -865,4 +864,27 @@ fn ensure_incremental_auto_vacuum_rebuilds_existing_file_db() {
         2,
         "file db should persist INCREMENTAL auto_vacuum after VACUUM rebuild"
     );
+}
+
+#[test]
+fn schema_v14_creates_session_usage_dedup_for_new_and_existing_databases() {
+    let fresh = Database::memory().expect("create fresh database");
+    let fresh_conn = fresh.conn.lock().expect("lock fresh database");
+    assert!(Database::table_exists(&fresh_conn, "session_usage_dedup").expect("check fresh ledger"));
+
+    let conn = Connection::open_in_memory().expect("open existing database");
+    Database::set_user_version(&conn, 13).expect("set v13");
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate v13 to v14");
+
+    assert_eq!(
+        Database::get_user_version(&conn).expect("read migrated version"),
+        SCHEMA_VERSION
+    );
+    conn.execute(
+        "INSERT INTO session_usage_dedup
+         (data_source, request_id, semantic_id, has_entry_id)
+         VALUES ('pi_session', 'request', 'semantic', 1)",
+        [],
+    )
+    .expect("insert ledger row");
 }

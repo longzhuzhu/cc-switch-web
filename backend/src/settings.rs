@@ -42,6 +42,8 @@ pub struct VisibleApps {
     pub openclaw: bool,
     #[serde(default = "default_true")]
     pub hermes: bool,
+    #[serde(default = "default_true")]
+    pub pi: bool,
 }
 
 impl Default for VisibleApps {
@@ -54,6 +56,7 @@ impl Default for VisibleApps {
             opencode: true,
             openclaw: true,
             hermes: true,
+            pi: true,
         }
     }
 }
@@ -171,16 +174,44 @@ pub struct CodexOfficialHistoryUnifyMigration {
     pub codex_config_dir: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexThirdPartyHistoryProviderBucketMigration {
+    pub completed_at: String,
+    pub target_provider_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_provider_ids: Vec<String>,
+    #[serde(default)]
+    pub migrated_jsonl_files: usize,
+    #[serde(default)]
+    pub migrated_state_rows: usize,
+    #[serde(default)]
+    pub scanned_history_files: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexProviderTemplateMigration {
+    pub completed_at: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub migrated_provider_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalMigrations {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_third_party_history_provider_bucket_v1:
+        Option<CodexThirdPartyHistoryProviderBucketMigration>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_provider_template_v1: Option<CodexProviderTemplateMigration>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub codex_official_history_unify_v1: Option<CodexOfficialHistoryUnifyMigration>,
 }
 
 /// 应用设置结构
 ///
-/// 存储设备级别设置，保存在本地 `~/.cc-switch/settings.json`，不随数据库同步。
+/// 存储设备级别设置，保存在本地 `~/.cc-switch-web/settings.json`，不随数据库同步。
 /// 这确保了云同步场景下多设备可以独立运作。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -189,6 +220,9 @@ pub struct AppSettings {
     /// 是否在主页面启用本地代理功能（默认关闭）
     #[serde(default)]
     pub enable_local_proxy: bool,
+    /// 切换第三方 Codex Provider 时保留原生 ChatGPT 登录材料。
+    #[serde(default)]
+    pub preserve_codex_official_auth_on_switch: bool,
     /// 让官方 Codex 与第三方 Provider 共用稳定的 resume history 桶。
     #[serde(default)]
     pub unify_codex_session_history: bool,
@@ -250,6 +284,8 @@ pub struct AppSettings {
     pub openclaw_config_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hermes_config_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pi_config_dir: Option<String>,
 
     // ===== 当前供应商 ID（设备级）=====
     /// 当前 Claude 供应商 ID（本地存储，优先于数据库 is_current）
@@ -312,6 +348,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             enable_local_proxy: false,
+            preserve_codex_official_auth_on_switch: false,
             unify_codex_session_history: false,
             unify_codex_migrate_existing: None,
             proxy_confirmed: None,
@@ -334,6 +371,7 @@ impl Default for AppSettings {
             opencode_config_dir: None,
             openclaw_config_dir: None,
             hermes_config_dir: None,
+            pi_config_dir: None,
             current_provider_claude: None,
             current_provider_codex: None,
             current_provider_gemini: None,
@@ -355,11 +393,7 @@ impl Default for AppSettings {
 impl AppSettings {
     fn settings_path() -> Option<PathBuf> {
         // settings.json 保留用于旧版本迁移和无数据库场景
-        Some(
-            crate::config::get_home_dir()
-                .join(".cc-switch")
-                .join("settings.json"),
-        )
+        Some(crate::config::get_app_config_dir().join("settings.json"))
     }
 
     fn normalize_paths(&mut self) {
@@ -407,6 +441,13 @@ impl AppSettings {
 
         self.hermes_config_dir = self
             .hermes_config_dir
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        self.pi_config_dir = self
+            .pi_config_dir
             .as_ref()
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
@@ -601,8 +642,54 @@ pub fn unify_codex_session_history() -> bool {
         .unify_codex_session_history
 }
 
+pub fn preserve_codex_official_auth_on_switch() -> bool {
+    get_settings().preserve_codex_official_auth_on_switch
+}
+
 pub fn unify_codex_migrate_existing_requested() -> bool {
     get_settings().unify_codex_migrate_existing.unwrap_or(false)
+}
+
+pub fn is_codex_third_party_history_provider_bucket_migrated() -> bool {
+    get_settings()
+        .local_migrations
+        .as_ref()
+        .and_then(|migrations| {
+            migrations
+                .codex_third_party_history_provider_bucket_v1
+                .as_ref()
+        })
+        .is_some_and(|migration| migration.scanned_history_files)
+}
+
+pub fn mark_codex_third_party_history_provider_bucket_migrated(
+    migration: CodexThirdPartyHistoryProviderBucketMigration,
+) -> Result<(), AppError> {
+    mutate_settings(|settings| {
+        settings
+            .local_migrations
+            .get_or_insert_with(Default::default)
+            .codex_third_party_history_provider_bucket_v1 = Some(migration);
+    })
+}
+
+pub fn is_codex_provider_template_migrated() -> bool {
+    get_settings()
+        .local_migrations
+        .as_ref()
+        .and_then(|migrations| migrations.codex_provider_template_v1.as_ref())
+        .is_some()
+}
+
+pub fn mark_codex_provider_template_migrated(
+    migration: CodexProviderTemplateMigration,
+) -> Result<(), AppError> {
+    mutate_settings(|settings| {
+        settings
+            .local_migrations
+            .get_or_insert_with(Default::default)
+            .codex_provider_template_v1 = Some(migration);
+    })
 }
 
 pub fn is_codex_official_history_unify_migrated_for_dir(codex_dir: &str) -> bool {
@@ -680,6 +767,14 @@ pub fn get_hermes_override_dir() -> Option<PathBuf> {
         .map(|p| resolve_override_path(p))
 }
 
+pub fn get_pi_override_dir() -> Option<PathBuf> {
+    let settings = settings_store().read().ok()?;
+    settings
+        .pi_config_dir
+        .as_ref()
+        .map(|p| resolve_override_path(p))
+}
+
 // ===== 当前供应商管理函数 =====
 
 /// 获取指定应用类型的当前供应商 ID（从本地 settings 读取）
@@ -698,6 +793,7 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::OpenCode => settings.current_provider_opencode.clone(),
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
         AppType::Hermes => None,
+        AppType::Pi => None,
     }
 }
 
@@ -717,7 +813,7 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::GrokBuild => settings.current_provider_grokbuild = id.map(|s| s.to_string()),
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
-        AppType::Hermes => {}
+        AppType::Hermes | AppType::Pi => {}
     }
 
     update_settings(settings)
@@ -854,10 +950,29 @@ pub fn update_webdav_sync_status(status: WebDavSyncStatus) -> Result<(), AppErro
 #[cfg(test)]
 mod tests {
     use super::AppSettings;
+    use serial_test::serial;
 
     #[test]
     fn profile_switcher_is_visible_for_existing_settings() {
         let settings: AppSettings = serde_json::from_str("{}").unwrap();
         assert!(settings.show_profile_switcher);
+    }
+
+    #[test]
+    #[serial]
+    fn settings_file_uses_web_data_directory() {
+        let home = tempfile::tempdir().unwrap();
+        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+        std::env::set_var("CC_SWITCH_TEST_HOME", home.path());
+
+        assert_eq!(
+            AppSettings::settings_path().unwrap(),
+            home.path().join(".cc-switch-web/settings.json")
+        );
+
+        match previous {
+            Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+            None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+        }
     }
 }
