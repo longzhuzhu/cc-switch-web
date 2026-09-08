@@ -4,7 +4,7 @@
 //!
 //! v3.10.0+ 统一管理架构：
 //! - Skills 使用统一的 id 主键，支持四应用启用标志
-//! - 实际文件存储在 ~/.cc-switch/skills/，同步到各应用目录
+//! - 实际文件存储在 ~/.cc-switch-web/skills/，同步到各应用目录
 
 use crate::app_config::{InstalledSkill, SkillApps};
 use crate::database::{lock_conn, Database};
@@ -46,6 +46,7 @@ impl Database {
                         grokbuild: row.get(11)?,
                         opencode: row.get(12)?,
                         hermes: row.get(13)?,
+                        pi: false,
                     },
                     installed_at: row.get(14)?,
                     content_hash: row.get(15)?,
@@ -91,6 +92,7 @@ impl Database {
                     grokbuild: row.get(11)?,
                     opencode: row.get(12)?,
                     hermes: row.get(13)?,
+                    pi: false,
                 },
                 installed_at: row.get(14)?,
                 content_hash: row.get(15)?,

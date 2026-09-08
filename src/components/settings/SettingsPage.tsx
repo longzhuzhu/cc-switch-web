@@ -474,6 +474,7 @@ export function SettingsPage({
                             opencodeDir={settings.opencodeConfigDir}
                             openclawDir={settings.openclawConfigDir}
                             hermesDir={settings.hermesConfigDir}
+                            piDir={settings.piConfigDir}
                             onDirectoryChange={updateDirectory}
                             onBrowseDirectory={browseDirectory}
                             onResetDirectory={resetDirectory}
@@ -511,6 +512,7 @@ export function SettingsPage({
                             onImport={importConfig}
                             onExport={exportConfig}
                             onClear={clearSelection}
+                            onMigrationSuccess={onImportSuccess}
                           />
                         </AccordionContent>
                       </AccordionItem>

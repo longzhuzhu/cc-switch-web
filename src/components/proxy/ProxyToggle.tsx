@@ -14,13 +14,19 @@ import type { AppId } from "@/lib/api";
 
 interface ProxyToggleProps {
   className?: string;
-  activeApp: AppId;
+  activeApp: Exclude<AppId, "pi">;
 }
 
 export function ProxyToggle({ className, activeApp }: ProxyToggleProps) {
   const { t } = useTranslation();
-  const { isRunning, takeoverStatus, setTakeoverForApp, isPending, status } =
-    useProxyStatus();
+  const {
+    isRunning,
+    takeoverStatus,
+    setTakeoverForApp,
+    isPending,
+    isInitialStatusPending,
+    status,
+  } = useProxyStatus();
 
   const handleToggle = async (checked: boolean) => {
     try {
@@ -75,7 +81,7 @@ export function ProxyToggle({ className, activeApp }: ProxyToggleProps) {
           className={cn(
             "h-4 w-4 transition-colors",
             takeoverEnabled
-              ? "text-emerald-500 animate-pulse"
+              ? "text-emerald-500 status-heartbeat"
               : "text-muted-foreground",
           )}
         />
@@ -83,7 +89,7 @@ export function ProxyToggle({ className, activeApp }: ProxyToggleProps) {
       <Switch
         checked={takeoverEnabled}
         onCheckedChange={handleToggle}
-        disabled={isPending}
+        disabled={isPending || isInitialStatusPending}
       />
     </div>
   );

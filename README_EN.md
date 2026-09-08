@@ -15,65 +15,83 @@ Architecture and positioning:
 
 ## Usage
 
-CC Switch Web runs a local Rust service so you can manage and one-click switch provider configurations for multiple AI coding tools — Claude, Codex, Gemini, OpenClaw, and more — from your browser.
+CC Switch Web runs a local Rust service so you can manage and one-click switch provider configurations for Claude, Claude Desktop, Codex, Gemini, Grok Build, OpenCode, OpenClaw, Hermes, Pi, and other AI coding tools from your browser.
 
 Capabilities already available on the Web branch:
 
-- Provider form model fetching for Claude, Codex, Gemini, and OpenClaw
+- Provider management for Claude, Claude Desktop, Codex, Gemini, Grok Build, OpenCode, OpenClaw, Hermes, and Pi
+- Pi Provider, Prompts, Skills, Sessions, and Usage support; Pi keeps ownership of `/login`, `auth.json`, the default Provider/Model, proxying, failover, and managed OAuth
 - Official subscription quota display for Claude, Codex, and Gemini
 - Managed ChatGPT (Codex OAuth) account center, Claude preset, and quota display
+- Built-in WebSearch for Claude-to-Codex routing and Alpha Search passthrough for Codex routes
 - Environment variable conflict detection and cleanup entry points
 - Deep link import via `?deeplink=...` or manual `ccswitch://...` input
 - About page entry to open the latest GitHub release page
 - Workspace-style UI for Provider, Settings, Skills, and Sessions pages
 
+See [Pi Native Contract and Implementation Boundaries](docs/pi-native-contract-zh.md) and the other Pi documents in the same directory for configuration ownership, synchronization, model capabilities, and UI constraints.
+
 ### Quick Start
 
-1. Build the release binary with embedded frontend assets:
+#### Option 1: Prebuilt Release
 
-   ```bash
-   pnpm install --frozen-lockfile
-   pnpm build
-   ```
+1. Open [GitHub Releases](https://github.com/zuoliangyu/cc-switch-web/releases/latest) and download the latest prebuilt package for your system:
 
-   (Rust `1.88+` required; see the "Development" section below for detailed build/dev options.)
+   | System | Download |
+   | --- | --- |
+   | Windows x64 | `cc-switch-web-windows-x64.zip` |
+   | macOS (Intel / Apple Silicon) | `cc-switch-web-macos-universal.zip` |
+   | Linux x64 | `cc-switch-web-linux-x64.tar.gz` |
+   | Linux ARM64 | `cc-switch-web-linux-arm64.tar.gz` |
 
-2. Run the binary, then open the final address printed in the terminal:
-
-   ```bash
-   # Linux/macOS
-   ./backend/target/release/cc-switch-web --backend-port 8890
-   ```
+2. Extract the archive, enter the directory containing the binary, and run it directly:
 
    ```powershell
    # Windows
-   .\backend\target\release\cc-switch-web.exe -b 8890
+   .\cc-switch-web.exe
+   ```
+
+   ```bash
+   # Linux/macOS
+   chmod +x ./cc-switch-web
+   ./cc-switch-web
    ```
 
    In release mode the frontend static assets and Web API share the same port, with `8890` as the default preferred port. If the port is occupied or denied, the service automatically scans forward and prints the actual port it bound to.
 
-3. Open the address printed in the terminal in your browser, and you're ready.
+3. Open the address printed in the terminal in your browser. For Docker, systemd, or source builds, see "Development" below.
 
-4. Data location: in local Web service mode, data is stored under the default CC Switch local config root:
+4. Data location: in local Web service mode, Web data is stored in its own directory:
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   This includes `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
+   This includes `settings.json`, `cc-switch.db`, backup data, and unified Skills storage. On first startup, if this directory does not exist and `~/.cc-switch/cc-switch.db` is found, it is migrated read-only; the source database is never modified by Web. If no CC Switch database is found, migration is skipped and a fresh Web data store is initialized. Legacy `config.json` is not part of the active Web runtime data path.
 
-> To run via Docker or keep it hosted on a headless server, see "Docker" and "Linux systemd Example" under "Development" below.
+#### Option 2: Docker
+
+```bash
+docker pull ghcr.io/zuoliangyu/cc-switch-web:latest
+docker run -d --name cc-switch-web \
+  -p 127.0.0.1:8890:8890 \
+  -v cc-switch-web-data:/data \
+  --restart unless-stopped \
+  ghcr.io/zuoliangyu/cc-switch-web:latest
+```
+
+Open [http://localhost:8890](http://localhost:8890). Web data persists in the `cc-switch-web-data` volume; a new volume initializes a fresh Web data store. The current GHCR runtime image supports `linux/amd64` only; use the Release package on ARM64. By default, the container manages only data inside that volume. To migrate CC Switch data, manage host CLI configuration, or deploy on a LAN/public network, see "Docker", "Access Key", and "Linux systemd Example" below.
 
 ## Version
 
-The current repository version is `1.0.0`. For per-version change details, the per-fix upstream commit references, and items deferred to follow-up tasks, see `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md`.
+The current repository version is `2.1.0`. This release adds the latest upstream Provider and reasoning capabilities, Codex OAuth lifecycle handling, Hosted WebSearch, and secure native Windows CLI detection, while fixing third-party Provider session migration and full-suite test stability. See `CHANGELOG.md` and `docs-dev/web-parity-post-40cac1a6-2026-08.md` for release details and the upstream migration ledger.
 
 This repository treats `0.1.0` as its initial Web release baseline; previous inherited release history has been removed and should be considered part of the upstream project history.
 
 ## Relationship to Upstream
 
 - Upstream project: [cc-switch](https://github.com/farion1231/cc-switch)
-- Current Web repository: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
+- Current Web repository: [zuoliangyu/cc-switch-web](https://github.com/zuoliangyu/cc-switch-web)
 - Author: 左岚 ([Bilibili](https://space.bilibili.com/27619688))
 - This repository focuses on the Web branch direction of CC Switch
 - If you are looking for the original CC Switch project or upstream release information, please visit the upstream repository directly
@@ -148,7 +166,7 @@ Script entry layout:
    - The Rust service terminal shows Web API method/path/status/duration logs
    - You can override this with `VITE_RUNTIME_DEBUG_REQUESTS=0|1` and `CC_SWITCH_WEB_DEBUG_API=0|1`
 
-### Local Release Binary
+### Build a Release Binary from Source
 
 1. Build the embedded release binary:
 
@@ -187,13 +205,13 @@ Script entry layout:
 
    If the preferred port is already in use, excluded by the OS, or denied by local policy, the service automatically scans forward and prints the actual port it bound to.
 
-4. In local Web service mode, CC Switch Web stores its own data under the default CC Switch local config root:
+4. In local Web service mode, CC Switch Web stores its own data in a separate directory:
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   This includes files such as `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
+   This includes files such as `settings.json`, `cc-switch.db`, backup data, and unified Skills storage. On first startup, if this directory does not exist, data is migrated read-only from `~/.cc-switch`. Settings also provides a manual re-migration action that backs up Web data first. Web never modifies the CC Switch source database. Legacy `config.json` is not part of the active Web runtime data path.
 
 ### Access Key (Optional)
 
@@ -290,7 +308,7 @@ Version tags also publish matching `vX.Y.Z`, `X.Y.Z`, and `X.Y` image tags. The 
    docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
    ```
 
-   The example file is primarily for Linux servers and uses `$HOME` paths for `.claude`, `.codex`, `.gemini`, `.config/opencode`, and `.config/openclaw`.
+   The example file is primarily for Linux servers and uses `$HOME` paths for `.claude`, `.codex`, `.gemini`, `.config/opencode`, and `.config/openclaw`. To enable automatic or manual CC Switch migration, uncomment `${HOME}/.cc-switch:/data/.cc-switch:ro`; the migration source remains read-only inside the container.
 
 ### Export Linux Package Inside Docker
 

@@ -139,6 +139,10 @@ vi.mock("@/components/mcp/McpPanel", () => ({
     ),
 }));
 
+// App 依赖较多，全量并发时模块转换可能超过单测超时；在收集阶段完成加载，
+// 让用例超时只衡量实际交互流程。
+const { default: App } = await import("@/App");
+
 const renderApp = (AppComponent: ComponentType) => {
   const client = new QueryClient();
   return render(
@@ -157,11 +161,8 @@ describe("App integration with MSW", () => {
     toastErrorMock.mockReset();
   });
 
-  // 全套并发跑时 MSW server 处理多个 test file 留下的 lifecycle 偶发抢占 fetch
-  // mock，导致这条端到端流单跑稳过、合跑偶发失败。给 retry: 2 做幂等保护，
-  // 同时 resetProviderState 在 beforeEach 已经把 msw state 还原到默认。
-  it("covers basic provider flows via real hooks", { retry: 2 }, async () => {
-    const { default: App } = await import("@/App");
+  // 模块加载已在收集阶段完成，默认超时只衡量实际交互流程。
+  it("covers basic provider flows via real hooks", async () => {
     renderApp(App);
 
     await waitFor(() =>

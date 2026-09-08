@@ -355,6 +355,27 @@ struct ContentRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct PiPromptFileUpdateRequest {
+    expected_revision: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PiRevisionRequest {
+    expected_revision: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PiPromptTemplateUpdateRequest {
+    original_slug: Option<String>,
+    expected_revision: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RenameBackupRequest {
     old_filename: String,
     new_name: String,
@@ -836,11 +857,103 @@ async fn get_current_prompt_file_content(
     Ok(Json(content))
 }
 
+fn pi_prompt_kind(
+    kind: &str,
+) -> Result<crate::services::pi_prompt_files::PiPromptFileKind, ApiError> {
+    match kind {
+        "system_override" => Ok(crate::services::pi_prompt_files::PiPromptFileKind::SystemOverride),
+        "system_append" => Ok(crate::services::pi_prompt_files::PiPromptFileKind::SystemAppend),
+        _ => Err(ApiError::bad_request(format!(
+            "unsupported Pi prompt file kind: {kind}"
+        ))),
+    }
+}
+
+async fn get_pi_state(
+) -> Result<Json<crate::services::pi_state::PiCurrentState>, ApiError> {
+    crate::services::pi_state::PiStateService::current()
+        .map(Json)
+        .map_err(|error| ApiError::internal(format!("failed to load Pi state: {error}")))
+}
+
+async fn get_pi_prompt_file(
+    Path(kind): Path<String>,
+) -> Result<Json<crate::services::pi_prompt_files::PiPromptFileSnapshot>, ApiError> {
+    crate::services::pi_prompt_files::PiPromptFileService::read(pi_prompt_kind(&kind)?)
+        .map(Json)
+        .map_err(|error| ApiError::internal(format!("failed to load Pi prompt file: {error}")))
+}
+
+async fn update_pi_prompt_file(
+    Path(kind): Path<String>,
+    Json(payload): Json<PiPromptFileUpdateRequest>,
+) -> Result<Json<crate::services::pi_prompt_files::PiPromptFileSnapshot>, ApiError> {
+    crate::services::pi_prompt_files::PiPromptFileService::replace(
+        pi_prompt_kind(&kind)?,
+        &payload.expected_revision,
+        &payload.content,
+    )
+    .map(Json)
+    .map_err(|error| ApiError::internal(format!("failed to save Pi prompt file: {error}")))
+}
+
+async fn delete_pi_prompt_file(
+    Path(kind): Path<String>,
+    Json(payload): Json<PiRevisionRequest>,
+) -> Result<Json<bool>, ApiError> {
+    crate::services::pi_prompt_files::PiPromptFileService::delete(
+        pi_prompt_kind(&kind)?,
+        &payload.expected_revision,
+    )
+    .map(Json)
+    .map_err(|error| ApiError::internal(format!("failed to delete Pi prompt file: {error}")))
+}
+
+async fn list_pi_prompt_templates(
+) -> Result<Json<Vec<crate::services::pi_prompt_files::PiPromptTemplate>>, ApiError> {
+    crate::services::pi_prompt_files::PiPromptTemplateService::list()
+        .map(Json)
+        .map_err(|error| ApiError::internal(format!("failed to list Pi templates: {error}")))
+}
+
+async fn update_pi_prompt_template(
+    Path(slug): Path<String>,
+    Json(payload): Json<PiPromptTemplateUpdateRequest>,
+) -> Result<Json<crate::services::pi_prompt_files::PiPromptTemplate>, ApiError> {
+    crate::services::pi_prompt_files::PiPromptTemplateService::upsert(
+        &slug,
+        payload.original_slug.as_deref(),
+        &payload.expected_revision,
+        &payload.content,
+    )
+    .map(Json)
+    .map_err(|error| ApiError::internal(format!("failed to save Pi template: {error}")))
+}
+
+async fn delete_pi_prompt_template(
+    Path(slug): Path<String>,
+    Json(payload): Json<PiRevisionRequest>,
+) -> Result<Json<bool>, ApiError> {
+    crate::services::pi_prompt_files::PiPromptTemplateService::delete(
+        &slug,
+        &payload.expected_revision,
+    )
+    .map(Json)
+    .map_err(|error| ApiError::internal(format!("failed to delete Pi template: {error}")))
+}
+
+async fn get_pi_session_discovery(
+) -> Json<crate::session_manager::providers::pi::PiSessionDiscovery> {
+    Json(crate::session_manager::providers::pi::session_discovery())
+}
+
 async fn get_live_provider_ids(Path(app): Path<String>) -> Result<Json<Vec<String>>, ApiError> {
     let provider_ids = match AppType::from_str(&app) {
         Ok(AppType::OpenCode) => crate::opencode_config::get_providers()
             .map(|providers| providers.keys().cloned().collect()),
         Ok(AppType::OpenClaw) => crate::openclaw_config::get_providers()
+            .map(|providers| providers.keys().cloned().collect()),
+        Ok(AppType::Pi) => crate::pi_config::read_pi_native_providers()
             .map(|providers| providers.keys().cloned().collect()),
         Ok(app_type) => {
             return Err(ApiError::bad_request(format!(
@@ -865,6 +978,9 @@ async fn import_providers_from_live(
         }
         Ok(AppType::OpenClaw) => {
             crate::commands::import_openclaw_providers_from_live_internal(state.app_state.as_ref())
+        }
+        Ok(AppType::Pi) => {
+            crate::services::provider::import_pi_providers_from_live(state.app_state.as_ref())
         }
         Ok(app_type) => {
             return Err(ApiError::bad_request(format!(
@@ -1005,6 +1121,14 @@ async fn fetch_provider_models(
     .await
     .map_err(ApiError::bad_request)?;
     Ok(Json(models))
+}
+
+async fn get_opencode_models(
+) -> Result<Json<Vec<crate::commands::OpenCodeModelRef>>, ApiError> {
+    crate::commands::get_opencode_models_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
 }
 
 async fn fetch_xai_oauth_models(
@@ -2121,6 +2245,20 @@ async fn import_config_upload(
     }
 
     Ok(Json(payload))
+}
+
+async fn migrate_from_cc_switch(
+    State(state): State<WebApiState>,
+) -> Result<Json<Value>, ApiError> {
+    let result = state
+        .app_state
+        .db
+        .migrate_from_cc_switch()
+        .map_err(|error| ApiError::internal(format!("failed to migrate from CC Switch: {error}")))?;
+    let warning = crate::commands::post_import_sync_warning_for_state(state.app_state.as_ref());
+    let payload = serde_json::to_value(result)
+        .map_err(|error| ApiError::internal(format!("failed to encode migration result: {error}")))?;
+    Ok(Json(crate::commands::attach_warning(payload, warning)))
 }
 
 async fn webdav_test_connection(
@@ -3537,7 +3675,33 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         log::warn!("startup Gemini common-config credential scrub failed: {err}");
     }
     crate::services::webdav_auto_sync::start_worker(app_state.db.clone());
-    tokio::task::spawn_blocking(|| {
+    let db_for_codex_history_migration = app_state.db.clone();
+    tokio::task::spawn_blocking(move || {
+        match crate::codex_history_migration::maybe_migrate_codex_third_party_history_provider_bucket() {
+            Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
+                "Codex 第三方历史归桶迁移完成: sources={}, files={}, rows={}",
+                outcome.source_provider_ids.join(","),
+                outcome.migrated_jsonl_files,
+                outcome.migrated_state_rows
+            ),
+            Ok(_) => {}
+            Err(error) => log::warn!("Codex 第三方历史归桶迁移失败: {error}"),
+        }
+        match crate::codex_history_migration::maybe_migrate_codex_provider_template_bucket(
+            &db_for_codex_history_migration,
+        ) {
+            Ok(outcome)
+                if outcome.skipped_reason.is_none()
+                    && !outcome.migrated_provider_ids.is_empty() =>
+            {
+                log::info!(
+                    "Codex Provider 模板归桶迁移完成: providers={}",
+                    outcome.migrated_provider_ids.join(",")
+                )
+            }
+            Ok(_) => {}
+            Err(error) => log::warn!("Codex Provider 模板归桶迁移失败: {error}"),
+        }
         match crate::codex_history_migration::maybe_migrate_codex_official_history() {
             Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
                 "Codex 官方历史迁移完成: files={}, rows={}",
@@ -3564,6 +3728,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/auth/verify", get(verify_web_access_key))
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
+        .route(
+            "/api/settings/migrate-from-cc-switch",
+            post(migrate_from_cc_switch),
+        )
         .route("/api/settings", get(get_settings).put(save_settings))
         .route(
             "/api/settings/codex-unify-history-backup",
@@ -3736,6 +3904,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             post(test_usage_script),
         )
         .route("/api/providers/models/fetch", post(fetch_provider_models))
+        .route("/api/opencode/models", get(get_opencode_models))
         .route("/api/providers/endpoints/test", post(test_api_endpoints))
         .route(
             "/api/providers/:app/:id/custom-endpoints",
@@ -3913,6 +4082,19 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             put(upsert_prompt).delete(delete_prompt),
         )
         .route("/api/prompts/:app/:id/enable", post(enable_prompt))
+        .route("/api/pi/state", get(get_pi_state))
+        .route(
+            "/api/pi/prompt-files/:kind",
+            get(get_pi_prompt_file)
+                .put(update_pi_prompt_file)
+                .delete(delete_pi_prompt_file),
+        )
+        .route("/api/pi/prompt-templates", get(list_pi_prompt_templates))
+        .route(
+            "/api/pi/prompt-templates/:slug",
+            put(update_pi_prompt_template).delete(delete_pi_prompt_template),
+        )
+        .route("/api/pi/session-discovery", get(get_pi_session_discovery))
         .route(
             "/api/mcp/servers",
             get(get_mcp_servers).post(upsert_mcp_server),

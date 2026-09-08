@@ -6,8 +6,8 @@ use serde_json::{json, Value};
 use toml_edit::{DocumentMut, Item, TableLike};
 
 use crate::app_config::AppType;
-use crate::codex_config::{get_codex_auth_path, write_codex_live_atomic_with_stable_provider};
-use crate::config::{get_claude_settings_path, read_json_file, write_json_file, write_text_file};
+use crate::codex_config::get_codex_auth_path;
+use crate::config::{get_claude_settings_path, read_json_file, write_json_file};
 use crate::database::Database;
 use crate::error::AppError;
 use crate::provider::Provider;
@@ -379,7 +379,11 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
             }
             _ => false,
         },
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => false,
+        AppType::GrokBuild
+        | AppType::OpenCode
+        | AppType::OpenClaw
+        | AppType::Hermes
+        | AppType::Pi => false,
     }
 }
 
@@ -449,7 +453,11 @@ pub(crate) fn remove_common_config_from_settings(
             }
             Ok(result)
         }
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+        AppType::GrokBuild
+        | AppType::OpenCode
+        | AppType::OpenClaw
+        | AppType::Hermes
+        | AppType::Pi => {
             Ok(settings.clone())
         }
     }
@@ -506,7 +514,11 @@ fn apply_common_config_to_settings(
             }
             Ok(result)
         }
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+        AppType::GrokBuild
+        | AppType::OpenCode
+        | AppType::OpenClaw
+        | AppType::Hermes
+        | AppType::Pi => {
             Ok(settings.clone())
         }
     }
@@ -682,27 +694,22 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             crate::codex_config::apply_codex_unified_session_bucket_to_settings(
                 provider.category.as_deref(),
                 &mut settings,
-            )
-            .map_err(AppError::Config)?;
+            )?;
             let obj = settings
                 .as_object()
                 .ok_or_else(|| AppError::Config("Codex 供应商配置必须是 JSON 对象".to_string()))?;
             let auth = obj
                 .get("auth")
                 .ok_or_else(|| AppError::Config("Codex 供应商配置缺少 'auth' 字段".to_string()))?;
-            let config_str = obj.get("config").and_then(|v| v.as_str()).ok_or_else(|| {
-                AppError::Config("Codex 供应商配置缺少 'config' 字段或不是字符串".to_string())
-            })?;
-
-            if crate::proxy::providers::is_codex_official_provider(provider) {
-                // 官方条目不持有凭据；只恢复 config.toml，保留 Codex 原生 ChatGPT 登录。
-                write_text_file(&crate::codex_config::get_codex_config_path(), config_str)?;
-            } else {
-                // 走 with_stable_provider 路径：写下去之前会先把 model_provider 归一化到
-                // 稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id），
-                // 让 Codex resume history 不会因为切换 provider 漂移。
-                write_codex_live_atomic_with_stable_provider(auth, Some(config_str))?;
-            }
+            let config_str = obj.get("config").and_then(Value::as_str);
+            let profile = crate::proxy::providers::resolve_codex_catalog_tool_profile(provider);
+            crate::codex_config::write_codex_provider_live_with_catalog(
+                &settings,
+                provider.category.as_deref(),
+                auth,
+                config_str,
+                profile,
+            )?;
         }
         AppType::Gemini => {
             // Delegate to write_gemini_live which handles env file writing correctly
@@ -813,6 +820,11 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             crate::hermes_config::set_provider(&provider.id, provider.settings_config.clone())?;
             log::info!("Hermes provider '{}' written to live config", provider.id);
         }
+        AppType::Pi => {
+            return Err(AppError::InvalidInput(
+                "Pi providers must use the native models.json adapter".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -822,6 +834,10 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
 /// Writes all providers from the database to the live configuration file.
 /// Used for OpenCode and other additive mode applications.
 fn sync_all_providers_to_live(state: &AppState, app_type: &AppType) -> Result<(), AppError> {
+    // Pi 的 models.json 成员关系由原生文件决定；全局恢复不能把数据库目录全部启用。
+    if *app_type == AppType::Pi {
+        return Ok(());
+    }
     let providers = state.db.get_all_providers(app_type.as_str())?;
     let mut synced_count = 0usize;
 
@@ -855,6 +871,9 @@ pub(crate) fn sync_current_provider_for_app_to_live(
     state: &AppState,
     app_type: &AppType,
 ) -> Result<(), AppError> {
+    if *app_type == AppType::Pi {
+        return Ok(());
+    }
     if app_type.is_additive_mode() {
         sync_all_providers_to_live(state, app_type)?;
     } else {
@@ -923,17 +942,15 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
 pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
     match app_type {
         AppType::Codex => {
-            let auth_path = get_codex_auth_path();
-            if !auth_path.exists() {
-                return Err(AppError::localized(
-                    "codex.auth.missing",
-                    "Codex 配置文件不存在：缺少 auth.json",
-                    "Codex configuration missing: auth.json not found",
-                ));
+            let mut result = crate::codex_config::read_codex_live_settings()?;
+            if let Ok(Some(model_catalog)) =
+                crate::codex_config::read_codex_model_catalog_simplified_from_live()
+            {
+                if let Some(obj) = result.as_object_mut() {
+                    obj.insert("modelCatalog".to_string(), model_catalog);
+                }
             }
-            let auth: Value = read_json_file(&auth_path)?;
-            let cfg_text = crate::codex_config::read_and_validate_codex_config_text()?;
-            Ok(json!({ "auth": auth, "config": cfg_text }))
+            Ok(result)
         }
         AppType::Claude | AppType::ClaudeDesktop => {
             let path = get_claude_settings_path();
@@ -1011,6 +1028,8 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             Ok(config)
         }
         AppType::Hermes => Ok(Value::Object(crate::hermes_config::get_providers()?)),
+        AppType::Pi => serde_json::to_value(crate::pi_config::read_pi_native_providers()?)
+            .map_err(|source| AppError::JsonSerialize { source }),
     }
 }
 
@@ -1108,7 +1127,7 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             settings
         }
         // Additive mode apps are handled by the early return above.
-        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi => {
             unreachable!("additive mode apps are handled by early return")
         }
     };
