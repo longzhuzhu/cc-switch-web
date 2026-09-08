@@ -23,8 +23,9 @@ use crate::store::AppState;
 
 // Re-export sub-module functions for external access
 pub use live::{
-    import_default_config, import_openclaw_providers_from_live,
+    import_default_config, import_hermes_providers_from_live, import_openclaw_providers_from_live,
     import_opencode_providers_from_live, read_live_settings, sync_current_to_live,
+    update_toml_common_config_snippet,
 };
 
 // Internal re-exports (pub(crate))
@@ -32,12 +33,14 @@ pub(crate) use live::sanitize_claude_settings_for_live;
 pub(crate) use live::{
     build_effective_settings_with_common_config, normalize_provider_common_config_for_storage,
     provider_exists_in_live_config, strip_common_config_from_live_settings,
-    sync_current_provider_for_app_to_live,
-    write_live_with_common_config,
+    sync_current_provider_for_app_to_live, write_live_with_common_config,
 };
 
 // Internal re-exports
-use live::{remove_openclaw_provider_from_live, remove_opencode_provider_from_live};
+use live::{
+    remove_hermes_provider_from_live, remove_openclaw_provider_from_live,
+    remove_opencode_provider_from_live,
+};
 use usage::validate_usage_script;
 
 /// Provider business logic service
@@ -50,10 +53,79 @@ pub struct SwitchResult {
     pub warnings: Vec<String>,
 }
 
+/// 官方供应商通常禁止代理接管；Codex 固定内置条目是唯一例外。
+pub fn official_provider_supports_proxy_takeover(app_type: &AppType, provider: &Provider) -> bool {
+    matches!(app_type, AppType::Codex)
+        && crate::proxy::providers::is_codex_official_provider(provider)
+}
+
+/// 统一会话开关变化后，立即刷新当前官方 Codex 的 live 或代理恢复备份。
+pub fn reapply_current_codex_official_live(state: &AppState) -> Result<bool, AppError> {
+    let Some(current_id) =
+        crate::settings::get_effective_current_provider(&state.db, &AppType::Codex)?
+    else {
+        return Ok(false);
+    };
+    let Some(provider) = state
+        .db
+        .get_provider_by_id(&current_id, AppType::Codex.as_str())?
+    else {
+        return Ok(false);
+    };
+    if !crate::proxy::providers::is_codex_official_provider(&provider) {
+        return Ok(false);
+    }
+
+    let has_backup =
+        futures::executor::block_on(state.db.get_live_backup(AppType::Codex.as_str()))?.is_some();
+    let live_taken_over = state
+        .proxy_service
+        .detect_takeover_in_live_config_for_app(&AppType::Codex);
+    if has_backup || live_taken_over {
+        futures::executor::block_on(
+            state
+                .proxy_service
+                .update_live_backup_from_provider(AppType::Codex.as_str(), &provider),
+        )
+        .map_err(AppError::Message)?;
+    } else {
+        write_live_with_common_config(state.db.as_ref(), &AppType::Codex, &provider)?;
+        McpService::sync_enabled_for_app(state, &AppType::Codex)?;
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    use serial_test::serial;
+
+    struct TestHome {
+        previous: Option<std::ffi::OsString>,
+        _dir: tempfile::TempDir,
+    }
+
+    impl TestHome {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().expect("temp home");
+            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            Self {
+                previous,
+                _dir: dir,
+            }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
 
     #[test]
     fn validate_provider_settings_rejects_missing_auth() {
@@ -91,7 +163,52 @@ mod tests {
     }
 
     #[test]
-    fn extract_codex_common_config_preserves_mcp_servers_base_url() {
+    #[serial]
+    fn grokbuild_provider_crud_accepts_custom_and_official_configs() {
+        let _home = TestHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let db = std::sync::Arc::new(
+            crate::database::Database::memory().expect("create in-memory database"),
+        );
+        let state = AppState::new(db);
+        let custom = Provider::with_id(
+            "grok-custom".into(),
+            "Grok Custom".into(),
+            json!({
+                "config": r#"[models]
+default = "grok-4.5"
+
+[model."grok-4.5"]
+model = "grok-4.5"
+base_url = "https://example.com/v1"
+name = "Example"
+api_key = "secret"
+api_backend = "responses"
+context_window = 500000
+"#
+            }),
+            None,
+        );
+        ProviderService::add(&state, AppType::GrokBuild, custom, true)
+            .expect("add custom provider");
+
+        let mut official = Provider::with_id(
+            "grokbuild-official".into(),
+            "Grok Official".into(),
+            json!({ "config": "" }),
+            None,
+        );
+        official.category = Some("official".into());
+        ProviderService::add(&state, AppType::GrokBuild, official, true)
+            .expect("add official provider");
+
+        let providers = ProviderService::list(&state, AppType::GrokBuild).unwrap();
+        assert!(providers.contains_key("grok-custom"));
+        assert!(providers.contains_key("grokbuild-official"));
+    }
+
+    #[test]
+    fn extract_codex_common_config_removes_provider_and_mcp_sections() {
         let config_toml = r#"model_provider = "azure"
 model = "gpt-4"
 disable_response_storage = true
@@ -125,14 +242,192 @@ base_url = "http://localhost:8080"
             !extracted.contains("[model_providers"),
             "should remove entire model_providers table"
         );
-        assert!(
-            extracted.contains("http://localhost:8080"),
-            "should keep mcp_servers.* base_url"
+        assert!(!extracted.contains("[mcp_servers"));
+        assert!(!extracted.contains("http://localhost:8080"));
+    }
+
+    #[test]
+    fn codex_live_shared_changes_replace_common_config_on_switch() {
+        let db = std::sync::Arc::new(
+            crate::database::Database::memory().expect("create in-memory database"),
         );
+        db.set_config_snippet(
+            AppType::Codex.as_str(),
+            Some("disable_response_storage = true".to_string()),
+        )
+        .expect("seed snippet");
+        let state = AppState::new(db.clone());
+        let mut provider = Provider::with_id(
+            "codex-source".to_string(),
+            "Codex Source".to_string(),
+            json!({}),
+            None,
+        );
+        provider.meta = Some(crate::provider::ProviderMeta {
+            common_config_enabled: Some(true),
+            ..Default::default()
+        });
+        let live = json!({
+            "config": "model = \"gpt-5.6\"\ndisable_response_storage = false\n\n[model_providers.remote]\nbase_url = \"https://example.com/v1\"\n"
+        });
+        let mut result = SwitchResult::default();
+
+        ProviderService::sync_common_config_snippet_from_live(
+            &state,
+            &AppType::Codex,
+            &provider,
+            &live,
+            &mut result,
+        );
+
+        let snippet = db
+            .get_config_snippet(AppType::Codex.as_str())
+            .expect("read snippet")
+            .expect("snippet");
+        assert!(snippet.contains("disable_response_storage = false"));
+        assert!(!snippet.contains("model_providers"));
+        assert!(!snippet.contains("https://example.com"));
+        assert!(result.warnings.is_empty());
+    }
+
+    #[test]
+    fn sensitive_key_matcher_covers_credentials_without_hiding_token_limits() {
+        for key in [
+            "GOOGLE_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "SOME_PROXY_AUTH_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "GITHUB_PAT",
+        ] {
+            assert!(ProviderService::is_sensitive_config_key(key), "{key}");
+        }
+        for key in ["PATH", "GEMINI_TIMEOUT_MS", "MAX_THINKING_TOKENS"] {
+            assert!(!ProviderService::is_sensitive_config_key(key), "{key}");
+        }
+    }
+
+    #[test]
+    fn extract_gemini_common_config_strips_all_credentials() {
+        let settings = json!({
+            "env": {
+                "GEMINI_API_KEY": "gemini-key",
+                "GOOGLE_API_KEY": "google-key",
+                "GOOGLE_APPLICATION_CREDENTIALS": "/path/credentials.json",
+                "SOME_PROXY_AUTH_TOKEN": "proxy-token",
+                "GOOGLE_GEMINI_BASE_URL": "https://gemini.example",
+                "GEMINI_TIMEOUT_MS": "30000"
+            }
+        });
+
+        let snippet = ProviderService::extract_gemini_common_config(&settings)
+            .expect("extract common config");
+        let value: Value = serde_json::from_str(&snippet).expect("valid json");
+
+        assert_eq!(value["GEMINI_TIMEOUT_MS"], "30000");
+        assert_eq!(value.as_object().expect("object").len(), 1);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn scrub_removes_historical_gemini_credentials_without_storing_values() {
+        let _home = TestHome::new();
+        let db = std::sync::Arc::new(crate::database::Database::memory().expect("database"));
+        let state = AppState::new(db.clone());
+        db.set_config_snippet(
+            "gemini",
+            Some(
+                json!({
+                    "GOOGLE_API_KEY": "leaked-secret",
+                    "GEMINI_TIMEOUT_MS": "30000"
+                })
+                .to_string(),
+            ),
+        )
+        .expect("snippet");
+        let provider = Provider::with_id(
+            "victim".to_string(),
+            "Victim".to_string(),
+            json!({
+                "env": {
+                    "GOOGLE_API_KEY": "leaked-secret",
+                    "GEMINI_TIMEOUT_MS": "30000"
+                }
+            }),
+            None,
+        );
+        db.save_provider("gemini", &provider).expect("provider");
+
+        ProviderService::scrub_leaked_gemini_common_config(&state)
+            .await
+            .expect("scrub");
+
+        let snippet = db
+            .get_config_snippet("gemini")
+            .expect("read snippet")
+            .expect("snippet remains");
+        assert_eq!(
+            serde_json::from_str::<Value>(&snippet).expect("json"),
+            json!({ "GEMINI_TIMEOUT_MS": "30000" })
+        );
+        let cleaned = db
+            .get_provider_by_id("victim", "gemini")
+            .expect("read provider")
+            .expect("provider exists");
+        assert!(cleaned.settings_config["env"].get("GOOGLE_API_KEY").is_none());
+        let audit = db
+            .get_setting("gemini_common_config_scrub_audit_v1")
+            .expect("audit")
+            .expect("audit exists");
+        assert!(!audit.contains("leaked-secret"));
     }
 }
 
 impl ProviderService {
+    pub(crate) fn is_sensitive_config_key(name: &str) -> bool {
+        let upper = name.to_ascii_uppercase();
+        const SENSITIVE_SUFFIXES: &[&str] = &[
+            "_KEY",
+            "_API_KEY",
+            "_ACCESS_KEY",
+            "_ACCESS_KEY_ID",
+            "_KEY_ID",
+            "_PRIVATE_KEY",
+            "_APIKEY",
+            "_ACCESSKEY",
+            "_SECRETKEY",
+            "_APITOKEN",
+            "_AUTH_TOKEN",
+            "_TOKEN",
+            "_PAT",
+            "_PWD",
+            "_PASS",
+            "_PASSPHRASE",
+            "_CREDS",
+        ];
+        const SENSITIVE_EXACT: &[&str] = &[
+            "APIKEY",
+            "API_KEY",
+            "TOKEN",
+            "SECRET",
+            "PASSWORD",
+            "CREDENTIALS",
+        ];
+        const SENSITIVE_CONTAINS: &[&str] = &[
+            "SECRET",
+            "PASSWORD",
+            "PASSWD",
+            "CREDENTIAL",
+            "PRIVATE_KEY",
+            "BEARER_TOKEN",
+        ];
+
+        SENSITIVE_EXACT.contains(&upper.as_str())
+            || SENSITIVE_SUFFIXES.iter().any(|suffix| upper.ends_with(suffix))
+            || SENSITIVE_CONTAINS
+                .iter()
+                .any(|fragment| upper.contains(fragment))
+    }
+
     fn normalize_provider_if_claude(app_type: &AppType, provider: &mut Provider) {
         if matches!(app_type, AppType::Claude) {
             let mut v = provider.settings_config.clone();
@@ -166,6 +461,14 @@ impl ProviderService {
             .meta
             .get_or_insert_with(Default::default)
             .live_config_managed = Some(managed);
+    }
+
+    fn is_hermes_read_only_provider(provider: &Provider) -> bool {
+        provider
+            .settings_config
+            .get(crate::hermes_config::PROVIDER_SOURCE_FIELD)
+            .and_then(Value::as_str)
+            == Some(crate::hermes_config::PROVIDER_SOURCE_DICT)
     }
 
     /// List all providers for an app type
@@ -254,6 +557,17 @@ impl ProviderService {
         let existing_provider = state
             .db
             .get_provider_by_id(&original_id, app_type.as_str())?;
+        if matches!(app_type, AppType::Hermes)
+            && existing_provider
+                .as_ref()
+                .is_some_and(Self::is_hermes_read_only_provider)
+        {
+            return Err(AppError::localized(
+                "provider.hermes.read_only",
+                "该供应商由 Hermes providers 配置管理，请在 Hermes Web UI 中修改",
+                "This provider is managed by Hermes; edit it in Hermes Web UI",
+            ));
+        }
         // Normalize Claude model keys
         Self::normalize_provider_if_claude(&app_type, &mut provider);
         Self::validate_provider_settings(&app_type, &provider)?;
@@ -403,8 +717,11 @@ impl ProviderService {
                 .map_err(|e| AppError::Message(format!("更新 Live 备份失败: {e}")))?;
             } else {
                 write_live_with_common_config(state.db.as_ref(), &app_type, &provider)?;
-                // Sync MCP
-                McpService::sync_all_enabled(state)?;
+                if let Err(error) = McpService::sync_enabled_for_app(state, &app_type) {
+                    log::warn!(
+                        "保存供应商后重投影 {app_type:?} MCP 失败（将在下次同步时自愈）: {error}"
+                    );
+                }
             }
         }
 
@@ -460,6 +777,7 @@ impl ProviderService {
                 match app_type {
                     AppType::OpenCode => remove_opencode_provider_from_live(id)?,
                     AppType::OpenClaw => remove_openclaw_provider_from_live(id)?,
+                    AppType::Hermes => remove_hermes_provider_from_live(id)?,
                     _ => {}
                 }
             }
@@ -540,6 +858,9 @@ impl ProviderService {
             AppType::OpenClaw => {
                 remove_openclaw_provider_from_live(id)?;
             }
+            AppType::Hermes => {
+                remove_hermes_provider_from_live(id)?;
+            }
             _ => {
                 return Err(AppError::Message(format!(
                     "App {} does not support remove from live config",
@@ -602,7 +923,10 @@ impl ProviderService {
         // Hot-switch only when BOTH: this app is taken over AND proxy server is actually running
         let should_hot_switch = (is_app_taken_over || live_taken_over) && is_proxy_running;
 
-        if should_hot_switch && _provider.category.as_deref() == Some("official") {
+        if should_hot_switch
+            && _provider.category.as_deref() == Some("official")
+            && !official_provider_supports_proxy_takeover(&app_type, _provider)
+        {
             return Err(AppError::localized(
                 "provider.switch.official_blocked_by_proxy",
                 "Routing 激活时不能切换到官方供应商，经由本地代理访问官方 API 可能导致账号风险。请先关闭 Routing，或改用第三方供应商。",
@@ -643,6 +967,9 @@ impl ProviderService {
                 if let Err(e) = state.proxy_service.cleanup_claude_model_overrides_in_live() {
                     log::warn!("清理 Claude Live 模型字段失败（不影响切换结果）: {e}");
                 }
+            } else if matches!(app_type, AppType::Codex) {
+                futures::executor::block_on(state.proxy_service.reapply_codex_takeover_live())
+                    .map_err(|e| AppError::Message(format!("刷新 Codex 接管配置失败: {e}")))?;
             }
 
             // Note: No Live config write, no MCP sync
@@ -704,6 +1031,13 @@ impl ProviderService {
                     // Only backfill when switching to a different provider
                     if let Ok(live_config) = read_live_settings(app_type.clone()) {
                         if let Some(mut current_provider) = providers.get(&current_id).cloned() {
+                            Self::sync_common_config_snippet_from_live(
+                                state,
+                                &app_type,
+                                &current_provider,
+                                &live_config,
+                                &mut result,
+                            );
                             current_provider.settings_config =
                                 strip_common_config_from_live_settings(
                                     state.db.as_ref(),
@@ -734,8 +1068,13 @@ impl ProviderService {
             state.db.set_current_provider(app_type.as_str(), id)?;
         }
 
-        // Sync to live (write_gemini_live handles security flag internally for Gemini)
-        write_live_with_common_config(state.db.as_ref(), &app_type, provider)?;
+        // providers: map entries are owned by Hermes and must not be rewritten as custom providers.
+        if !matches!(app_type, AppType::Hermes) || !Self::is_hermes_read_only_provider(provider) {
+            write_live_with_common_config(state.db.as_ref(), &app_type, provider)?;
+        }
+        if matches!(app_type, AppType::Hermes) {
+            crate::hermes_config::apply_switch_defaults(&provider.id, &provider.settings_config)?;
+        }
 
         if app_type.is_additive_mode() && Self::provider_live_config_managed(provider) != Some(true)
         {
@@ -745,6 +1084,7 @@ impl ProviderService {
                 let rollback_result = match app_type {
                     AppType::OpenCode => remove_opencode_provider_from_live(&provider.id),
                     AppType::OpenClaw => remove_openclaw_provider_from_live(&provider.id),
+                    AppType::Hermes => remove_hermes_provider_from_live(&provider.id),
                     _ => Ok(()),
                 };
 
@@ -765,8 +1105,9 @@ impl ProviderService {
             }
         }
 
-        // Sync MCP
-        McpService::sync_all_enabled(state)?;
+        if let Err(error) = McpService::sync_enabled_for_app(state, &app_type) {
+            log::warn!("切换供应商后重投影 {app_type:?} MCP 失败（将在下次同步时自愈）: {error}");
+        }
 
         Ok(result)
     }
@@ -896,6 +1237,71 @@ impl ProviderService {
         Self::migrate_legacy_common_config_usage(state, app_type, &snippet)
     }
 
+    /// 切走前把 Claude/Codex live 中的共享改动整体重提取回通用配置片段。
+    fn sync_common_config_snippet_from_live(
+        state: &AppState,
+        app_type: &AppType,
+        provider: &Provider,
+        live_config: &Value,
+        result: &mut SwitchResult,
+    ) {
+        if !matches!(app_type, AppType::Claude | AppType::Codex)
+            || provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.common_config_enabled)
+                != Some(true)
+        {
+            return;
+        }
+
+        match state.db.is_config_snippet_cleared(app_type.as_str()) {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(error) => {
+                log::warn!(
+                    "读取 {} 通用配置清空标记失败: {error}",
+                    app_type.as_str()
+                );
+                return;
+            }
+        }
+
+        let new_snippet = match Self::extract_common_config_snippet_from_settings(
+            app_type.clone(),
+            live_config,
+        ) {
+            Ok(snippet) => snippet,
+            Err(error) => {
+                log::warn!(
+                    "从 {} Provider '{}' live 配置提取通用配置失败: {error}",
+                    app_type.as_str(),
+                    provider.id
+                );
+                return;
+            }
+        };
+        if state.db.get_config_snippet(app_type.as_str()).ok().flatten().as_deref()
+            == Some(new_snippet.as_str())
+        {
+            return;
+        }
+
+        if let Err(error) = state
+            .db
+            .set_config_snippet(app_type.as_str(), Some(new_snippet))
+        {
+            log::warn!(
+                "保存 {} Provider '{}' 自动同步的通用配置失败: {error}",
+                app_type.as_str(),
+                provider.id
+            );
+            result
+                .warnings
+                .push(format!("common_config_sync_failed:{}", provider.id));
+        }
+    }
+
     /// Extract common config snippet from current provider
     ///
     /// Extracts the current provider's configuration and removes provider-specific fields
@@ -921,8 +1327,10 @@ impl ProviderService {
             }
             AppType::Codex => Self::extract_codex_common_config(&provider.settings_config),
             AppType::Gemini => Self::extract_gemini_common_config(&provider.settings_config),
+            AppType::GrokBuild => Ok(String::new()),
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
+            AppType::Hermes => Ok(String::new()),
         }
     }
 
@@ -937,8 +1345,10 @@ impl ProviderService {
             }
             AppType::Codex => Self::extract_codex_common_config(settings_config),
             AppType::Gemini => Self::extract_gemini_common_config(settings_config),
+            AppType::GrokBuild => Ok(String::new()),
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
+            AppType::Hermes => Ok(String::new()),
         }
     }
 
@@ -946,18 +1356,20 @@ impl ProviderService {
     fn extract_claude_common_config(settings: &Value) -> Result<String, AppError> {
         let mut config = settings.clone();
 
-        // Fields to exclude from common config
         const ENV_EXCLUDES: &[&str] = &[
-            // Auth
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_AUTH_TOKEN",
-            // Models (5 fields)
             "ANTHROPIC_MODEL",
             "ANTHROPIC_REASONING_MODEL",
             "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
             "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
             "ANTHROPIC_DEFAULT_SONNET_MODEL",
-            // Endpoint
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+            "CLAUDE_CODE_SUBAGENT_MODEL",
+            "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+            "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
             "ANTHROPIC_BASE_URL",
         ];
 
@@ -970,8 +1382,16 @@ impl ProviderService {
 
         // Remove env fields
         if let Some(env) = config.get_mut("env").and_then(|v| v.as_object_mut()) {
+            let sensitive: Vec<String> = env
+                .keys()
+                .filter(|key| Self::is_sensitive_config_key(key))
+                .cloned()
+                .collect();
             for key in ENV_EXCLUDES {
                 env.remove(*key);
+            }
+            for key in sensitive {
+                env.remove(&key);
             }
             // If env is empty after removal, remove the env object itself
             if env.is_empty() {
@@ -981,8 +1401,16 @@ impl ProviderService {
 
         // Remove top-level fields
         if let Some(obj) = config.as_object_mut() {
+            let sensitive: Vec<String> = obj
+                .keys()
+                .filter(|key| Self::is_sensitive_config_key(key))
+                .cloned()
+                .collect();
             for key in TOP_LEVEL_EXCLUDES {
                 obj.remove(*key);
+            }
+            for key in sensitive {
+                obj.remove(&key);
             }
         }
 
@@ -1017,9 +1445,25 @@ impl ProviderService {
         root.remove("model_provider");
         // Legacy/alt formats might use a top-level base_url.
         root.remove("base_url");
+        root.remove("wire_api");
 
         // Remove entire model_providers table (provider-specific configuration)
         root.remove("model_providers");
+        root.remove("mcp_servers");
+        if let Some(mcp) = root
+            .get_mut("mcp")
+            .and_then(|item| item.as_table_like_mut())
+        {
+            mcp.remove("servers");
+            if mcp.is_empty() {
+                root.remove("mcp");
+            }
+        }
+        root.remove("experimental_bearer_token");
+        root.remove("model_catalog_json");
+        if root.get("web_search").and_then(|item| item.as_str()) == Some("disabled") {
+            root.remove("web_search");
+        }
 
         // Clean up multiple empty lines (keep at most one blank line).
         let mut cleaned = String::new();
@@ -1051,7 +1495,7 @@ impl ProviderService {
         let mut snippet = serde_json::Map::new();
         if let Some(env) = env {
             for (key, value) in env {
-                if key == "GOOGLE_GEMINI_BASE_URL" || key == "GEMINI_API_KEY" {
+                if key == "GOOGLE_GEMINI_BASE_URL" || Self::is_sensitive_config_key(key) {
                     continue;
                 }
                 let Value::String(v) = value else {
@@ -1070,6 +1514,141 @@ impl ProviderService {
 
         serde_json::to_string_pretty(&Value::Object(snippet))
             .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))
+    }
+
+    pub async fn scrub_leaked_gemini_common_config(state: &AppState) -> Result<(), AppError> {
+        const FLAG: &str = "gemini_common_config_credentials_scrubbed_v1";
+        const AUDIT_KEY: &str = "gemini_common_config_scrub_audit_v1";
+        let app = AppType::Gemini;
+
+        if state.db.get_setting(FLAG)?.as_deref() == Some("true") {
+            return Ok(());
+        }
+
+        let Some(snippet_text) = state.db.get_config_snippet(app.as_str())? else {
+            state.db.set_setting(FLAG, "true")?;
+            return Ok(());
+        };
+        let Ok(Value::Object(entries)) = serde_json::from_str::<Value>(&snippet_text) else {
+            state.db.set_setting(FLAG, "true")?;
+            return Ok(());
+        };
+
+        let mut leaked = serde_json::Map::new();
+        let mut clean = serde_json::Map::new();
+        for (key, value) in entries {
+            if Self::is_sensitive_config_key(&key) {
+                leaked.insert(key, value);
+            } else {
+                clean.insert(key, value);
+            }
+        }
+        if leaked.is_empty() {
+            state.db.set_setting(FLAG, "true")?;
+            return Ok(());
+        }
+
+        let leaked_keys: Vec<String> = leaked.keys().cloned().collect();
+        let leaked_value = Value::Object(leaked);
+        let leaked_text = serde_json::to_string(&leaked_value)
+            .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))?;
+
+        let providers = state.db.get_all_providers(app.as_str())?;
+        let mut pending = Vec::new();
+        for (id, provider) in providers {
+            let cleaned = live::remove_common_config_from_settings(
+                &app,
+                &provider.settings_config,
+                &leaked_text,
+            )?;
+            if cleaned != provider.settings_config {
+                pending.push((id, provider, cleaned));
+            }
+        }
+
+        let removed_env_keys = |before: &Value, after: &Value| -> Vec<String> {
+            let before_env = before.get("env").and_then(Value::as_object);
+            let after_env = after.get("env").and_then(Value::as_object);
+            match (before_env, after_env) {
+                (Some(before_env), Some(after_env)) => before_env
+                    .keys()
+                    .filter(|key| !after_env.contains_key(*key))
+                    .cloned()
+                    .collect(),
+                (Some(before_env), None) => before_env.keys().cloned().collect(),
+                _ => Vec::new(),
+            }
+        };
+        let audit = serde_json::json!({
+            "removedFromSnippet": leaked_keys,
+            "providers": pending
+                .iter()
+                .map(|(id, provider, cleaned)| serde_json::json!({
+                    "id": id,
+                    "removedKeys": removed_env_keys(&provider.settings_config, cleaned),
+                }))
+                .collect::<Vec<_>>(),
+        });
+        if state.db.get_setting(AUDIT_KEY)?.is_none() {
+            state.db.set_setting(
+                AUDIT_KEY,
+                &serde_json::to_string(&audit)
+                    .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))?,
+            )?;
+        }
+
+        for (id, provider, cleaned) in pending {
+            let mut updated = provider;
+            updated.settings_config = cleaned;
+            state.db.save_provider(app.as_str(), &updated)?;
+            log::info!("已从 Gemini 供应商 '{id}' 中清除泄漏的共享凭据");
+        }
+
+        if let Some(backup) = state.db.get_live_backup(app.as_str()).await? {
+            let original: Value = serde_json::from_str(&backup.original_config)
+                .map_err(|e| AppError::Message(format!("解析 Gemini 代理接管备份失败: {e}")))?;
+            let cleaned =
+                live::remove_common_config_from_settings(&app, &original, &leaked_text)?;
+            if cleaned != original {
+                state
+                    .db
+                    .save_live_backup(
+                        app.as_str(),
+                        &serde_json::to_string(&cleaned).map_err(|e| {
+                            AppError::Message(format!("Serialization failed: {e}"))
+                        })?,
+                    )
+                    .await?;
+            }
+        }
+
+        let leaked_env: std::collections::HashMap<String, String> = leaked_value
+            .as_object()
+            .map(|map| {
+                map.iter()
+                    .filter_map(|(key, value)| {
+                        value.as_str().map(|text| (key.clone(), text.to_string()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        crate::gemini_config::remove_gemini_env_entries(&leaked_env)?;
+
+        if clean.is_empty() {
+            state.db.set_config_snippet(app.as_str(), None)?;
+        } else {
+            state.db.set_config_snippet(
+                app.as_str(),
+                Some(
+                    serde_json::to_string_pretty(&Value::Object(clean))
+                        .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))?,
+                ),
+            )?;
+        }
+
+        state.db.set_setting(FLAG, "true")?;
+        log::warn!("Gemini 通用配置中的历史凭据污染已完成一次性清理");
+        Ok(())
     }
 
     /// Extract common config for OpenCode (JSON format)
@@ -1278,6 +1857,30 @@ impl ProviderService {
                 use crate::gemini_config::validate_gemini_settings;
                 validate_gemini_settings(&provider.settings_config)?
             }
+            AppType::GrokBuild => {
+                let settings = provider.settings_config.as_object().ok_or_else(|| {
+                    AppError::localized(
+                        "provider.grokbuild.settings.not_object",
+                        "Grok Build 配置必须是 JSON 对象",
+                        "Grok Build configuration must be a JSON object",
+                    )
+                })?;
+                let config = settings
+                    .get("config")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        AppError::localized(
+                            "provider.grokbuild.config.missing",
+                            "Grok Build 配置缺少 config 字段",
+                            "Grok Build configuration is missing the config field",
+                        )
+                    })?;
+                if provider.category.as_deref() == Some("official") {
+                    crate::grok_config::validate_config_toml_syntax(config)?;
+                } else {
+                    crate::grok_config::validate_config_toml(config)?;
+                }
+            }
             AppType::OpenCode => {
                 // OpenCode uses a different config structure: { npm, options, models }
                 // Basic validation - must be an object
@@ -1297,6 +1900,27 @@ impl ProviderService {
                         "provider.openclaw.settings.not_object",
                         "OpenClaw 配置必须是 JSON 对象",
                         "OpenClaw configuration must be a JSON object",
+                    ));
+                }
+            }
+            AppType::Hermes => {
+                let settings = provider.settings_config.as_object().ok_or_else(|| {
+                    AppError::localized(
+                        "provider.hermes.settings.not_object",
+                        "Hermes 配置必须是 JSON 对象",
+                        "Hermes configuration must be a JSON object",
+                    )
+                })?;
+                let name = settings
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim();
+                if name.is_empty() {
+                    return Err(AppError::localized(
+                        "provider.hermes.name.missing",
+                        "Hermes 配置缺少供应商名称",
+                        "Hermes configuration is missing the provider name",
                     ));
                 }
             }
@@ -1437,6 +2061,28 @@ impl ProviderService {
 
                 Ok((api_key, base_url))
             }
+            AppType::GrokBuild => {
+                let config = provider
+                    .settings_config
+                    .get("config")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        AppError::localized(
+                            "provider.grokbuild.config.missing",
+                            "Grok Build 配置缺少 config 字段",
+                            "Grok Build configuration is missing the config field",
+                        )
+                    })?;
+                let (base_url, api_key) = crate::grok_config::extract_credentials(config)
+                    .ok_or_else(|| {
+                        AppError::localized(
+                            "provider.grokbuild.credentials.missing",
+                            "Grok Build 配置缺少 Base URL 或 API Key",
+                            "Grok Build configuration is missing the base URL or API key",
+                        )
+                    })?;
+                Ok((api_key, base_url))
+            }
             AppType::OpenCode => {
                 // OpenCode uses options.apiKey and options.baseURL
                 let options = provider
@@ -1493,6 +2139,21 @@ impl ProviderService {
                     .unwrap_or("")
                     .to_string();
 
+                Ok((api_key, base_url))
+            }
+            AppType::Hermes => {
+                let api_key = provider
+                    .settings_config
+                    .get("api_key")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let base_url = provider
+                    .settings_config
+                    .get("base_url")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
                 Ok((api_key, base_url))
             }
         }

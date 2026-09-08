@@ -16,9 +16,7 @@ use crate::proxy::gemini_url::{normalize_gemini_model_id, resolve_gemini_native_
 use crate::proxy::providers::copilot_auth;
 use crate::proxy::providers::transform::anthropic_to_openai;
 use crate::proxy::providers::transform_gemini::anthropic_to_gemini;
-use crate::proxy::providers::transform_responses::{
-    anthropic_to_responses, anthropic_to_responses_for_codex_oauth,
-};
+use crate::proxy::providers::transform_responses::anthropic_to_responses;
 use crate::proxy::providers::{
     get_adapter, AuthInfo, AuthStrategy, ClaudeAdapter, ProviderAdapter,
 };
@@ -196,6 +194,13 @@ impl StreamCheckService {
         }
     }
 
+    fn custom_user_agent(provider: &Provider) -> Option<reqwest::header::HeaderValue> {
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.custom_user_agent_header().ok().flatten())
+    }
+
     /// 单次流式检查
     async fn check_once(
         app_type: &AppType,
@@ -207,7 +212,10 @@ impl StreamCheckService {
     ) -> Result<StreamCheckResult, AppError> {
         let start = Instant::now();
 
-        if matches!(app_type, AppType::OpenCode | AppType::OpenClaw) {
+        if matches!(
+            app_type,
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes
+        ) {
             return Self::check_once_without_adapter(app_type, provider, config, start).await;
         }
 
@@ -263,6 +271,18 @@ impl StreamCheckService {
                 )
                 .await
             }
+            AppType::GrokBuild => {
+                Self::check_codex_stream(
+                    &client,
+                    &base_url,
+                    &auth,
+                    &model_to_test,
+                    test_prompt,
+                    request_timeout,
+                    provider,
+                )
+                .await
+            }
             AppType::Gemini => {
                 Self::check_gemini_stream(
                     &client,
@@ -275,8 +295,8 @@ impl StreamCheckService {
                 )
                 .await
             }
-            AppType::OpenCode | AppType::OpenClaw => {
-                unreachable!("OpenCode/OpenClaw 已通过 check_once_without_adapter 处理")
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+                unreachable!("累加模式应用已通过 check_once_without_adapter 处理")
             }
         };
 
@@ -356,17 +376,18 @@ impl StreamCheckService {
             == Some("codex_oauth");
 
         let body = if is_openai_responses {
-            if is_codex_oauth {
-                anthropic_to_responses_for_codex_oauth(anthropic_body, Some(&provider.id))
-            } else {
-                anthropic_to_responses(anthropic_body, Some(&provider.id))
-            }
+            anthropic_to_responses(
+                anthropic_body,
+                Some(&provider.id),
+                is_codex_oauth,
+                false,
+            )
             .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else if is_gemini_native {
             anthropic_to_gemini(anthropic_body)
                 .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else if is_openai_chat {
-            anthropic_to_openai(anthropic_body, Some(&provider.id))
+            anthropic_to_openai(anthropic_body)
                 .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else {
             anthropic_body
@@ -468,6 +489,12 @@ impl StreamCheckService {
             }
         }
 
+        if !is_github_copilot {
+            if let Some(user_agent) = Self::custom_user_agent(provider) {
+                request_builder = request_builder.header("user-agent", user_agent);
+            }
+        }
+
         let response = request_builder
             .timeout(timeout)
             .json(&body)
@@ -519,6 +546,12 @@ impl StreamCheckService {
         // 获取本地系统信息
         let os_name = Self::get_os_name();
         let arch_name = Self::get_arch_name();
+        let user_agent = Self::custom_user_agent(provider).unwrap_or_else(|| {
+            reqwest::header::HeaderValue::from_str(&format!(
+                "codex_cli_rs/0.80.0 ({os_name} 15.7.2; {arch_name}) Terminal"
+            ))
+            .unwrap_or_else(|_| reqwest::header::HeaderValue::from_static("codex_cli_rs/0.80.0"))
+        });
 
         // Responses API 请求体格式 (input 必须是数组)
         let mut body = json!({
@@ -540,10 +573,7 @@ impl StreamCheckService {
                 .header("content-type", "application/json")
                 .header("accept", "text/event-stream")
                 .header("accept-encoding", "identity")
-                .header(
-                    "user-agent",
-                    format!("codex_cli_rs/0.80.0 ({os_name} 15.7.2; {arch_name}) Terminal"),
-                )
+                .header("user-agent", user_agent.clone())
                 .header("originator", "codex_cli_rs")
                 .timeout(timeout)
                 .json(&body)
@@ -681,7 +711,17 @@ impl StreamCheckService {
                 )
                 .await
             }
-            _ => unreachable!("check_once_without_adapter 只处理 OpenCode/OpenClaw"),
+            AppType::Hermes => {
+                Self::check_hermes_stream(
+                    &client,
+                    provider,
+                    &model_to_test,
+                    test_prompt,
+                    request_timeout,
+                )
+                .await
+            }
+            _ => unreachable!("check_once_without_adapter 只处理累加模式应用"),
         };
 
         let response_time = start.elapsed().as_millis() as u64;
@@ -872,6 +912,62 @@ impl StreamCheckService {
                 "OpenClaw provider is missing the `api` field",
             )),
         }
+    }
+
+    async fn check_hermes_stream(
+        client: &Client,
+        provider: &Provider,
+        model: &str,
+        test_prompt: &str,
+        timeout: std::time::Duration,
+    ) -> Result<(u16, String), AppError> {
+        let base_url = Self::extract_hermes_string(provider, "base_url")?;
+        let api_key = Self::extract_hermes_string(provider, "api_key")?;
+        let api_mode = Self::extract_hermes_string(provider, "api_mode")?;
+        let (strategy, api_format) = Self::resolve_hermes_api_mode(&api_mode)?;
+
+        Self::check_claude_stream(
+            client,
+            &base_url,
+            &AuthInfo::new(api_key, strategy),
+            model,
+            test_prompt,
+            timeout,
+            provider,
+            Some(api_format),
+            None,
+        )
+        .await
+    }
+
+    fn resolve_hermes_api_mode(api_mode: &str) -> Result<(AuthStrategy, &'static str), AppError> {
+        match api_mode {
+            "anthropic_messages" => Ok((AuthStrategy::Anthropic, "anthropic")),
+            "chat_completions" => Ok((AuthStrategy::Bearer, "openai_chat")),
+            "codex_responses" => Ok((AuthStrategy::Bearer, "openai_responses")),
+            other => Err(AppError::localized(
+                "hermes_api_mode_not_supported",
+                format!("Hermes 暂不支持 API 模式: {other}"),
+                format!("Hermes API mode is not supported: {other}"),
+            )),
+        }
+    }
+
+    fn extract_hermes_string(provider: &Provider, field: &str) -> Result<String, AppError> {
+        provider
+            .settings_config
+            .get(field)
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .ok_or_else(|| {
+                AppError::localized(
+                    "hermes_config_field_missing",
+                    format!("Hermes 供应商缺少 {field}"),
+                    format!("Hermes provider is missing `{field}`"),
+                )
+            })
     }
 
     fn openclaw_uses_auth_header(provider: &Provider) -> bool {
@@ -1173,6 +1269,15 @@ impl StreamCheckService {
             AppType::Codex => {
                 Self::extract_codex_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
+            AppType::GrokBuild => crate::grok_config::extract_model_config(
+                provider
+                    .settings_config
+                    .get("config")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default(),
+            )
+            .map(|model| model.model)
+            .unwrap_or_else(|| config.codex_model.clone()),
             AppType::Gemini => Self::extract_env_model(provider, "GEMINI_MODEL")
                 .unwrap_or_else(|| config.gemini_model.clone()),
             AppType::OpenCode => {
@@ -1184,6 +1289,9 @@ impl StreamCheckService {
                 // OpenClaw uses models array in settings_config
                 // Try to extract first model from the models array
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| "gpt-4o".to_string())
+            }
+            AppType::Hermes => {
+                Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
         }
     }
@@ -1362,6 +1470,44 @@ mod tests {
     }
 
     #[test]
+    fn custom_user_agent_trims_empty_and_invalid_values() {
+        use crate::provider::ProviderMeta;
+
+        let mut provider = make_provider(serde_json::json!({}));
+        assert!(StreamCheckService::custom_user_agent(&provider).is_none());
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("  claude-cli/2.1.161  ".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(
+            StreamCheckService::custom_user_agent(&provider)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "claude-cli/2.1.161"
+        );
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("   ".to_string()),
+            ..Default::default()
+        });
+        assert!(StreamCheckService::custom_user_agent(&provider).is_none());
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("claude-cli/2.1.161 中文".to_string()),
+            ..Default::default()
+        });
+        assert!(StreamCheckService::custom_user_agent(&provider).is_some());
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("claude-cli/2.1.161\nX".to_string()),
+            ..Default::default()
+        });
+        assert!(StreamCheckService::custom_user_agent(&provider).is_none());
+    }
+
+    #[test]
     fn test_resolve_opencode_base_url_explicit_wins() {
         let provider = make_provider(serde_json::json!({
             "npm": "@ai-sdk/openai",
@@ -1385,6 +1531,23 @@ mod tests {
             StreamCheckService::resolve_opencode_base_url(&provider, Some("@ai-sdk/openai"))
                 .expect("openai fallback should resolve");
         assert_eq!(resolved, "https://api.openai.com/v1");
+    }
+
+    #[test]
+    fn hermes_api_modes_use_matching_wire_formats() {
+        assert_eq!(
+            StreamCheckService::resolve_hermes_api_mode("anthropic_messages").unwrap(),
+            (AuthStrategy::Anthropic, "anthropic")
+        );
+        assert_eq!(
+            StreamCheckService::resolve_hermes_api_mode("chat_completions").unwrap(),
+            (AuthStrategy::Bearer, "openai_chat")
+        );
+        assert_eq!(
+            StreamCheckService::resolve_hermes_api_mode("codex_responses").unwrap(),
+            (AuthStrategy::Bearer, "openai_responses")
+        );
+        assert!(StreamCheckService::resolve_hermes_api_mode("unknown").is_err());
     }
 
     #[test]

@@ -33,7 +33,7 @@ mod schema;
 mod tests;
 
 // Failover 队列项仅在 crate 内部 API 层使用
-pub(crate) use dao::FailoverQueueItem;
+pub(crate) use dao::{FailoverQueueItem, Profile};
 
 use crate::config::get_app_config_dir;
 use crate::error::AppError;
@@ -45,10 +45,13 @@ use std::sync::Mutex;
 
 /// 当前 Schema 版本号
 /// 每次修改表结构时递增，并在 schema.rs 中添加相应的迁移逻辑
-pub(crate) const SCHEMA_VERSION: i32 = 11;
+pub(crate) const SCHEMA_VERSION: i32 = 13;
 
 /// Claude Desktop 官方预设供应商 ID（恢复官方配置时识别用）
 pub(crate) const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID: &str = "claude-desktop-official";
+
+/// Codex 内置官方供应商 ID；只有这个固定条目允许复用 Codex 原生 ChatGPT 登录。
+pub(crate) const CODEX_OFFICIAL_PROVIDER_ID: &str = "codex-official";
 
 /// 安全地序列化 JSON，避免 unwrap panic
 pub(crate) fn to_json_string<T: Serialize>(value: &T) -> Result<String, AppError> {
@@ -138,6 +141,9 @@ impl Database {
             log::warn!("Failed to ensure incremental auto-vacuum: {e}");
         }
         db.ensure_model_pricing_seeded()?;
+        if let Err(e) = crate::services::model_pricing::sync_local_model_pricing(&db) {
+            log::warn!("Failed to sync local model pricing file: {e}");
+        }
 
         // Startup cleanup: prune old logs and reclaim space
         if let Err(e) = db.cleanup_old_stream_check_logs(7) {
@@ -250,5 +256,4 @@ impl Database {
 
         Ok(rebuilt)
     }
-
 }

@@ -17,6 +17,8 @@ pub struct McpApps {
     #[serde(default)]
     pub gemini: bool,
     #[serde(default)]
+    pub grokbuild: bool,
+    #[serde(default)]
     pub opencode: bool,
     #[serde(default)]
     pub hermes: bool,
@@ -29,8 +31,10 @@ impl McpApps {
             AppType::Claude => self.claude,
             AppType::Codex => self.codex,
             AppType::Gemini => self.gemini,
+            AppType::GrokBuild => self.grokbuild,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support MCP
+            AppType::Hermes => self.hermes,
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 MCP
         }
     }
@@ -41,8 +45,10 @@ impl McpApps {
             AppType::Claude => self.claude = enabled,
             AppType::Codex => self.codex = enabled,
             AppType::Gemini => self.gemini = enabled,
+            AppType::GrokBuild => self.grokbuild = enabled,
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support MCP, ignore
+            AppType::Hermes => self.hermes = enabled,
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 MCP
         }
     }
@@ -59,12 +65,17 @@ impl McpApps {
         if self.gemini {
             apps.push(AppType::Gemini);
         }
+        if self.grokbuild {
+            apps.push(AppType::GrokBuild);
+        }
         if self.opencode {
             apps.push(AppType::OpenCode);
         }
+        if self.hermes {
+            apps.push(AppType::Hermes);
+        }
         apps
     }
-
 }
 
 /// Skill 应用启用状态（标记 Skill 应用到哪些客户端）
@@ -76,6 +87,8 @@ pub struct SkillApps {
     pub codex: bool,
     #[serde(default)]
     pub gemini: bool,
+    #[serde(default)]
+    pub grokbuild: bool,
     #[serde(default)]
     pub opencode: bool,
     #[serde(default)]
@@ -89,8 +102,10 @@ impl SkillApps {
             AppType::Claude => self.claude,
             AppType::Codex => self.codex,
             AppType::Gemini => self.gemini,
+            AppType::GrokBuild => self.grokbuild,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support Skills
+            AppType::Hermes => self.hermes,
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
@@ -101,8 +116,10 @@ impl SkillApps {
             AppType::Claude => self.claude = enabled,
             AppType::Codex => self.codex = enabled,
             AppType::Gemini => self.gemini = enabled,
+            AppType::GrokBuild => self.grokbuild = enabled,
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support Skills, ignore
+            AppType::Hermes => self.hermes = enabled,
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
@@ -119,15 +136,26 @@ impl SkillApps {
         if self.gemini {
             apps.push(AppType::Gemini);
         }
+        if self.grokbuild {
+            apps.push(AppType::GrokBuild);
+        }
         if self.opencode {
             apps.push(AppType::OpenCode);
+        }
+        if self.hermes {
+            apps.push(AppType::Hermes);
         }
         apps
     }
 
     /// 检查是否所有应用都未启用
     pub fn is_empty(&self) -> bool {
-        !self.claude && !self.codex && !self.gemini && !self.opencode
+        !self.claude
+            && !self.codex
+            && !self.gemini
+            && !self.grokbuild
+            && !self.opencode
+            && !self.hermes
     }
 
     /// 仅启用指定应用（其他应用设为禁用）
@@ -136,7 +164,6 @@ impl SkillApps {
         apps.set_enabled_for(app, true);
         apps
     }
-
 }
 
 /// 已安装的 Skill（v3.10.0+ 统一结构）
@@ -285,9 +312,13 @@ pub struct PromptRoot {
     #[serde(default)]
     pub gemini: PromptConfig,
     #[serde(default)]
+    pub grokbuild: PromptConfig,
+    #[serde(default)]
     pub opencode: PromptConfig,
     #[serde(default)]
     pub openclaw: PromptConfig,
+    #[serde(default)]
+    pub hermes: PromptConfig,
 }
 
 use crate::error::AppError;
@@ -295,9 +326,9 @@ use crate::error::AppError;
 #[cfg(test)]
 use crate::config::{copy_file, get_app_config_dir, get_app_config_path, write_json_file};
 #[cfg(test)]
-use crate::provider::ProviderManager;
-#[cfg(test)]
 use crate::prompt_files::prompt_file_path;
+#[cfg(test)]
+use crate::provider::ProviderManager;
 
 /// 应用类型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -313,8 +344,11 @@ pub enum AppType {
     ClaudeDesktop,
     Codex,
     Gemini,
+    #[serde(alias = "grok-build", alias = "grok_build", alias = "grok")]
+    GrokBuild,
     OpenCode,
     OpenClaw,
+    Hermes,
 }
 
 impl AppType {
@@ -324,8 +358,10 @@ impl AppType {
             AppType::ClaudeDesktop => "claude-desktop",
             AppType::Codex => "codex",
             AppType::Gemini => "gemini",
+            AppType::GrokBuild => "grokbuild",
             AppType::OpenCode => "opencode",
             AppType::OpenClaw => "openclaw",
+            AppType::Hermes => "hermes",
         }
     }
 
@@ -334,7 +370,10 @@ impl AppType {
     /// - Switch mode (false): Only the current provider is written to live config (Claude, Codex, Gemini)
     /// - Additive mode (true): All providers are written to live config (OpenCode, OpenClaw)
     pub fn is_additive_mode(&self) -> bool {
-        matches!(self, AppType::OpenCode | AppType::OpenClaw)
+        matches!(
+            self,
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes
+        )
     }
 
     /// Return an iterator over all app types
@@ -343,8 +382,10 @@ impl AppType {
             AppType::Claude,
             AppType::Codex,
             AppType::Gemini,
+            AppType::GrokBuild,
             AppType::OpenCode,
             AppType::OpenClaw,
+            AppType::Hermes,
         ]
         .into_iter()
     }
@@ -359,12 +400,14 @@ impl FromStr for AppType {
             "claude" => Ok(AppType::Claude),
             "codex" => Ok(AppType::Codex),
             "gemini" => Ok(AppType::Gemini),
+            "grokbuild" | "grok-build" | "grok_build" | "grok" => Ok(AppType::GrokBuild),
             "opencode" => Ok(AppType::OpenCode),
             "openclaw" => Ok(AppType::OpenClaw),
+            "hermes" => Ok(AppType::Hermes),
             other => Err(AppError::localized(
                 "unsupported_app",
-                format!("不支持的应用标识: '{other}'。可选值: claude, codex, gemini, opencode, openclaw。"),
-                format!("Unsupported app id: '{other}'. Allowed: claude, codex, gemini, opencode, openclaw."),
+                format!("不支持的应用标识: '{other}'。可选值: claude, codex, gemini, grokbuild, opencode, openclaw, hermes。"),
+                format!("Unsupported app id: '{other}'. Allowed: claude, codex, gemini, grokbuild, opencode, openclaw, hermes."),
             )),
         }
     }
@@ -586,6 +629,7 @@ impl MultiAppConfig {
         Self::auto_import_prompt_if_exists(&mut config, AppType::Gemini)?;
         Self::auto_import_prompt_if_exists(&mut config, AppType::OpenCode)?;
         Self::auto_import_prompt_if_exists(&mut config, AppType::OpenClaw)?;
+        Self::auto_import_prompt_if_exists(&mut config, AppType::Hermes)?;
 
         Ok(config)
     }
@@ -608,6 +652,7 @@ impl MultiAppConfig {
             || !self.prompts.gemini.prompts.is_empty()
             || !self.prompts.opencode.prompts.is_empty()
             || !self.prompts.openclaw.prompts.is_empty()
+            || !self.prompts.hermes.prompts.is_empty()
         {
             return Ok(false);
         }
@@ -621,6 +666,7 @@ impl MultiAppConfig {
             AppType::Gemini,
             AppType::OpenCode,
             AppType::OpenClaw,
+            AppType::Hermes,
         ] {
             // 复用已有的单应用导入逻辑
             if Self::auto_import_prompt_if_exists(self, app)? {
@@ -692,8 +738,10 @@ impl MultiAppConfig {
             AppType::Claude | AppType::ClaudeDesktop => &mut config.prompts.claude.prompts,
             AppType::Codex => &mut config.prompts.codex.prompts,
             AppType::Gemini => &mut config.prompts.gemini.prompts,
+            AppType::GrokBuild => &mut config.prompts.grokbuild.prompts,
             AppType::OpenCode => &mut config.prompts.opencode.prompts,
             AppType::OpenClaw => &mut config.prompts.openclaw.prompts,
+            AppType::Hermes => &mut config.prompts.hermes.prompts,
         };
 
         prompts.insert(id, prompt);
@@ -733,8 +781,10 @@ impl MultiAppConfig {
                 AppType::Claude => &self.mcp.claude.servers,
                 AppType::Codex => &self.mcp.codex.servers,
                 AppType::Gemini => &self.mcp.gemini.servers,
+                AppType::GrokBuild => continue,
                 AppType::OpenCode => &self.mcp.opencode.servers,
                 AppType::OpenClaw => continue, // OpenClaw MCP is still in development, skip
+                AppType::Hermes => continue,
                 AppType::ClaudeDesktop => continue, // C-Phase0：claude-desktop 暂不支持 MCP
             };
 
@@ -1068,6 +1118,9 @@ mod tests {
             Ok(AppType::Claude)
         ));
         assert!(matches!(AppType::from_str("\tcoDeX\t"), Ok(AppType::Codex)));
+        for alias in ["grokbuild", "grok-build", "grok_build", "grok"] {
+            assert!(matches!(AppType::from_str(alias), Ok(AppType::GrokBuild)));
+        }
     }
 
     #[test]

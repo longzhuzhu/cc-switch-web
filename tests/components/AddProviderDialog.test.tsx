@@ -59,6 +59,20 @@ describe("AddProviderDialog", () => {
     };
   });
 
+  it("显示预设填写提示并收紧顶部间距", () => {
+    const { container } = render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("provider.addFooterHint")).toBeInTheDocument();
+    expect(container.ownerDocument.querySelector(".pt-3")).not.toBeNull();
+  });
+
   it("使用 ProviderForm 返回的自定义端点", async () => {
     const handleSubmit = vi.fn().mockResolvedValue(undefined);
     const handleOpenChange = vi.fn();
@@ -124,5 +138,71 @@ describe("AddProviderDialog", () => {
         lastUsed: undefined,
       },
     });
+  });
+
+  it("从 Grok Build config.toml 提取自定义端点", async () => {
+    const handleSubmit = vi.fn().mockResolvedValue(undefined);
+    mockFormValues = {
+      name: "Grok Relay",
+      websiteUrl: "",
+      settingsConfig: JSON.stringify({
+        config: `[models]
+default = "grok-4.5"
+
+[model."grok-4.5"]
+model = "grok-4.5"
+base_url = "https://grok.example.com/v1"
+name = "Grok Relay"
+api_key = "secret"
+api_backend = "responses"
+context_window = 500000
+`,
+      }),
+    };
+
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="grokbuild"
+        onSubmit={handleSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "common.add" }));
+
+    await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
+    expect(handleSubmit.mock.calls[0][0].meta?.custom_endpoints).toEqual({
+      "https://grok.example.com/v1": {
+        url: "https://grok.example.com/v1",
+        addedAt: expect.any(Number),
+        lastUsed: undefined,
+      },
+    });
+  });
+
+  it("Grok Build 官方预设走现有 seed 流程", async () => {
+    const handleSubmit = vi.fn().mockResolvedValue(undefined);
+    mockFormValues = {
+      name: "Grok Official",
+      websiteUrl: "https://x.ai/grok",
+      settingsConfig: JSON.stringify({ config: "" }),
+      presetId: "grokbuild-official",
+      presetCategory: "official",
+    };
+
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="grokbuild"
+        onSubmit={handleSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "common.add" }));
+
+    await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
+    expect(handleSubmit.mock.calls[0][0].ensureGrokBuildOfficialSeed).toBe(
+      true,
+    );
   });
 });

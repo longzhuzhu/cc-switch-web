@@ -63,6 +63,20 @@ export interface ModelPricing {
   cacheCreationCostPerMillion: string;
 }
 
+export interface ModelsDevSyncConfig {
+  autoSyncEnabled: boolean;
+  includeCommonModels: boolean;
+  selectedModelKeys: string[];
+  excludedCommonModelKeys: string[];
+  lastSyncAt: number | null;
+  lastSyncError: string | null;
+}
+
+export interface ModelsDevSyncState {
+  config: ModelsDevSyncConfig;
+  configPath: string;
+}
+
 export interface UsageSummary {
   totalRequests: number;
   totalCost: string;
@@ -129,7 +143,7 @@ export interface UsageRangeSelection {
   customEndDate?: number;
 }
 
-export type AppTypeFilter = "all" | "claude" | "codex" | "gemini";
+export type AppTypeFilter = "all" | "claude" | "codex" | "gemini" | "grokbuild";
 
 export interface StatsFilters {
   timeRange: UsageRangePreset;

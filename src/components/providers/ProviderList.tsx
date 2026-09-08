@@ -13,18 +13,24 @@ import {
   type CSSProperties,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Search, X } from "lucide-react";
+import { AlertTriangle, Plus, Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Provider } from "@/types";
 import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
+import { claudeDesktopApi } from "@/lib/api/claudeDesktop";
+import { extractErrorMessage } from "@/utils/errorUtils";
 import { useDragSort } from "@/hooks/useDragSort";
 import {
   useOpenClawLiveProviderIds,
   useOpenClawDefaultModel,
 } from "@/hooks/useOpenClaw";
+import {
+  useHermesLiveProviderIds,
+  useHermesModelConfig,
+} from "@/hooks/useHermes";
 import { useStreamCheck } from "@/hooks/useStreamCheck";
 import { ProviderCard } from "@/components/providers/ProviderCard";
 import { ProviderEmptyState } from "@/components/providers/ProviderEmptyState";
@@ -105,7 +111,11 @@ export function ProviderList({
     appId === "openclaw",
   );
 
-  // 判断供应商是否已添加到配置（累加模式应用：OpenCode/OpenClaw）
+  const { data: hermesLiveIds } = useHermesLiveProviderIds(appId === "hermes");
+  const { data: hermesModelConfig } = useHermesModelConfig(appId === "hermes");
+  const hermesCurrentProviderId = hermesModelConfig?.provider;
+
+  // 判断供应商是否已添加到配置（累加模式应用：OpenCode/OpenClaw/Hermes）
   const isProviderInConfig = useCallback(
     (providerId: string): boolean => {
       if (appId === "opencode") {
@@ -114,9 +124,12 @@ export function ProviderList({
       if (appId === "openclaw") {
         return openclawLiveIds?.includes(providerId) ?? false;
       }
+      if (appId === "hermes") {
+        return hermesLiveIds?.includes(providerId) ?? false;
+      }
       return true; // 其他应用始终返回 true
     },
-    [appId, opencodeLiveIds, openclawLiveIds],
+    [appId, opencodeLiveIds, openclawLiveIds, hermesLiveIds],
   );
 
   // OpenClaw: query default model to determine which provider is default
@@ -178,6 +191,12 @@ export function ProviderList({
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const { data: claudeDesktopStatus } = useQuery({
+    queryKey: ["claudeDesktopStatus"],
+    queryFn: () => claudeDesktopApi.getStatus(),
+    enabled: appId === "claude-desktop",
+    refetchInterval: appId === "claude-desktop" ? 5000 : false,
+  });
   const [showStreamCheckConfirm, setShowStreamCheckConfirm] = useState(false);
   const [pendingTestProvider, setPendingTestProvider] =
     useState<Provider | null>(null);
@@ -234,13 +253,18 @@ export function ProviderList({
     onSuccess: (imported) => {
       if (imported) {
         queryClient.invalidateQueries({ queryKey: ["providers", appId] });
+        if (appId === "claude-desktop") {
+          queryClient.invalidateQueries({ queryKey: ["claudeDesktopStatus"] });
+        }
         toast.success(t("provider.importCurrentDescription"));
       } else {
         toast.info(t("provider.noProviders"));
       }
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error) || t("settings.importFailed"));
+      // 失败前可能已导入部分条目，仍需刷新列表呈现真实状态。
+      queryClient.invalidateQueries({ queryKey: ["providers", appId] });
     },
   });
 
@@ -283,6 +307,36 @@ export function ProviderList({
     });
   }, [searchTerm, sortedProviders]);
 
+  const claudeDesktopStatusMessages = useMemo(() => {
+    if (appId !== "claude-desktop" || !claudeDesktopStatus) return [];
+
+    const messages: string[] = [];
+    if (!claudeDesktopStatus.supported) {
+      return [t("claudeDesktop.statusUnsupported")];
+    }
+    if (claudeDesktopStatus.staleRawModels) {
+      messages.push(t("claudeDesktop.statusStaleRawModels"));
+    }
+    if (claudeDesktopStatus.missingRouteMappings) {
+      messages.push(t("claudeDesktop.statusMissingRouteMappings"));
+    }
+    if (
+      claudeDesktopStatus.mode === "proxy" &&
+      !claudeDesktopStatus.gatewayTokenConfigured
+    ) {
+      messages.push(t("claudeDesktop.statusGatewayTokenMissing"));
+    }
+
+    const expected = claudeDesktopStatus.expectedBaseUrl?.replace(/\/+$/, "");
+    const actual = claudeDesktopStatus.actualBaseUrl?.replace(/\/+$/, "");
+    if (expected && actual && expected !== actual) {
+      messages.push(
+        t("claudeDesktop.statusBaseUrlMismatch", { expected, actual }),
+      );
+    }
+    return messages;
+  }, [appId, claudeDesktopStatus, t]);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -323,6 +377,8 @@ export function ProviderList({
             const isOmoCurrent = isOmo && provider.id === (currentOmoId || "");
             const isOmoSlimCurrent =
               isOmoSlim && provider.id === (currentOmoSlimId || "");
+            const isHermesCurrent =
+              appId === "hermes" && hermesCurrentProviderId === provider.id;
             return (
               <SortableProviderCard
                 key={provider.id}
@@ -332,7 +388,9 @@ export function ProviderList({
                     ? isOmoCurrent
                     : isOmoSlim
                       ? isOmoSlimCurrent
-                      : provider.id === currentProviderId
+                      : appId === "hermes"
+                        ? isHermesCurrent
+                        : provider.id === currentProviderId
                 }
                 appId={appId}
                 isInConfig={isProviderInConfig(provider.id)}
@@ -359,8 +417,11 @@ export function ProviderList({
                   handleToggleFailover(provider.id, enabled)
                 }
                 activeProviderId={activeProviderId}
-                // OpenClaw: default model
-                isDefaultModel={isProviderDefaultModel(provider.id)}
+                isDefaultModel={
+                  appId === "hermes"
+                    ? isHermesCurrent
+                    : isProviderDefaultModel(provider.id)
+                }
                 onSetAsDefault={
                   onSetAsDefault ? () => onSetAsDefault(provider) : undefined
                 }
@@ -374,6 +435,19 @@ export function ProviderList({
 
   return (
     <div className="mt-4 space-y-4">
+      {claudeDesktopStatusMessages.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {t("claudeDesktop.statusTitle")}
+          </div>
+          <ul className="mt-2 space-y-1 text-xs leading-relaxed">
+            {claudeDesktopStatusMessages.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="glass-card rounded-[30px] border border-border-default p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
@@ -419,7 +493,9 @@ export function ProviderList({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              variant={isSearchOpen || searchTerm.trim() ? "default" : "outline"}
+              variant={
+                isSearchOpen || searchTerm.trim() ? "default" : "outline"
+              }
               className="min-w-[8rem]"
               onClick={() => setIsSearchOpen(true)}
             >

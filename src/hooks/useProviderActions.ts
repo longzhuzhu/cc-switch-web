@@ -20,8 +20,14 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import {
   extractCodexWireApi,
+  isCodexAnthropicWireApi,
   isCodexChatWireApi,
 } from "@/utils/providerConfigUtils";
+import { isOAuthProviderType } from "@/config/constants";
+import {
+  providerNeedsRouting,
+  supportsOfficialProxyTakeover,
+} from "@/utils/providerCapabilities";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -71,6 +77,8 @@ export function useProviderActions(
         providerKey?: string;
         suggestedDefaults?: OpenClawSuggestedDefaults;
         addToLive?: boolean;
+        ensureGrokBuildOfficialSeed?: boolean;
+        ensureCodexOfficialSeed?: boolean;
       },
     ) => {
       await addProviderMutation.mutateAsync(provider);
@@ -140,7 +148,7 @@ export function useProviderActions(
         provider.meta?.providerType === "github_copilot";
       // 跟随上游 cc-switch 1c82b8a3：Codex provider 走 Chat 协议也需要代理路由
       const isCodexChatFormat =
-        activeApp === "codex" &&
+        (activeApp === "codex" || activeApp === "grokbuild") &&
         (provider.meta?.apiFormat === "openai_chat" ||
           (typeof (provider.settingsConfig as Record<string, any>)?.config ===
             "string" &&
@@ -149,13 +157,32 @@ export function useProviderActions(
                 (provider.settingsConfig as Record<string, any>).config,
               ),
             )));
+      const isCodexAnthropicFormat =
+        (activeApp === "codex" || activeApp === "grokbuild") &&
+        (provider.meta?.apiFormat === "anthropic" ||
+          (typeof (provider.settingsConfig as Record<string, any>)?.config ===
+            "string" &&
+            isCodexAnthropicWireApi(
+              extractCodexWireApi(
+                (provider.settingsConfig as Record<string, any>).config,
+              ),
+            )));
+
+      const routingReady =
+        activeApp === "claude-desktop"
+          ? isProxyRunning === true
+          : isProxyTakeover === true;
 
       // Determine why this provider requires the proxy
       let proxyRequiredReason: string | null = null;
-      if (!isProxyRunning && provider.category !== "official") {
+      if (!routingReady && providerNeedsRouting(activeApp, provider)) {
         if (isCopilotProvider) {
           proxyRequiredReason = t("notifications.proxyReasonCopilot", {
             defaultValue: "使用 GitHub Copilot 作为 Claude 供应商",
+          });
+        } else if (isOAuthProviderType(provider.meta?.providerType)) {
+          proxyRequiredReason = t("notifications.proxyReasonManagedOAuth", {
+            defaultValue: "使用托管 OAuth 登录（令牌由本地路由注入）",
           });
         } else if (
           provider.meta?.apiFormat === "openai_chat" &&
@@ -168,6 +195,11 @@ export function useProviderActions(
           proxyRequiredReason = t("notifications.proxyReasonOpenAIChat", {
             defaultValue: "使用 OpenAI Chat 接口格式",
           });
+        } else if (isCodexAnthropicFormat) {
+          proxyRequiredReason = t(
+            "notifications.proxyReasonAnthropicMessages",
+            { defaultValue: "使用 Anthropic Messages 接口格式" },
+          );
         } else if (
           provider.meta?.apiFormat === "openai_responses" &&
           activeApp === "claude"
@@ -184,7 +216,9 @@ export function useProviderActions(
           });
         } else if (
           provider.meta?.isFullUrl &&
-          (activeApp === "claude" || activeApp === "codex")
+          (activeApp === "claude" ||
+            activeApp === "codex" ||
+            activeApp === "grokbuild")
         ) {
           proxyRequiredReason = t("notifications.proxyReasonFullUrl", {
             defaultValue: "开启了完整 URL 连接模式",
@@ -203,7 +237,11 @@ export function useProviderActions(
         return;
       }
 
-      if (isProxyTakeover && provider.category === "official") {
+      if (
+        isProxyTakeover &&
+        provider.category === "official" &&
+        !supportsOfficialProxyTakeover(activeApp, provider)
+      ) {
         toast.error(
           t("notifications.officialBlockedByProxy", {
             defaultValue:
@@ -255,9 +293,11 @@ export function useProviderActions(
           );
         } else {
           // 普通供应商：显示切换成功
-          // OpenCode/OpenClaw: show "added to config" message instead of "switched"
+          // 累加模式应用显示“已添加到配置”而不是“切换成功”
           const isMultiProviderApp =
-            activeApp === "opencode" || activeApp === "openclaw";
+            activeApp === "opencode" ||
+            activeApp === "openclaw" ||
+            activeApp === "hermes";
           const messageKey = isMultiProviderApp
             ? "notifications.addToConfigSuccess"
             : "notifications.switchSuccess";

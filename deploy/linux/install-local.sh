@@ -14,6 +14,7 @@ SERVICE_TEMPLATE="$REPO_ROOT/deploy/systemd/cc-switch-web.local.service"
 SERVICE_DEST="/etc/systemd/system/${SERVICE_NAME}.service"
 BINARY_SOURCE="$REPO_ROOT/backend/target/release/cc-switch-web"
 BINARY_DEST="$INSTALL_DIR/cc-switch-web"
+ENV_FILE="$INSTALL_DIR/cc-switch-web.env"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -96,6 +97,11 @@ test -f "$SERVICE_TEMPLATE"
 
 sudo install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$INSTALL_DIR"
 sudo install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
+if ! sudo test -e "$ENV_FILE"; then
+  printf '%s\n' '# CC_SWITCH_WEB_ACCESS_KEY=replace-with-a-long-random-key' | sudo tee "$ENV_FILE" >/dev/null
+  sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$ENV_FILE"
+  sudo chmod 0600 "$ENV_FILE"
+fi
 sudo install -m 0755 "$BINARY_SOURCE" "$BINARY_DEST"
 sudo install -m 0644 "$SERVICE_TEMPLATE" "$SERVICE_DEST"
 

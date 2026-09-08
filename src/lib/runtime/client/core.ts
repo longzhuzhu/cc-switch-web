@@ -11,10 +11,13 @@ import {
   getWebCopilotUsageForAccount,
   getWebCodingPlanQuota,
   getWebCodexOauthQuota,
+  getWebXaiOauthQuota,
   getWebSubscriptionQuota,
   getWebBalance,
   createWebDbBackup,
+  createWebProfile,
   deleteWebEnvVars,
+  deleteWebProfile,
   downloadWebConfigExport,
   deleteWebProvider,
   deleteWebDbBackup,
@@ -65,6 +68,7 @@ import {
   getWebCurrentOmoSlimProviderId,
   disableWebCurrentOmoSlim,
   getWebPricingModelSource,
+  getWebProfiles,
   getWebMcpServers,
   getWebProviderHealth,
   getWebProviderUsage,
@@ -88,6 +92,7 @@ import {
   getWebSkillRepos,
   getWebSkillBackups,
   getWebManagedAuthStatus,
+  getWebXaiOauthModels,
   getWebUnmanagedSkills,
   getWebOptimizerConfig,
   getWebUpstreamProxyStatus,
@@ -100,8 +105,10 @@ import {
   removeWebManagedAuthAccount,
   resetWebCircuitBreaker,
   restoreWebDbBackup,
+  restoreWebCodexUnifiedHistory,
   restoreWebEnvBackup,
   saveWebSettings,
+  hasWebCodexUnifyHistoryBackup,
   scanWebLocalProxies,
   getWebRectifierConfig,
   setWebAutoFailoverEnabled,
@@ -120,6 +127,7 @@ import {
   syncWebUniversalProvider,
   testWebProxyUrl,
   toggleWebMcpApp,
+  updateWebTomlCommonConfigSnippet,
   launchWebHermesDashboard,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
@@ -155,6 +163,7 @@ import {
   getWebSessions,
   launchWebSessionTerminal,
   getWebModelPricing,
+  getWebModelsDevSyncConfig,
   getWebModelStats,
   getWebProviderLimits,
   getWebProviderStats,
@@ -193,8 +202,15 @@ import {
   testWebUsageScript,
   toggleWebSkillApp,
   syncWebSessionUsage,
+  rebuildWebCodexUsage,
+  recordWebModelsDevSyncResult,
+  applyWebProfile,
+  clearWebCurrentProfile,
   uploadWebdavSync,
   updateWebModelPricing,
+  updateWebModelPricingBatch,
+  saveWebModelsDevSyncConfig,
+  updateWebProfile,
   updateWebProvider,
   updateWebProvidersSortOrder,
   updateWebProxyConfig,
@@ -205,13 +221,7 @@ import {
   deleteWebUniversalProvider,
 } from "./web";
 
-type AppId =
-  | "claude"
-  | "codex"
-  | "gemini"
-  | "opencode"
-  | "openclaw"
-  | "hermes";
+type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw" | "hermes";
 
 type InvokeArgs = Record<string, unknown> | undefined;
 
@@ -227,6 +237,10 @@ export async function invoke<T>(
       return (await getWebSettings()) as T;
     case "save_settings":
       return (await saveWebSettings(args?.settings as any)) as T;
+    case "has_codex_unify_history_backup":
+      return (await hasWebCodexUnifyHistoryBackup()) as T;
+    case "restore_codex_unified_history":
+      return (await restoreWebCodexUnifiedHistory()) as T;
     case "get_common_config_snippet":
       return (await getWebCommonConfigSnippet(args?.appType as string)) as T;
     case "set_common_config_snippet":
@@ -238,6 +252,12 @@ export async function invoke<T>(
       return (await extractWebCommonConfigSnippet(
         args?.appType as string,
         args?.settingsConfig as string | undefined,
+      )) as T;
+    case "update_toml_common_config_snippet":
+      return (await updateWebTomlCommonConfigSnippet(
+        (args?.configToml as string | undefined) ?? "",
+        (args?.snippetToml as string | undefined) ?? "",
+        args?.enabled === true,
       )) as T;
     case "sync_current_providers_live":
       return (await syncWebCurrentProvidersLive()) as T;
@@ -310,6 +330,11 @@ export async function invoke<T>(
         args?.apiKey as string,
         args?.isFullUrl as boolean | undefined,
         args?.modelsUrl as string | undefined,
+        args?.customUserAgent as string | undefined,
+      )) as T;
+    case "get_xai_oauth_models":
+      return (await getWebXaiOauthModels(
+        args?.accountId as string | null | undefined,
       )) as T;
     case "get_windows_env_paths":
       return (await fetchWebWindowsEnvPaths()) as T;
@@ -571,6 +596,10 @@ export async function invoke<T>(
       return (await getWebCodexOauthQuota(
         (args?.accountId as string | null | undefined) ?? null,
       )) as T;
+    case "get_xai_oauth_quota":
+      return (await getWebXaiOauthQuota(
+        (args?.accountId as string | null | undefined) ?? null,
+      )) as T;
     case "get_coding_plan_quota":
       return (await getWebCodingPlanQuota(
         args?.baseUrl as string,
@@ -591,6 +620,32 @@ export async function invoke<T>(
       return (await restoreWebEnvBackup(args?.backupPath as string)) as T;
     case "get_mcp_servers":
       return (await getWebMcpServers()) as T;
+    case "list_profiles":
+      return (await getWebProfiles()) as T;
+    case "create_profile":
+      return (await createWebProfile(
+        args?.name as string,
+        args?.scope as import("@/lib/api/profiles").ProfileScope,
+      )) as T;
+    case "update_profile":
+      return (await updateWebProfile(args?.id as string, {
+        name: args?.name as string | undefined,
+        resnapshot: args?.resnapshot as boolean | undefined,
+        scope: args?.scope as
+          | import("@/lib/api/profiles").ProfileScope
+          | undefined,
+      })) as T;
+    case "delete_profile":
+      return (await deleteWebProfile(args?.id as string)) as T;
+    case "apply_profile":
+      return (await applyWebProfile(
+        args?.id as string,
+        args?.scope as import("@/lib/api/profiles").ProfileScope,
+      )) as T;
+    case "clear_current_profile":
+      return (await clearWebCurrentProfile(
+        args?.scope as import("@/lib/api/profiles").ProfileScope,
+      )) as T;
     case "upsert_mcp_server":
       return (await upsertWebMcpServer(args?.server as any)) as T;
     case "delete_mcp_server":
@@ -775,6 +830,17 @@ export async function invoke<T>(
         args?.cacheReadCost as string,
         args?.cacheCreationCost as string,
       )) as T;
+    case "update_model_pricing_batch":
+      return (await updateWebModelPricingBatch(args?.entries as any)) as T;
+    case "get_models_dev_sync_config":
+      return (await getWebModelsDevSyncConfig()) as T;
+    case "save_models_dev_sync_config":
+      return (await saveWebModelsDevSyncConfig(args?.config as any)) as T;
+    case "record_models_dev_sync_result":
+      return (await recordWebModelsDevSyncResult(
+        args?.syncedAt as number | null,
+        args?.error as string | null,
+      )) as T;
     case "delete_model_pricing":
       return (await deleteWebModelPricing(args?.modelId as string)) as T;
     case "check_provider_limits":
@@ -784,6 +850,8 @@ export async function invoke<T>(
       )) as T;
     case "sync_session_usage":
       return (await syncWebSessionUsage()) as T;
+    case "rebuild_codex_usage":
+      return (await rebuildWebCodexUsage()) as T;
     case "get_usage_data_sources":
       return (await getWebUsageDataSources()) as T;
     case "start_proxy_server":

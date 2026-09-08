@@ -17,7 +17,10 @@ import { UniversalProviderPanel } from "@/components/universal";
 import { providerPresets } from "@/config/claudeProviderPresets";
 import { codexProviderPresets } from "@/config/codexProviderPresets";
 import { geminiProviderPresets } from "@/config/geminiProviderPresets";
+import { grokBuildProviderPresets } from "@/config/grokBuildProviderPresets";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
+import { extractGrokBuildBaseUrl } from "@/utils/grokBuildConfig";
+import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
 import type { OpenClawSuggestedDefaults } from "@/config/openclawProviderPresets";
 import type { UniversalProviderPreset } from "@/config/universalProviderPresets";
 
@@ -30,6 +33,8 @@ interface AddProviderDialogProps {
       providerKey?: string;
       suggestedDefaults?: OpenClawSuggestedDefaults;
       addToLive?: boolean;
+      ensureGrokBuildOfficialSeed?: boolean;
+      ensureCodexOfficialSeed?: boolean;
     },
   ) => Promise<void> | void;
 }
@@ -41,8 +46,12 @@ export function AddProviderDialog({
   onSubmit,
 }: AddProviderDialogProps) {
   const { t } = useTranslation();
-  // OpenCode and OpenClaw don't support universal providers
-  const showUniversalTab = appId !== "opencode" && appId !== "openclaw";
+  // 累加模式应用和 Grok Build 不支持统一供应商投影。
+  const showUniversalTab =
+    appId !== "opencode" &&
+    appId !== "openclaw" &&
+    appId !== "hermes" &&
+    appId !== "grokbuild";
   const [activeTab, setActiveTab] = useState<"app-specific" | "universal">(
     "app-specific",
   );
@@ -95,6 +104,8 @@ export function AddProviderDialog({
         providerKey?: string;
         suggestedDefaults?: OpenClawSuggestedDefaults;
         addToLive?: boolean;
+        ensureGrokBuildOfficialSeed?: boolean;
+        ensureCodexOfficialSeed?: boolean;
       } = {
         name: values.name.trim(),
         notes: values.notes?.trim() || undefined,
@@ -106,9 +117,25 @@ export function AddProviderDialog({
         ...(values.meta ? { meta: values.meta } : {}),
       };
 
-      // OpenCode/OpenClaw: pass providerKey for ID generation
       if (
-        (appId === "opencode" || appId === "openclaw") &&
+        appId === "grokbuild" &&
+        values.presetCategory === "official" &&
+        values.presetId === GROKBUILD_OFFICIAL_PROVIDER_ID
+      ) {
+        providerData.ensureGrokBuildOfficialSeed = true;
+      }
+
+      if (
+        appId === "codex" &&
+        values.presetCategory === "official" &&
+        values.presetId === "codex-0"
+      ) {
+        providerData.ensureCodexOfficialSeed = true;
+      }
+
+      // 累加模式应用：传递 providerKey 作为 Provider ID
+      if (
+        (appId === "opencode" || appId === "openclaw" || appId === "hermes") &&
         values.providerKey
       ) {
         providerData.providerKey = values.providerKey;
@@ -172,6 +199,12 @@ export function AddProviderDialog({
                 preset.endpointCandidates.forEach(addUrl);
               }
             }
+          } else if (appId === "grokbuild") {
+            const presetIndex = parseInt(
+              values.presetId.replace("grokbuild-", ""),
+            );
+            const preset = grokBuildProviderPresets[presetIndex];
+            preset?.endpointCandidates?.forEach(addUrl);
           }
         }
 
@@ -193,6 +226,11 @@ export function AddProviderDialog({
           if (env?.GOOGLE_GEMINI_BASE_URL) {
             addUrl(env.GOOGLE_GEMINI_BASE_URL);
           }
+        } else if (appId === "grokbuild") {
+          const config = parsedConfig.config as string | undefined;
+          if (config) {
+            addUrl(extractGrokBuildBaseUrl(config));
+          }
         } else if (appId === "opencode") {
           const options = parsedConfig.options as
             | Record<string, any>
@@ -204,6 +242,10 @@ export function AddProviderDialog({
           // OpenClaw uses baseUrl directly
           if (parsedConfig.baseUrl) {
             addUrl(parsedConfig.baseUrl as string);
+          }
+        } else if (appId === "hermes") {
+          if (parsedConfig.base_url) {
+            addUrl(parsedConfig.base_url as string);
           }
         }
 
@@ -240,6 +282,9 @@ export function AddProviderDialog({
   const footer =
     !showUniversalTab || activeTab === "app-specific" ? (
       <>
+        <span className="mr-auto min-w-0 truncate text-xs text-muted-foreground">
+          {t("provider.addFooterHint")}
+        </span>
         <Button
           variant="outline"
           onClick={() => onOpenChange(false)}
@@ -282,6 +327,7 @@ export function AddProviderDialog({
       title={t("provider.addNewProvider")}
       onClose={() => onOpenChange(false)}
       footer={footer}
+      contentClassName="pt-3"
     >
       {showUniversalTab ? (
         <Tabs

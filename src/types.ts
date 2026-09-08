@@ -131,12 +131,62 @@ export interface AuthBinding {
   accountId?: string;
 }
 
+export interface ClaudeDesktopModelRoute {
+  model: string;
+  labelOverride?: string;
+  supports1m?: boolean;
+}
+
+export type CodexChatThinkingParam =
+  | "none"
+  | "thinking"
+  | "enable_thinking"
+  | "reasoning_split";
+
+export type CodexChatEffortParam =
+  | "none"
+  | "reasoning_effort"
+  | "reasoning.effort";
+
+export type CodexChatEffortValueMode =
+  | "passthrough"
+  | "low_high"
+  | "deepseek"
+  | "openrouter";
+
+export type CodexChatReasoningOutputFormat =
+  | "auto"
+  | "reasoning_content"
+  | "reasoning"
+  | "reasoning_details"
+  | "think_tags";
+
+export interface CodexChatReasoning {
+  supportsThinking?: boolean;
+  supportsEffort?: boolean;
+  thinkingParam?: CodexChatThinkingParam;
+  effortParam?: CodexChatEffortParam;
+  effortValueMode?: CodexChatEffortValueMode;
+  outputFormat?: CodexChatReasoningOutputFormat;
+}
+
+export type PromptCacheRoutingMode = "auto" | "enabled" | "disabled";
+
+export interface LocalProxyRequestOverrides {
+  headers?: Record<string, string>;
+  body?: Record<string, unknown>;
+}
+
 // 供应商元数据（字段名与后端一致，保持 snake_case）
 export interface ProviderMeta {
   // 自定义端点：以 URL 为键，值为端点信息
   custom_endpoints?: Record<string, CustomEndpoint>;
   // 是否在切换/同步到 live 时应用通用配置片段
   commonConfigEnabled?: boolean;
+  // Claude Desktop 3P 配置写入模式
+  claudeDesktopMode?: "direct" | "proxy";
+  // Claude Desktop 本地路由模式：Claude-safe route -> upstream model
+  claudeDesktopModelRoutes?: Record<string, ClaudeDesktopModelRoute>;
   // 用量查询脚本配置
   usage_script?: UsageScript;
   // 请求地址管理：测速后自动选择最佳端点
@@ -171,6 +221,14 @@ export interface ProviderMeta {
   isFullUrl?: boolean;
   // Prompt cache key for OpenAI-compatible endpoints (improves cache hit rate)
   promptCacheKey?: string;
+  // Codex Responses -> Chat 转换的会话级提示词缓存路由
+  promptCacheRouting?: PromptCacheRoutingMode;
+  // Codex Responses -> Chat Completions 推理能力元数据
+  codexChatReasoning?: CodexChatReasoning;
+  // 本地代理转发使用的自定义 User-Agent
+  customUserAgent?: string;
+  // 协议转换完成后应用到上游请求的本地代理覆盖项
+  localProxyRequestOverrides?: LocalProxyRequestOverrides;
   // 累加模式应用中，该 provider 是否已写入 live config
   liveConfigManaged?: boolean;
   // 供应商类型（用于识别 Copilot 等特殊供应商）
@@ -201,6 +259,15 @@ export type ClaudeApiFormat =
 // - "openai_chat": OpenAI Chat Completions 格式，需要本地路由转换
 export type CodexApiFormat = "openai_responses" | "openai_chat";
 
+export interface CodexCatalogModel {
+  model: string;
+  displayName?: string;
+  contextWindow?: string | number;
+  supportsParallelToolCalls?: boolean;
+  inputModalities?: string[];
+  baseInstructions?: string;
+}
+
 // Claude 认证字段类型
 export type ClaudeApiKeyField = "ANTHROPIC_AUTH_TOKEN" | "ANTHROPIC_API_KEY";
 
@@ -210,6 +277,7 @@ export interface VisibleApps {
   "claude-desktop": boolean;
   codex: boolean;
   gemini: boolean;
+  grokbuild: boolean;
   opencode: boolean;
   openclaw: boolean;
   hermes: boolean;
@@ -259,6 +327,10 @@ export interface Settings {
   // ===== 设备级 UI 设置 =====
   // 是否启用主页面本地代理功能（默认关闭）
   enableLocalProxy?: boolean;
+  // 让之后创建的官方 Codex 会话与第三方 Provider 共用恢复历史入口
+  unifyCodexSessionHistory?: boolean;
+  // 用户选择把已有官方会话迁入统一历史；迁移失败时用于启动重试
+  unifyCodexMigrateExisting?: boolean;
   // User has confirmed the local proxy first-run notice
   proxyConfirmed?: boolean;
   // User has confirmed the usage query first-run notice
@@ -267,6 +339,8 @@ export interface Settings {
   streamCheckConfirmed?: boolean;
   // Whether to show the failover toggle independently on the main page
   enableFailoverToggle?: boolean;
+  // Whether to show the project Profile switcher on the main page
+  showProfileSwitcher?: boolean;
   // User has confirmed the failover toggle first-run notice
   failoverConfirmed?: boolean;
   // User has confirmed the first-run welcome notice
@@ -294,6 +368,8 @@ export interface Settings {
   codexConfigDir?: string;
   // 覆盖 Gemini 配置目录（可选）
   geminiConfigDir?: string;
+  // 覆盖 Grok Build 配置目录（可选）
+  grokConfigDir?: string;
   // 覆盖 OpenCode 配置目录（可选）
   opencodeConfigDir?: string;
   // 覆盖 OpenClaw 配置目录（可选）
@@ -369,6 +445,7 @@ export interface McpApps {
   "claude-desktop": boolean;
   codex: boolean;
   gemini: boolean;
+  grokbuild: boolean;
   opencode: boolean;
   openclaw: boolean;
   hermes: boolean;
@@ -516,6 +593,9 @@ export interface OpenClawModel {
   };
   contextWindow?: number;
   maxTokens?: number; // 最大输出 token 数
+  compat?: {
+    maxTokensField?: string; // 最大输出 token 请求字段名（如 "max_tokens"）
+  };
 }
 
 // OpenClaw 默认模型配置（agents.defaults.model）

@@ -41,6 +41,12 @@ import type {
 } from "@/lib/api/sessions";
 import type { ProviderSortUpdate } from "@/lib/api/providers";
 import type {
+  Profile,
+  ProfilesResponse,
+  ProfileScope,
+  UpdateProfileOptions,
+} from "@/lib/api/profiles";
+import type {
   DiscoverableSkill,
   MigrationResult,
   SkillArchiveInstallResult,
@@ -74,6 +80,8 @@ import type {
   DailyStats,
   LogFilters,
   ModelPricing,
+  ModelsDevSyncConfig,
+  ModelsDevSyncState,
   ModelStats,
   PaginatedLogs,
   ProviderLimitStatus,
@@ -96,66 +104,49 @@ interface ProvidersResponse {
   currentProviderId: string;
 }
 
-const DEFAULT_WEB_API_BASE = "";
+const WEB_ACCESS_KEY_STORAGE_KEY = "cc-switch-web-access-key";
+export const WEB_AUTH_REQUIRED_EVENT = "cc-switch-web-auth-required";
 
-const AUTH_TOKEN_KEY = "cc-switch-auth-token";
-
-export function getAuthToken(): string | null {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+export function getWebAccessKey(): string | null {
+  try {
+    return sessionStorage.getItem(WEB_ACCESS_KEY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
 }
 
-export function setAuthToken(token: string): void {
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
+export function setWebAccessKey(accessKey: string): void {
+  sessionStorage.setItem(WEB_ACCESS_KEY_STORAGE_KEY, accessKey);
 }
 
-export function clearAuthToken(): void {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
+export function clearWebAccessKey(): void {
+  try {
+    sessionStorage.removeItem(WEB_ACCESS_KEY_STORAGE_KEY);
+  } catch {
+    // Storage may be unavailable in hardened browser modes.
+  }
 }
 
-export interface AuthHasKeyResponse {
-  hasKey: boolean;
+function webRequestHeaders(accept: string): Record<string, string> {
+  const headers: Record<string, string> = { Accept: accept };
+  const accessKey = getWebAccessKey();
+  if (accessKey) {
+    headers.Authorization = `Bearer ${accessKey}`;
+  }
+  return headers;
 }
 
-export interface AuthLoginResponse {
-  token: string;
-}
-
-export async function authHasKey(): Promise<AuthHasKeyResponse> {
-  return requestJson<AuthHasKeyResponse>("/api/auth/has-key");
-}
-
-export async function authSetupKey(key: string): Promise<AuthLoginResponse> {
-  return requestWithBody<AuthLoginResponse>("/api/auth/setup-key", "POST", {
-    key,
-  });
-}
-
-export async function authLogin(key: string): Promise<AuthLoginResponse> {
-  return requestWithBody<AuthLoginResponse>("/api/auth/login", "POST", {
-    key,
-  });
-}
-
-export async function authChangeKey(
-  oldKey: string,
-  newKey: string,
-): Promise<{ success: boolean }> {
-  return requestWithBody<{ success: boolean }>("/api/auth/change-key", "PUT", {
-    oldKey,
-    newKey,
-  });
+function handleUnauthorized(response: Response): void {
+  if (response.status !== 401) return;
+  clearWebAccessKey();
+  window.dispatchEvent(new CustomEvent(WEB_AUTH_REQUIRED_EVENT));
 }
 
 export const getWebApiBase = (): string => {
   const configured = import.meta.env.VITE_LOCAL_API_BASE?.trim();
-  // When VITE_LOCAL_API_BASE is explicitly set to empty, use same-origin (empty string).
-  // This is needed for reverse-proxy deployments where frontend and API share the same origin.
-  if (configured !== undefined && configured !== null && configured.length === 0) {
-    return "";
-  }
   return configured && configured.length > 0
     ? configured.replace(/\/+$/, "")
-    : DEFAULT_WEB_API_BASE;
+    : "";
 };
 
 const isWebRuntimeDebugEnabled = (): boolean =>
@@ -279,21 +270,11 @@ async function getErrorMessage(
 
 async function requestJson<T>(path: string): Promise<T> {
   logWebRequest("GET", path);
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  };
-  const token = getAuthToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  const response = await fetch(`${getWebApiBase()}${path}`, { headers });
+  const response = await fetch(`${getWebApiBase()}${path}`, {
+    headers: webRequestHeaders("application/json"),
+  });
 
-  if (response.status === 401) {
-    clearAuthToken();
-    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
-    throw new Error("Unauthorized");
-  }
-
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -309,26 +290,16 @@ async function requestWithBody<T>(
   body?: unknown,
 ): Promise<T> {
   logWebRequest(method, path, body);
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-  const token = getAuthToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method,
-    headers,
+    headers: {
+      ...webRequestHeaders("application/json"),
+      "Content-Type": "application/json",
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-  if (response.status === 401) {
-    clearAuthToken();
-    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
-    throw new Error("Unauthorized");
-  }
-
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for ${method} ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -348,25 +319,13 @@ async function requestFormData<T>(
   formData: FormData,
 ): Promise<T> {
   logWebRequest("POST", path, formData);
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  };
-  const token = getAuthToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method: "POST",
-    headers,
+    headers: webRequestHeaders("application/json"),
     body: formData,
   });
 
-  if (response.status === 401) {
-    clearAuthToken();
-    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
-    throw new Error("Unauthorized");
-  }
-
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for POST ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -410,6 +369,24 @@ export async function getWebSettings(): Promise<Settings> {
       error,
     );
     return getDefaultSettings();
+  }
+}
+
+export interface WebAuthStatus {
+  required: boolean;
+}
+
+export async function getWebAuthStatus(): Promise<WebAuthStatus> {
+  return requestJson<WebAuthStatus>("/api/auth/status");
+}
+
+export async function verifyWebAccessKey(accessKey: string): Promise<void> {
+  setWebAccessKey(accessKey);
+  try {
+    await requestJson<boolean>("/api/auth/verify");
+  } catch (error) {
+    clearWebAccessKey();
+    throw error;
   }
 }
 
@@ -465,6 +442,18 @@ export async function extractWebCommonConfigSnippet(
     `/api/settings/common-config/${encodeURIComponent(appType)}/extract`,
     "POST",
     { settingsConfig },
+  );
+}
+
+export async function updateWebTomlCommonConfigSnippet(
+  configToml: string,
+  snippetToml: string,
+  enabled: boolean,
+): Promise<string> {
+  return requestWithBody<string>(
+    "/api/settings/common-config/codex/update-toml",
+    "POST",
+    { configToml, snippetToml, enabled },
   );
 }
 
@@ -621,6 +610,13 @@ export async function getWebManagedAuthStatus(
   return requestJson(`/api/auth/${encodeURIComponent(authProvider)}/status`);
 }
 
+export async function getWebXaiOauthModels(
+  accountId?: string | null,
+): Promise<import("@/lib/api/model-fetch").FetchedModel[]> {
+  const query = accountId ? `?accountId=${encodeURIComponent(accountId)}` : "";
+  return requestJson(`/api/auth/xai_oauth/models${query}`);
+}
+
 export async function removeWebManagedAuthAccount(
   authProvider: string,
   accountId: string,
@@ -709,6 +705,17 @@ export async function getWebCodexOauthQuota(
   const query = params.toString();
   return requestJson<import("@/types/subscription").SubscriptionQuota>(
     `/api/subscription/codex-oauth${query ? `?${query}` : ""}`,
+  );
+}
+
+export async function getWebXaiOauthQuota(
+  accountId: string | null,
+): Promise<import("@/types/subscription").SubscriptionQuota> {
+  const params = new URLSearchParams();
+  if (accountId) params.set("accountId", accountId);
+  const query = params.toString();
+  return requestJson<import("@/types/subscription").SubscriptionQuota>(
+    `/api/subscription/xai-oauth${query ? `?${query}` : ""}`,
   );
 }
 
@@ -828,6 +835,7 @@ export async function fetchWebProviderModels(
   apiKey: string,
   isFullUrl?: boolean,
   modelsUrl?: string,
+  customUserAgent?: string,
 ): Promise<import("@/lib/api/model-fetch").FetchedModel[]> {
   return requestWithBody<import("@/lib/api/model-fetch").FetchedModel[]>(
     "/api/providers/models/fetch",
@@ -837,6 +845,7 @@ export async function fetchWebProviderModels(
       apiKey,
       isFullUrl,
       modelsUrl,
+      customUserAgent,
     },
   );
 }
@@ -849,8 +858,9 @@ export async function fetchWebWindowsEnvPaths(): Promise<
   logWebRequest("GET", path, undefined);
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: webRequestHeaders("application/json"),
   });
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for GET ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -1016,9 +1026,8 @@ export async function getWebProxyTakeoverStatus(): Promise<ProxyTakeoverStatus> 
 export async function getWebClaudeDesktopStatus(): Promise<
   import("@/types/claudeDesktop").ClaudeDesktopStatus
 > {
-  const { getDefaultClaudeDesktopStatus } = await import(
-    "@/types/claudeDesktop"
-  );
+  const { getDefaultClaudeDesktopStatus } =
+    await import("@/types/claudeDesktop");
   try {
     return await requestJson("/api/claude-desktop/status");
   } catch (error) {
@@ -1363,6 +1372,18 @@ export async function saveWebSettings(settings: Settings): Promise<boolean> {
   return requestWithBody<boolean>("/api/settings", "PUT", settings);
 }
 
+export async function hasWebCodexUnifyHistoryBackup(): Promise<boolean> {
+  return requestJson<boolean>("/api/settings/codex-unify-history-backup");
+}
+
+export async function restoreWebCodexUnifiedHistory(): Promise<
+  import("@/lib/api/settings").CodexUnifyHistoryRestoreResult
+> {
+  return requestWithBody<
+    import("@/lib/api/settings").CodexUnifyHistoryRestoreResult
+  >("/api/settings/codex-unify-history-restore", "POST");
+}
+
 export async function testWebdavConnection(
   settings: WebDavSyncSettings,
   preserveEmptyPassword = true,
@@ -1422,12 +1443,12 @@ export async function downloadWebConfigExport(
     `${getWebApiBase()}/api/config/export?filename=${encodeURIComponent(defaultName)}`,
     {
       headers: {
-        Accept: "application/sql,text/plain,*/*",
-        Authorization: `Bearer ${getAuthToken()}`,
+        ...webRequestHeaders("application/sql,text/plain,*/*"),
       },
     },
   );
 
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for GET /api/config/export`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -2268,6 +2289,36 @@ export async function updateWebModelPricing(
   );
 }
 
+export async function updateWebModelPricingBatch(
+  entries: ModelPricing[],
+): Promise<number> {
+  return requestWithBody<number>(
+    "/api/usage/model-pricing/batch",
+    "PUT",
+    entries,
+  );
+}
+
+export async function getWebModelsDevSyncConfig(): Promise<ModelsDevSyncState> {
+  return requestJson<ModelsDevSyncState>("/api/usage/models-dev-sync");
+}
+
+export async function saveWebModelsDevSyncConfig(
+  config: ModelsDevSyncConfig,
+): Promise<void> {
+  return requestWithBody<void>("/api/usage/models-dev-sync", "PUT", config);
+}
+
+export async function recordWebModelsDevSyncResult(
+  syncedAt: number | null,
+  error: string | null,
+): Promise<void> {
+  return requestWithBody<void>("/api/usage/models-dev-sync/result", "POST", {
+    syncedAt,
+    error,
+  });
+}
+
 export async function deleteWebModelPricing(modelId: string): Promise<void> {
   return requestWithBody<void>(
     `/api/usage/model-pricing/${encodeURIComponent(modelId)}`,
@@ -2286,6 +2337,59 @@ export async function getWebProviderLimits(
 
 export async function syncWebSessionUsage(): Promise<SessionSyncResult> {
   return requestWithBody<SessionSyncResult>("/api/usage/session-sync", "POST");
+}
+
+export async function rebuildWebCodexUsage(): Promise<SessionSyncResult> {
+  return requestWithBody<SessionSyncResult>("/api/usage/codex/rebuild", "POST");
+}
+
+export async function getWebProfiles(): Promise<ProfilesResponse> {
+  return requestJson<ProfilesResponse>("/api/profiles");
+}
+
+export async function createWebProfile(
+  name: string,
+  scope: ProfileScope,
+): Promise<Profile> {
+  return requestWithBody<Profile>("/api/profiles", "POST", { name, scope });
+}
+
+export async function updateWebProfile(
+  id: string,
+  options: UpdateProfileOptions,
+): Promise<Profile> {
+  return requestWithBody<Profile>(
+    `/api/profiles/${encodeURIComponent(id)}`,
+    "PUT",
+    options,
+  );
+}
+
+export async function deleteWebProfile(id: string): Promise<void> {
+  return requestWithBody<void>(
+    `/api/profiles/${encodeURIComponent(id)}`,
+    "DELETE",
+  );
+}
+
+export async function applyWebProfile(
+  id: string,
+  scope: ProfileScope,
+): Promise<string[]> {
+  return requestWithBody<string[]>(
+    `/api/profiles/${encodeURIComponent(id)}/apply`,
+    "POST",
+    { scope },
+  );
+}
+
+export async function clearWebCurrentProfile(
+  scope: ProfileScope,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/profiles/current/${encodeURIComponent(scope)}`,
+    "DELETE",
+  );
 }
 
 export async function getWebUsageDataSources(): Promise<DataSourceSummary[]> {

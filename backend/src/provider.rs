@@ -1,3 +1,4 @@
+use http::header::{HeaderValue, InvalidHeaderValue};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -91,6 +92,10 @@ impl Provider {
         self.provider_type() == Some("codex_oauth")
     }
 
+    pub fn is_xai_oauth(&self) -> bool {
+        self.provider_type() == Some("xai_oauth")
+    }
+
     pub fn is_github_copilot(&self) -> bool {
         self.provider_type() == Some("github_copilot")
             || self.claude_base_url_contains("githubcopilot.com")
@@ -102,6 +107,7 @@ impl Provider {
     pub fn uses_managed_account_auth(&self) -> bool {
         self.is_github_copilot()
             || self.is_codex_oauth()
+            || self.is_xai_oauth()
             || self.claude_base_url_contains("chatgpt.com/backend-api/codex")
     }
 }
@@ -281,6 +287,31 @@ pub struct ClaudeDesktopModelRoute {
     pub supports_1m: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct CodexChatReasoningConfig {
+    #[serde(rename = "supportsThinking", skip_serializing_if = "Option::is_none")]
+    pub supports_thinking: Option<bool>,
+    #[serde(rename = "supportsEffort", skip_serializing_if = "Option::is_none")]
+    pub supports_effort: Option<bool>,
+    #[serde(rename = "thinkingParam", skip_serializing_if = "Option::is_none")]
+    pub thinking_param: Option<String>,
+    #[serde(rename = "effortParam", skip_serializing_if = "Option::is_none")]
+    pub effort_param: Option<String>,
+    #[serde(rename = "effortValueMode", skip_serializing_if = "Option::is_none")]
+    pub effort_value_mode: Option<String>,
+    #[serde(rename = "outputFormat", skip_serializing_if = "Option::is_none")]
+    pub output_format: Option<String>,
+}
+
+/// 协议转换后应用到本地代理上游请求的覆盖项。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LocalProxyRequestOverrides {
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub headers: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<serde_json::Value>,
+}
+
 /// 供应商元数据
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderMeta {
@@ -359,6 +390,28 @@ pub struct ProviderMeta {
     /// If not set, provider ID is used automatically during format conversion.
     #[serde(rename = "promptCacheKey", skip_serializing_if = "Option::is_none")]
     pub prompt_cache_key: Option<String>,
+    #[serde(rename = "promptCacheRouting", skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_routing: Option<String>,
+    #[serde(rename = "codexChatReasoning", skip_serializing_if = "Option::is_none")]
+    pub codex_chat_reasoning: Option<CodexChatReasoningConfig>,
+    /// 本地代理转发使用的自定义 User-Agent。
+    #[serde(rename = "customUserAgent", skip_serializing_if = "Option::is_none")]
+    pub custom_user_agent: Option<String>,
+    /// 协议转换后应用到上游请求的本地代理覆盖项。
+    #[serde(
+        rename = "localProxyRequestOverrides",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub local_proxy_request_overrides: Option<LocalProxyRequestOverrides>,
+    /// Codex → Anthropic bridge 的供应商级输出上限。
+    #[serde(rename = "maxOutputTokens", skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
+    /// 是否为 Codex → Anthropic 请求模拟 Claude Code 指纹。
+    #[serde(
+        rename = "impersonateClaudeCode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub impersonate_claude_code: Option<bool>,
     /// 累加模式应用中，该 provider 是否已写入 live config。
     /// `None` 表示旧数据/未知状态，`Some(false)` 表示明确仅存在于数据库中。
     #[serde(rename = "liveConfigManaged", skip_serializing_if = "Option::is_none")]
@@ -373,7 +426,21 @@ pub struct ProviderMeta {
     pub github_account_id: Option<String>,
 }
 
+/// 解析 Provider 级自定义 User-Agent；空白视为未设置，非法 header 交由调用方静默忽略。
+pub fn parse_custom_user_agent(
+    raw: Option<&str>,
+) -> Result<Option<HeaderValue>, InvalidHeaderValue> {
+    match raw.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) => HeaderValue::from_str(value).map(Some),
+        None => Ok(None),
+    }
+}
+
 impl ProviderMeta {
+    pub fn custom_user_agent_header(&self) -> Result<Option<HeaderValue>, InvalidHeaderValue> {
+        parse_custom_user_agent(self.custom_user_agent.as_deref())
+    }
+
     /// 解析指定托管认证供应商绑定的账号 ID。
     ///
     /// 新版优先读取 authBinding，旧版继续兼容 githubAccountId。
@@ -792,10 +859,11 @@ pub struct OpenCodeModelLimit {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClaudeModelConfig, CodexModelConfig, GeminiModelConfig, OpenCodeProviderConfig, Provider,
-        ProviderManager, ProviderMeta, UniversalProvider,
+        ClaudeModelConfig, CodexModelConfig, GeminiModelConfig, LocalProxyRequestOverrides,
+        OpenCodeProviderConfig, Provider, ProviderManager, ProviderMeta, UniversalProvider,
     };
     use serde_json::json;
+    use std::collections::HashMap;
 
     #[test]
     fn provider_meta_serializes_pricing_model_source() {
@@ -819,6 +887,33 @@ mod tests {
         let value = serde_json::to_value(&meta).expect("serialize ProviderMeta");
 
         assert!(value.get("pricingModelSource").is_none());
+    }
+
+    #[test]
+    fn provider_meta_roundtrips_local_proxy_request_overrides() {
+        let meta = ProviderMeta {
+            local_proxy_request_overrides: Some(LocalProxyRequestOverrides {
+                headers: HashMap::from([("X-Test".to_string(), "yes".to_string())]),
+                body: Some(json!({ "temperature": 0.2 })),
+            }),
+            ..ProviderMeta::default()
+        };
+
+        let value = serde_json::to_value(&meta).expect("serialize ProviderMeta");
+        assert_eq!(
+            value["localProxyRequestOverrides"]["headers"]["X-Test"],
+            "yes"
+        );
+        assert_eq!(
+            value["localProxyRequestOverrides"]["body"]["temperature"],
+            0.2
+        );
+
+        let decoded: ProviderMeta =
+            serde_json::from_value(value).expect("deserialize ProviderMeta");
+        let overrides = decoded.local_proxy_request_overrides.unwrap();
+        assert_eq!(overrides.headers.get("X-Test"), Some(&"yes".to_string()));
+        assert_eq!(overrides.body.unwrap()["temperature"], 0.2);
     }
 
     #[test]
@@ -851,7 +946,7 @@ mod tests {
     fn provider_managed_account_auth_detection_uses_type_or_known_endpoint() {
         // 跟随上游 cc-switch 61e68d75：
         // - provider_type="github_copilot" 直接命中
-        // - provider_type="codex_oauth" 直接命中
+        // - provider_type="codex_oauth" / "xai_oauth" 直接命中
         // - ANTHROPIC_BASE_URL 含 githubcopilot.com 也算 copilot
         // - ANTHROPIC_BASE_URL 含 chatgpt.com/backend-api/codex 算 codex OAuth 端点
         let mut copilot = Provider::with_id(
@@ -879,6 +974,19 @@ mod tests {
         });
         assert!(codex.is_codex_oauth());
         assert!(codex.uses_managed_account_auth());
+
+        let mut xai = Provider::with_id(
+            "xai".to_string(),
+            "xAI".to_string(),
+            json!({ "env": {} }),
+            None,
+        );
+        xai.meta = Some(ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+        assert!(xai.is_xai_oauth());
+        assert!(xai.uses_managed_account_auth());
 
         let codex_endpoint = Provider::with_id(
             "codex-endpoint".to_string(),
@@ -912,6 +1020,7 @@ mod tests {
         );
         assert!(!third_party.is_github_copilot());
         assert!(!third_party.is_codex_oauth());
+        assert!(!third_party.is_xai_oauth());
         assert!(!third_party.uses_managed_account_auth());
     }
 

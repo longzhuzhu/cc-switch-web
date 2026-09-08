@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
@@ -8,6 +8,26 @@ import { ProviderList } from "@/components/providers/ProviderList";
 const useDragSortMock = vi.fn();
 const useSortableMock = vi.fn();
 const providerCardRenderSpy = vi.fn();
+const getClaudeDesktopStatusMock = vi.hoisted(() => vi.fn());
+const importDefaultMock = vi.hoisted(() => vi.fn());
+const toastErrorMock = vi.hoisted(() => vi.fn());
+
+vi.mock("sonner", () => ({
+  toast: { error: toastErrorMock, info: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock("@/lib/api/providers", () => ({
+  providersApi: {
+    importDefault: importDefaultMock,
+    importOpenCodeFromLive: vi.fn(),
+    importOpenClawFromLive: vi.fn(),
+    getOpenCodeLiveProviderIds: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/api/claudeDesktop", () => ({
+  claudeDesktopApi: { getStatus: getClaudeDesktopStatusMock },
+}));
 
 vi.mock("@/hooks/useDragSort", () => ({
   useDragSort: (...args: unknown[]) => useDragSortMock(...args),
@@ -115,15 +135,34 @@ function renderWithQueryClient(ui: ReactElement) {
     defaultOptions: { queries: { retry: false } },
   });
 
-  return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
-  );
+  return {
+    ...render(
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+    ),
+    queryClient,
+  };
 }
 
 beforeEach(() => {
   useDragSortMock.mockReset();
   useSortableMock.mockReset();
   providerCardRenderSpy.mockClear();
+  importDefaultMock.mockReset();
+  toastErrorMock.mockReset();
+  getClaudeDesktopStatusMock.mockResolvedValue({
+    supported: true,
+    configured: false,
+    appliedId: null,
+    profilePath: null,
+    configLibraryPath: null,
+    mode: null,
+    expectedBaseUrl: null,
+    actualBaseUrl: null,
+    proxyRunning: false,
+    staleRawModels: false,
+    missingRouteMappings: false,
+    gatewayTokenConfigured: false,
+  });
 
   useSortableMock.mockImplementation(({ id }: { id: string }) => ({
     setNodeRef: vi.fn(),
@@ -193,6 +232,34 @@ describe("ProviderList Component", () => {
     expect(handleCreate).toHaveBeenCalledTimes(1);
   });
 
+  it("shows string import errors and refreshes providers after failure", async () => {
+    importDefaultMock.mockRejectedValueOnce("live config is invalid");
+    const { queryClient } = renderWithQueryClient(
+      <ProviderList
+        providers={{}}
+        currentProviderId=""
+        appId="claude"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "provider.importCurrent" }),
+    );
+
+    await waitFor(() =>
+      expect(toastErrorMock).toHaveBeenCalledWith("live config is invalid"),
+    );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["providers", "claude"],
+    });
+  });
+
   it("should render in order returned by useDragSort and pass through action callbacks", () => {
     const providerA = createProvider({ id: "a", name: "A" });
     const providerB = createProvider({ id: "b", name: "B" });
@@ -235,12 +302,12 @@ describe("ProviderList Component", () => {
     // Drag attributes from useSortable
     expect(
       providerCardRenderSpy.mock.calls[0][0].dragHandleProps?.attributes[
-      "data-dnd-id"
+        "data-dnd-id"
       ],
     ).toBe("b");
     expect(
       providerCardRenderSpy.mock.calls[1][0].dragHandleProps?.attributes[
-      "data-dnd-id"
+        "data-dnd-id"
       ],
     ).toBe("a");
 
@@ -304,6 +371,58 @@ describe("ProviderList Component", () => {
     expect(screen.queryByTestId("provider-card-beta")).not.toBeInTheDocument();
     expect(
       screen.getByText("No providers match your search."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows Claude Desktop configuration drift", async () => {
+    const provider = createProvider();
+    useDragSortMock.mockReturnValue({
+      sortedProviders: [provider],
+      sensors: [],
+      handleDragEnd: vi.fn(),
+    });
+    getClaudeDesktopStatusMock.mockResolvedValueOnce({
+      supported: true,
+      configured: true,
+      appliedId: provider.id,
+      profilePath: "profile.json",
+      configLibraryPath: "configLibrary",
+      mode: "proxy",
+      expectedBaseUrl: "http://127.0.0.1:15721/claude-desktop/v1",
+      actualBaseUrl: "https://stale.example.com/v1",
+      proxyRunning: true,
+      staleRawModels: true,
+      missingRouteMappings: true,
+      gatewayTokenConfigured: false,
+    });
+
+    renderWithQueryClient(
+      <ProviderList
+        providers={{ [provider.id]: provider }}
+        currentProviderId={provider.id}
+        appId="claude-desktop"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByText("claudeDesktop.statusTitle"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusStaleRawModels"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusMissingRouteMappings"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusGatewayTokenMissing"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusBaseUrlMismatch"),
     ).toBeInTheDocument();
   });
 });

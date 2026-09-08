@@ -13,6 +13,9 @@ use toml_edit::DocumentMut;
 /// 当 anchor 没有可复用的自定义 provider id 时，回退到这个稳定值；
 /// 让 Codex resume history 在 CC Switch 切换 provider 时不再漂移。
 pub const CC_SWITCH_CODEX_MODEL_PROVIDER_ID: &str = "ccswitch";
+/// 官方 Codex 登录经本地代理接管时使用的专属路由标记。
+pub const CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID: &str = "cc-switch-official";
+const CODEX_PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
 
 /// Codex 内置的保留 provider id（来自 OpenAI Codex 自身的 model-provider catalog
 /// 与历史别名）。这些 id 不能被 CC Switch 当作"自定义稳定 id"重用，否则会和
@@ -407,7 +410,7 @@ pub fn update_codex_toml_field(toml_str: &str, field: &str, value: &str) -> Resu
     let trimmed = value.trim();
 
     match field {
-        "base_url" => {
+        "base_url" | "wire_api" => {
             let model_provider = doc
                 .get("model_provider")
                 .and_then(|item| item.as_str())
@@ -427,9 +430,9 @@ pub fn update_codex_toml_field(toml_str: &str, field: &str, value: &str) -> Resu
 
                     if let Some(provider_table) = model_providers[&provider_key].as_table_mut() {
                         if trimmed.is_empty() {
-                            provider_table.remove("base_url");
+                            provider_table.remove(field);
                         } else {
-                            provider_table["base_url"] = toml_edit::value(trimmed);
+                            provider_table[field] = toml_edit::value(trimmed);
                         }
                         return Ok(doc.to_string());
                     }
@@ -438,9 +441,9 @@ pub fn update_codex_toml_field(toml_str: &str, field: &str, value: &str) -> Resu
 
             // Fallback: no model_provider or structure mismatch → top-level base_url
             if trimmed.is_empty() {
-                doc.as_table_mut().remove("base_url");
+                doc.as_table_mut().remove(field);
             } else {
-                doc["base_url"] = toml_edit::value(trimmed);
+                doc[field] = toml_edit::value(trimmed);
             }
         }
         "model" => {
@@ -454,6 +457,262 @@ pub fn update_codex_toml_field(toml_str: &str, field: &str, value: &str) -> Resu
     }
 
     Ok(doc.to_string())
+}
+
+fn remove_proxy_placeholders_from_provider_tables(providers: &mut toml_edit::Table) {
+    for (_, item) in providers.iter_mut() {
+        if let Some(table) = item.as_table_mut() {
+            if table
+                .get("experimental_bearer_token")
+                .and_then(|item| item.as_str())
+                == Some(CODEX_PROXY_AUTH_PLACEHOLDER)
+            {
+                table.remove("experimental_bearer_token");
+            }
+        } else if let Some(table) = item.as_inline_table_mut() {
+            if table
+                .get("experimental_bearer_token")
+                .and_then(|value| value.as_str())
+                == Some(CODEX_PROXY_AUTH_PLACEHOLDER)
+            {
+                table.remove("experimental_bearer_token");
+            }
+        }
+    }
+}
+
+/// 为第三方 Codex 接管写入配置级占位符，避免覆盖原生 ChatGPT `auth.json`。
+pub fn apply_codex_proxy_auth_placeholder(config_text: &str) -> Result<String, String> {
+    let mut doc = config_text
+        .parse::<DocumentMut>()
+        .map_err(|e| format!("TOML parse error: {e}"))?;
+    doc["experimental_bearer_token"] = toml_edit::value(CODEX_PROXY_AUTH_PLACEHOLDER);
+    Ok(doc.to_string())
+}
+
+pub fn extract_codex_experimental_bearer_token(config_text: &str) -> Option<String> {
+    config_text
+        .parse::<DocumentMut>()
+        .ok()?
+        .get("experimental_bearer_token")?
+        .as_str()
+        .map(ToString::to_string)
+}
+
+pub fn remove_codex_proxy_auth_placeholder(config_text: &str) -> Result<String, String> {
+    let mut doc = config_text
+        .parse::<DocumentMut>()
+        .map_err(|e| format!("TOML parse error: {e}"))?;
+    if doc
+        .get("experimental_bearer_token")
+        .and_then(|item| item.as_str())
+        == Some(CODEX_PROXY_AUTH_PLACEHOLDER)
+    {
+        doc.as_table_mut().remove("experimental_bearer_token");
+    }
+    Ok(doc.to_string())
+}
+
+/// 让 Codex 内置官方账号通过本地 Responses 代理，同时继续由 Codex 提供认证。
+pub fn apply_codex_official_proxy_route(
+    config_text: &str,
+    proxy_base_url: &str,
+) -> Result<String, String> {
+    let mut doc = config_text
+        .parse::<DocumentMut>()
+        .map_err(|e| format!("TOML parse error: {e}"))?;
+    doc.as_table_mut().remove("experimental_bearer_token");
+    doc["model_provider"] = toml_edit::value(CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID);
+
+    let mut providers = match doc.as_table_mut().remove("model_providers") {
+        Some(item) => item
+            .into_table()
+            .map_err(|_| "model_providers must be a table".to_string())?,
+        None => {
+            let mut table = toml_edit::Table::new();
+            table.set_implicit(true);
+            table
+        }
+    };
+    remove_proxy_placeholders_from_provider_tables(&mut providers);
+
+    let mut official = toml_edit::Table::new();
+    official["name"] = toml_edit::value("OpenAI");
+    official["base_url"] = toml_edit::value(proxy_base_url.trim_end_matches('/'));
+    official["requires_openai_auth"] = toml_edit::value(true);
+    official["supports_websockets"] = toml_edit::value(false);
+    official["wire_api"] = toml_edit::value("responses");
+    providers.insert(
+        CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID,
+        toml_edit::Item::Table(official),
+    );
+    doc["model_providers"] = toml_edit::Item::Table(providers);
+    Ok(doc.to_string())
+}
+
+pub fn codex_config_has_official_proxy_route(config_text: &str) -> bool {
+    config_text
+        .parse::<DocumentMut>()
+        .ok()
+        .and_then(|doc| {
+            doc.get("model_provider")
+                .and_then(|item| item.as_str())
+                .map(ToString::to_string)
+        })
+        .as_deref()
+        == Some(CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID)
+}
+
+pub fn remove_codex_official_proxy_route(config_text: &str) -> Result<String, String> {
+    let mut doc = config_text
+        .parse::<DocumentMut>()
+        .map_err(|e| format!("TOML parse error: {e}"))?;
+    if doc.get("model_provider").and_then(|item| item.as_str())
+        != Some(CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID)
+    {
+        return Ok(config_text.to_string());
+    }
+
+    doc.as_table_mut().remove("model_provider");
+    if let Some(item) = doc.as_table_mut().remove("model_providers") {
+        let mut providers = item
+            .into_table()
+            .map_err(|_| "model_providers must be a table".to_string())?;
+        providers.remove(CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID);
+        remove_proxy_placeholders_from_provider_tables(&mut providers);
+        if !providers.is_empty() {
+            doc["model_providers"] = toml_edit::Item::Table(providers);
+        }
+    }
+    Ok(doc.to_string())
+}
+
+fn unified_official_provider_table() -> toml_edit::Table {
+    let mut table = toml_edit::Table::new();
+    table["name"] = toml_edit::value("OpenAI");
+    table["requires_openai_auth"] = toml_edit::value(true);
+    table["supports_websockets"] = toml_edit::value(true);
+    table["wire_api"] = toml_edit::value("responses");
+    table
+}
+
+fn table_matches_unified_official_provider(table: &toml_edit::Table) -> bool {
+    table.len() == 4
+        && table.get("name").and_then(|item| item.as_str()) == Some("OpenAI")
+        && table
+            .get("requires_openai_auth")
+            .and_then(|item| item.as_bool())
+            == Some(true)
+        && table
+            .get("supports_websockets")
+            .and_then(|item| item.as_bool())
+            == Some(true)
+        && table.get("wire_api").and_then(|item| item.as_str()) == Some("responses")
+}
+
+/// 把无显式路由的官方 Codex 配置归入 CC Switch 的稳定历史桶。
+pub fn inject_codex_unified_session_bucket(config_text: &str) -> Result<String, String> {
+    let mut doc = config_text
+        .parse::<DocumentMut>()
+        .map_err(|e| format!("TOML parse error: {e}"))?;
+    if doc.get("model_provider").is_some() {
+        return Ok(config_text.to_string());
+    }
+
+    let conflicts = doc
+        .get("model_providers")
+        .and_then(|item| item.as_table())
+        .and_then(|providers| providers.get(CC_SWITCH_CODEX_MODEL_PROVIDER_ID))
+        .and_then(|item| item.as_table())
+        .is_some_and(|table| !table_matches_unified_official_provider(table));
+    if conflicts {
+        log::warn!("Codex 配置已存在同名自定义路由，跳过统一会话历史注入");
+        return Ok(config_text.to_string());
+    }
+
+    doc["model_provider"] = toml_edit::value(CC_SWITCH_CODEX_MODEL_PROVIDER_ID);
+    if doc.get("model_providers").is_none() {
+        let mut providers = toml_edit::Table::new();
+        providers.set_implicit(true);
+        doc["model_providers"] = toml_edit::Item::Table(providers);
+    }
+    if let Some(providers) = doc["model_providers"].as_table_mut() {
+        if !providers.contains_key(CC_SWITCH_CODEX_MODEL_PROVIDER_ID) {
+            providers.insert(
+                CC_SWITCH_CODEX_MODEL_PROVIDER_ID,
+                toml_edit::Item::Table(unified_official_provider_table()),
+            );
+        }
+    }
+    Ok(doc.to_string())
+}
+
+pub fn strip_codex_unified_session_bucket(config_text: &str) -> Result<String, String> {
+    let mut doc = config_text
+        .parse::<DocumentMut>()
+        .map_err(|e| format!("TOML parse error: {e}"))?;
+    if doc.get("model_provider").and_then(|item| item.as_str())
+        != Some(CC_SWITCH_CODEX_MODEL_PROVIDER_ID)
+    {
+        return Ok(config_text.to_string());
+    }
+    let injected = doc
+        .get("model_providers")
+        .and_then(|item| item.as_table())
+        .and_then(|providers| providers.get(CC_SWITCH_CODEX_MODEL_PROVIDER_ID))
+        .and_then(|item| item.as_table())
+        .is_some_and(table_matches_unified_official_provider);
+    if !injected {
+        return Ok(config_text.to_string());
+    }
+
+    doc.as_table_mut().remove("model_provider");
+    let providers_empty = doc["model_providers"]
+        .as_table_mut()
+        .map(|providers| {
+            providers.remove(CC_SWITCH_CODEX_MODEL_PROVIDER_ID);
+            providers.is_empty()
+        })
+        .unwrap_or(false);
+    if providers_empty {
+        doc.as_table_mut().remove("model_providers");
+    }
+    Ok(doc.to_string())
+}
+
+pub fn apply_codex_unified_session_bucket_to_settings(
+    category: Option<&str>,
+    settings: &mut Value,
+) -> Result<(), String> {
+    if category != Some("official") || !crate::settings::unify_codex_session_history() {
+        return Ok(());
+    }
+    let config = settings
+        .get("config")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let injected = inject_codex_unified_session_bucket(&config)?;
+    if injected != config {
+        if let Some(object) = settings.as_object_mut() {
+            object.insert("config".to_string(), Value::String(injected));
+        }
+    }
+    Ok(())
+}
+
+pub fn strip_codex_unified_session_bucket_from_settings(
+    settings: &mut Value,
+) -> Result<(), String> {
+    let Some(config) = settings
+        .get("config")
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+    else {
+        return Ok(());
+    };
+    settings["config"] = Value::String(strip_codex_unified_session_bucket(&config)?);
+    Ok(())
 }
 
 /// Remove `base_url` from the active model_provider section only if it matches `predicate`.
@@ -1034,5 +1293,104 @@ base_url = "https://production.api/v1"
             .and_then(|v| v.get("base_url"))
             .and_then(|v| v.as_str());
         assert_eq!(base_url, Some("https://production.api/v1"));
+    }
+
+    #[test]
+    fn official_proxy_route_preserves_config_and_uses_native_auth() {
+        let input = r#"model = "gpt-5.4"
+experimental_bearer_token = "PROXY_MANAGED"
+
+[mcp_servers.example]
+command = "example"
+"#;
+        let output = apply_codex_official_proxy_route(input, "http://127.0.0.1:15721/v1")
+            .expect("apply route");
+        let doc: toml::Value = toml::from_str(&output).expect("parse route");
+
+        assert_eq!(
+            doc["model_provider"].as_str(),
+            Some(CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID)
+        );
+        assert!(doc.get("experimental_bearer_token").is_none());
+        assert!(doc.get("mcp_servers").is_some());
+        let route = &doc["model_providers"][CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID];
+        assert_eq!(
+            route["base_url"].as_str(),
+            Some("http://127.0.0.1:15721/v1")
+        );
+        assert_eq!(route["requires_openai_auth"].as_bool(), Some(true));
+        assert!(codex_config_has_official_proxy_route(&output));
+    }
+
+    #[test]
+    fn official_proxy_route_cleanup_only_removes_owned_route() {
+        let projected =
+            apply_codex_official_proxy_route("model = \"gpt-5.4\"\n", "http://127.0.0.1:15721/v1")
+                .expect("project");
+        let cleaned = remove_codex_official_proxy_route(&projected).expect("cleanup");
+        let doc: toml::Value = toml::from_str(&cleaned).expect("parse cleanup");
+        assert_eq!(doc["model"].as_str(), Some("gpt-5.4"));
+        assert!(doc.get("model_provider").is_none());
+        assert!(doc.get("model_providers").is_none());
+    }
+
+    #[test]
+    fn unified_session_bucket_preserves_config_and_round_trips() {
+        let input = r#"model = "gpt-5.4"
+
+[mcp_servers.example]
+command = "example"
+"#;
+        let injected = inject_codex_unified_session_bucket(input).expect("inject");
+        let doc: toml::Value = toml::from_str(&injected).expect("parse injected config");
+
+        assert_eq!(
+            doc["model_provider"].as_str(),
+            Some(CC_SWITCH_CODEX_MODEL_PROVIDER_ID)
+        );
+        assert_eq!(
+            doc["model_providers"][CC_SWITCH_CODEX_MODEL_PROVIDER_ID]["requires_openai_auth"]
+                .as_bool(),
+            Some(true)
+        );
+        assert!(doc.get("mcp_servers").is_some());
+
+        let stripped = strip_codex_unified_session_bucket(&injected).expect("strip");
+        let stripped_doc: toml::Value = toml::from_str(&stripped).expect("parse stripped config");
+        assert_eq!(stripped_doc["model"].as_str(), Some("gpt-5.4"));
+        assert!(stripped_doc.get("model_provider").is_none());
+        assert!(stripped_doc.get("model_providers").is_none());
+        assert!(stripped_doc.get("mcp_servers").is_some());
+    }
+
+    #[test]
+    fn unified_session_bucket_does_not_override_explicit_route() {
+        let input = r#"model_provider = "vendor"
+
+[model_providers.vendor]
+base_url = "https://vendor.example/v1"
+"#;
+        assert_eq!(
+            inject_codex_unified_session_bucket(input).expect("inject"),
+            input
+        );
+    }
+
+    #[test]
+    fn unified_session_bucket_skips_and_preserves_conflicting_stable_route() {
+        let input = r#"[model_providers.ccswitch]
+name = "Third Party"
+base_url = "https://vendor.example/v1"
+"#;
+        assert_eq!(
+            inject_codex_unified_session_bucket(input).expect("inject"),
+            input
+        );
+
+        let selected = format!("model_provider = \"ccswitch\"\n\n{input}");
+        assert_eq!(
+            strip_codex_unified_session_bucket(&selected).expect("strip"),
+            selected
+        );
     }
 }

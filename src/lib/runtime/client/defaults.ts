@@ -9,9 +9,10 @@ import type {
 
 const visibleApps: VisibleApps = {
   claude: true,
-  "claude-desktop": false,
+  "claude-desktop": true,
   codex: true,
   gemini: true,
+  grokbuild: true,
   opencode: true,
   openclaw: true,
   hermes: true,
@@ -57,6 +58,7 @@ export const getDefaultProxyTakeoverStatus = (): ProxyTakeoverStatus => ({
   "claude-desktop": false,
   codex: false,
   gemini: false,
+  grokbuild: false,
   opencode: false,
   openclaw: false,
   hermes: false,
